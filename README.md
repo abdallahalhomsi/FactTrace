@@ -1,4 +1,4 @@
-# VerifyLens
+# FactTrace
 
 Mobile Provenance Verification Lens for CS 449/549 Human-Computer Interaction.
 
