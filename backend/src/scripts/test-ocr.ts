@@ -1,3 +1,5 @@
+//load backend/.env first so ocr_primary and the key path from .env are used
+import "../config/env";
 import fs from "fs";
 import path from "path";
 import { ocr } from "../services/ocr.service";

@@ -39,6 +39,8 @@ export interface MatchRequest {
   source: ClaimSource;
   /** Present only when source === "qr"; skips matching. */
   claimId?: string;
+  //mean ocr confidence 0 to 1, or null if the engine returned none. used by matching to set matchresult.reason
+  ocrConfidence?: number | null;
 }
 
 export interface MatchResult {
@@ -54,6 +56,8 @@ export interface MatchResult {
    * - "both": both signals were weak
    */
   reason?: "low_ocr_confidence" | "low_similarity" | "both";
+  //fact check fallback result, only present when status is no_match (filled by manaal's factcheck service)
+  factCheck?: FactCheckResult;
 }
 
 // ---------- Fact Check fallback ----------
