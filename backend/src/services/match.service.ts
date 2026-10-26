@@ -34,7 +34,7 @@ function dice(a: Set<string>, b: Set<string>): number {
 
 const LOW_OCR_CONFIDENCE = 0.5; //same threshold manaal uses for partial ocr results
 
-export function matchClaim(req: MatchRequest): MatchResult {
+export async function matchClaim(req: MatchRequest): Promise<MatchResult> {
   //qr codes already contain the claim id, so no text matching is needed
   if (req.source === "qr" && req.claimId) {
     return claimExists(req.claimId)

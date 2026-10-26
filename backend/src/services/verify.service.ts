@@ -71,8 +71,8 @@ function toEvidenceCards(claim: ClaimDetail): VerifyEvidence[] {
   return cards.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)); //primary sources first
 }
 
-export function verifyClaim(req: MatchRequest): VerifyResponse {
-  const match = matchClaim(req); //find the closest stored claim
+export async function verifyClaim(req: MatchRequest): Promise<VerifyResponse> {
+  const match = await matchClaim(req); //find the closest stored claim
   const base = {
     matchStatus: STATUS_LABEL[match.status],
     matchScore: Math.round(match.score * 100), //0 to 1 becomes 0 to 100 for the frontend

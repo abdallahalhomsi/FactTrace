@@ -198,7 +198,7 @@ Body: `DecisionRequest`
 }
 ```
 - `decision` and `sharingIntention`: a `value` from `GET /config`, exactly as written (snake_case)
-- `matchStatus`: either spelling works (`MATCH` or `strong_match` etc.); it is stored in one format
+- `matchStatus`: either spelling works (MATCH or strong_match etc.). Internally, matchStatus is stored as MATCH | WEAK_MATCH | NO_MATCH (the shared.ts enum). /verify returns the snake_case form (strong_match | weak_match | no_match) for the frontend; /decisions accepts either and normalizes to the enum before storage.
 - `ocrEngine` and `ocrError`: copy `engine` and `error` from the `/ocr` result (omit or null for QR and typed claims)
 - `condition`: `app` | `browser` (the browser baseline uses the same endpoint; send the `claimId` being checked so accuracy can be scored, `sourcesOpened` holds URLs)
 - `participantId` must look like `P07` (P + 1 to 3 digits, stored uppercase). Anything else is rejected, so names or student IDs can't be saved by mistake

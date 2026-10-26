@@ -45,8 +45,9 @@ export function parseMatchRequest(rawBody: unknown): MatchRequest {
 
 //post /api/claims/match
 //body: claim text, source, and optionally the qr claim id, raw ocr text and ocr confidence. returns a match result
-export function postMatch(req: Request, res: Response): void {
-  sendSuccess(res, matchClaim(parseMatchRequest(req.body))); //check the input, run matching and send the result
+export async function postMatch(req: Request, res: Response): Promise<void> {
+  const result = await matchClaim(parseMatchRequest(req.body));
+  sendSuccess(res, result);
 }
 
 //get /api/claims/:id, returns the claim with its provenance signals, evidence and sources (never the answer)
