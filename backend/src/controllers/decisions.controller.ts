@@ -15,7 +15,12 @@ const VERDICTS = VERDICT_OPTIONS.map((o) => o.value); //allowed verdicts, from c
 const SHARING = SHARING_OPTIONS.map((o) => o.value); //allowed sharing answers, from config/study.ts
 const CONDITIONS = ["app", "browser"] as const; //study conditions
 const CLAIM_SOURCES = ["ocr", "qr", "manual"] as const; //how the claim got into the app
-const MATCH_STATUSES = ["MATCH", "WEAK_MATCH", "NO_MATCH"] as const; //what matching returned
+const MATCH_STATUSES = ["MATCH", "WEAK_MATCH", "NO_MATCH", "strong_match", "weak_match", "no_match"] as const; //what matching returned, in backend or /api/verify spelling
+///api/verify sends strong_match style labels, so they are stored in the backend spelling to keep the logs consistent
+const MATCH_STATUS_TO_BACKEND: Record<string, MatchStatus> = {
+  MATCH: "MATCH", WEAK_MATCH: "WEAK_MATCH", NO_MATCH: "NO_MATCH",
+  strong_match: "MATCH", weak_match: "WEAK_MATCH", no_match: "NO_MATCH",
+};
 const OCR_ENGINES = ["cloud_vision", "tesseract"] as const; //which ocr engine read the photo
 const OCR_ERRORS = ["NO_TEXT", "OCR_FAILED", "PARTIAL"] as const; //ocr outcomes other than null (null means fine)
 
@@ -58,7 +63,7 @@ export function postDecision(req: Request, res: Response): void {
     claimText: (body.claimText as string).trim(),
     originalOcrText: body.originalOcrText as string | undefined,
     inputSource: body.inputSource as ClaimSource | undefined,
-    matchStatus: body.matchStatus as MatchStatus | undefined,
+    matchStatus: typeof body.matchStatus === "string" ? MATCH_STATUS_TO_BACKEND[body.matchStatus] : undefined, //one spelling in the logs
     ocrEngine: (body.ocrEngine as OcrEngine | undefined) ?? null, //stored so the report can say how often each engine was used
     ocrError: (body.ocrError as OcrError | undefined) ?? null, //stored so the report can say how many captures were partial
     decision: body.decision as string,

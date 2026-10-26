@@ -1,7 +1,7 @@
 //shapes of every request and response the api sends, so frontend and backend agree
 //the frontend should keep an identical copy in mobile/src/types/api.ts
 
-import { ClaimSource, MatchStatus, OcrEngine, OcrError } from "./shared"; //types agreed with manaal in shared.ts
+import { ClaimSource, FactCheckResult, MatchStatus, OcrEngine, OcrError } from "./shared"; //types agreed with manaal in shared.ts
 
 //---------- response envelope ----------
 
@@ -98,6 +98,48 @@ export interface ClaimDetail {
   provenanceSignals: ProvenanceSignal[]; //cues about where the claim came from
   evidence: Evidence[]; //findings about the claim
   sources: Source[]; //every source used by the evidence
+}
+
+//---------- verify (one call for the frontend's results screen) ----------
+
+//match labels in the format the frontend already uses
+export type VerifyMatchStatus = "strong_match" | "weak_match" | "no_match";
+
+//one evidence card, in the exact field names the frontend's evidencesource type uses
+export interface VerifyEvidence {
+  id: string; //evidence id, also used to open the evidence details screen
+  title: string; //source title
+  sourceName: string; //who published it, for example "city transport office"
+  organization?: string; //kind of source as readable text, for example "official source"
+  author?: string; //left out when there is no named author
+  publicationDate?: string; //readable date like "october 2026", left out if unknown
+  summary: string; //short finding in plain words
+  evidenceText: string; //full explanation for the evidence details screen
+  originalUrl?: string; //link for "open original source"
+  provenance?: string; //where this record came from, ends with the curated dataset
+  isPrimary: boolean; //true for the main or original source
+  //extras the frontend may use or ignore
+  stance: EvidenceStance; //supports, contradicts or context
+  sourceType: SourceType; //raw source kind
+  publishedAt: string | null; //raw date yyyy-mm-dd
+}
+
+//what post /api/verify returns: the frontend's verificationresult shape plus a few extras
+export interface VerifyResponse {
+  originalClaim: string; //the text the user confirmed (or the stored text for qr scans)
+  matchedClaim?: string; //the stored claim it matched, left out on no match
+  matchStatus: VerifyMatchStatus; //strong, weak or no match
+  matchScore?: number; //match score from 0 to 100
+  explanation?: string; //"what we found" text, or why nothing was found
+  evidence: VerifyEvidence[]; //evidence cards, empty on no match
+  //extras the frontend may use or ignore
+  claimId: string | null; //matched claim id, needed later for /api/decisions
+  matchExplanation: string; //plain words on how sure the match is (the prof asked users to be able to recognise uncertain matches)
+  weakReason?: "low_ocr_confidence" | "low_similarity" | "both"; //only on weak matches
+  overallStance?: OverallStance; //what the evidence points to overall, left out on no match
+  datasetNotice: string; //reminder that results come from a curated dataset, not independent verification
+  provenanceSignals: ProvenanceSignal[]; //provenance cues, empty on no match
+  factCheck?: FactCheckResult; //google fact check result on no match (coming from manaal's service)
 }
 
 //---------- decisions (study logging) ----------

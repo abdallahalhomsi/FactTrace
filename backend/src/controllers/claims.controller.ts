@@ -10,10 +10,11 @@ import { asObject, Validator } from "../utils/validate"; //input checks
 
 const CLAIM_SOURCES = ["ocr", "qr", "manual"] as const; //how a claim can enter the app
 
-//post /api/claims/match
-//body: claim text, source, and optionally the qr claim id, raw ocr text and ocr confidence. returns a match result
-export function postMatch(req: Request, res: Response): void {
-  const body = asObject(req.body); //make sure the body is a json object
+//checks a match request body and turns it into a clean match request
+//shared by /api/claims/match and /api/verify so both accept exactly the same input
+export function parseMatchRequest(rawBody: unknown): MatchRequest {
+  const body = { ...asObject(rawBody) }; //make sure the body is a json object (copied so we can fill defaults)
+  if (body.source === undefined || body.source === null) body.source = "manual"; //no source sent means typed text, so older frontend code keeps working
   const v = new Validator(body)
     .oneOf("source", CLAIM_SOURCES) //source must be ocr, qr or manual
     .string("originalOcrText", { optional: true, maxLength: 5000 }) //raw ocr text is optional
@@ -33,14 +34,19 @@ export function postMatch(req: Request, res: Response): void {
   v.check(); //stop here with all errors if anything is wrong
 
   //build a clean request with only the fields we expect
-  const matchReq: MatchRequest = {
+  return {
     source: body.source as ClaimSource,
     claimText: typeof body.claimText === "string" ? body.claimText.trim() : "", //remove extra spaces at the ends
     claimId: body.source === "qr" ? (body.claimId as string) : undefined, //only qr requests use the id
     originalOcrText: body.originalOcrText as string | undefined,
     ocrConfidence: typeof body.ocrConfidence === "number" ? body.ocrConfidence : null, //null if not sent
   };
-  sendSuccess(res, matchClaim(matchReq)); //run matching and send the result
+}
+
+//post /api/claims/match
+//body: claim text, source, and optionally the qr claim id, raw ocr text and ocr confidence. returns a match result
+export function postMatch(req: Request, res: Response): void {
+  sendSuccess(res, matchClaim(parseMatchRequest(req.body))); //check the input, run matching and send the result
 }
 
 //get /api/claims/:id, returns the claim with its provenance signals, evidence and sources (never the answer)

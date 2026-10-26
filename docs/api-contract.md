@@ -39,8 +39,8 @@ Screen 2 camera ──► POST /ocr ──► Screen 3: show text (editable), PA
 QR scan ──────────────────────────────┐
 Manual entry ─────────────────────────┤
                                       ▼
-                       POST /claims/match ──► MATCH / WEAK_MATCH ──► GET /claims/:id ──► Screens 4 + 5
-                                          └─► NO_MATCH ──► "no match" screen (+ factCheck in the same response, coming soon)
+                     POST /verify (one call) ──► strong / weak match ──► Screens 4 + 5
+                         (or /claims/match + GET /claims/:id) └─► no match ──► "no match" screen (+ factCheck, coming soon)
                                                                │
                          decision + sharing popup ◄────────────┘
                                       ▼
@@ -89,11 +89,59 @@ A multipart upload (file in field `image`) also works, if that turns out easier.
 { "success": true, "text": "Honey never spoils if it is stored sealed.", "confidence": 0.95, "engine": "tesseract", "error": null }
 ```
 - `PARTIAL` still returns text: show it with a "please check this text" warning.
-- Keep `text`, `confidence`, `engine` and `error`: `text` and `confidence` go to `/claims/match` as `originalOcrText` and `ocrConfidence`; `engine` and `error` go to `/decisions` as `ocrEngine` and `ocrError`.
+- Keep `text`, `confidence`, `engine` and `error`: `text` and `confidence` go to `/verify` (or `/claims/match`) as `originalOcrText` and `ocrConfidence`; `engine` and `error` go to `/decisions` as `ocrEngine` and `ocrError`.
 - Raw base64 without the `data:` prefix is preferred; the prefixed form also works.
 - Images are processed in memory and never stored.
 
+### `POST /verify` (recommended for the app)
+One call that matches the claim and returns everything the results screen needs, in the frontend's `VerificationResult` shape. Same request body as `/claims/match` below; `source` defaults to `"manual"` if missing.
+
+```json
+{ "claimText": "honey never spoils", "source": "ocr", "originalOcrText": "honey never spoils", "ocrConfidence": 0.3 }
+```
+
+`data: VerifyResponse`
+```json
+{
+  "originalClaim": "honey never spoils",
+  "matchedClaim": "Honey never spoils if it is stored in a sealed container.",
+  "matchStatus": "weak_match",
+  "matchScore": 67,
+  "explanation": "Sealed honey resists spoilage because of its low moisture and acidity. It can crystallize, but that is not spoiling.",
+  "evidence": [
+    {
+      "id": "ev_03a",
+      "title": "Why honey lasts",
+      "sourceName": "Example Journal of Food Science",
+      "organization": "Academic source",
+      "author": "C. Researcher",
+      "publicationDate": "May 2021",
+      "summary": "Honey's low moisture and acidity prevent most microbial growth when sealed.",
+      "evidenceText": "Honey's low moisture and acidity prevent most microbial growth when sealed.",
+      "originalUrl": "https://example.org/journal/honey",
+      "provenance": "Example Journal of Food Science → FactTrace curated dataset",
+      "isPrimary": true,
+      "stance": "supports",
+      "sourceType": "academic",
+      "publishedAt": "2021-05-12"
+    }
+  ],
+  "claimId": "claim_03",
+  "matchExplanation": "This only partly matches a claim in our dataset (67% word overlap), and the scanned text may have been misread. Check that it is the claim you saw.",
+  "weakReason": "both",
+  "overallStance": "supports",
+  "datasetNotice": "These results come from a curated set of claims prepared for this study. They are not an independent verification of the claim.",
+  "provenanceSignals": [ ... ]
+}
+```
+- `matchStatus`: `strong_match` | `weak_match` | `no_match`. `matchScore`: 0 to 100.
+- Fields up to `evidence` match the frontend's existing `VerificationResult` / `EvidenceSource` types exactly. `author` and `publicationDate` are left out when unknown (optional in those types).
+- Extras the app can use or ignore: `claimId` (send it to `/decisions`), `matchExplanation` (how sure the match is, in plain words), `weakReason`, `overallStance`, `datasetNotice`, `provenanceSignals`, and per evidence `stance`, `sourceType`, `publishedAt`. Evidence is sorted primary first.
+- `no_match`: `evidence` and `provenanceSignals` are empty and there is no `matchedClaim`. `factCheck` will be added here once the Fact Check fallback is ready.
+- Dr. Göktaş asked that a database match is never presented as independent verification and that uncertain matches are recognisable: show `datasetNotice` on the results screen, and on `weak_match` show `matchedClaim` with `matchExplanation` ("Is this the claim you saw?").
+
 ### `POST /claims/match`
+Lower-level alternative to `/verify` (match only, backend field names).
 Body: `MatchRequest` (`ocrConfidence` is the `confidence` from `/ocr`, optional)
 ```json
 { "claimText": "honey never spoils in a sealed container", "source": "ocr", "originalOcrText": "honey nevr spoils in a sealed contaner", "ocrConfidence": 0.62 }
@@ -150,6 +198,7 @@ Body: `DecisionRequest`
 }
 ```
 - `decision` and `sharingIntention`: a `value` from `GET /config`, exactly as written (snake_case)
+- `matchStatus`: either spelling works (`MATCH` or `strong_match` etc.); it is stored in one format
 - `ocrEngine` and `ocrError`: copy `engine` and `error` from the `/ocr` result (omit or null for QR and typed claims)
 - `condition`: `app` | `browser` (the browser baseline uses the same endpoint; send the `claimId` being checked so accuracy can be scored, `sourcesOpened` holds URLs)
 - `participantId` must look like `P07` (P + 1 to 3 digits, stored uppercase). Anything else is rejected, so names or student IDs can't be saved by mistake
