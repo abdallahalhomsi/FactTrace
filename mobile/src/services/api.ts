@@ -2,12 +2,15 @@ import { Platform } from 'react-native';
 
 import { API_TIMEOUT_MS } from '../constants/api';
 
-const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+const configuredBaseUrl =
+  process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
 export function getApiBaseUrl(): string {
   const baseUrl =
     configuredBaseUrl ||
-    (Platform.OS === 'web' ? 'http://localhost:3000' : undefined);
+    (Platform.OS === 'web'
+      ? 'http://localhost:3000'
+      : undefined);
 
   if (!baseUrl) {
     throw new Error(
@@ -16,6 +19,7 @@ export function getApiBaseUrl(): string {
   }
 
   let parsedUrl: URL;
+
   try {
     parsedUrl = new URL(baseUrl);
   } catch {
@@ -24,7 +28,10 @@ export function getApiBaseUrl(): string {
     );
   }
 
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+  if (
+    parsedUrl.protocol !== 'http:' &&
+    parsedUrl.protocol !== 'https:'
+  ) {
     throw new Error(
       'EXPO_PUBLIC_API_BASE_URL must use http:// or https://.',
     );
@@ -33,16 +40,21 @@ export function getApiBaseUrl(): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
-function getErrorMessage(body: unknown, status: number): string {
+function getErrorMessage(
+  body: unknown,
+  status: number,
+): string {
   if (
     typeof body === 'object' &&
     body !== null &&
     'error' in body
   ) {
     const error = body.error;
+
     if (typeof error === 'string') {
       return error;
     }
+
     if (
       typeof error === 'object' &&
       error !== null &&
@@ -61,10 +73,12 @@ export async function apiRequest<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const controller = new AbortController();
+
   const timeout = setTimeout(
     () => controller.abort(),
     API_TIMEOUT_MS,
   );
+
   const bodyIsFormData =
     typeof FormData !== 'undefined' &&
     options.body instanceof FormData;
@@ -85,6 +99,7 @@ export async function apiRequest<T>(
     );
 
     let responseBody: unknown;
+
     try {
       responseBody = await response.json();
     } catch {
@@ -97,15 +112,24 @@ export async function apiRequest<T>(
 
     if (!response.ok) {
       throw new Error(
-        getErrorMessage(responseBody, response.status),
+        getErrorMessage(
+          responseBody,
+          response.status,
+        ),
       );
     }
 
     return responseBody as T;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('The request timed out. Please try again.');
+    if (
+      error instanceof Error &&
+      error.name === 'AbortError'
+    ) {
+      throw new Error(
+        'The request timed out. Please try again.',
+      );
     }
+
     throw error;
   } finally {
     clearTimeout(timeout);

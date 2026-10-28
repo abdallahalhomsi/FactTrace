@@ -6,6 +6,7 @@ import {
   BackendOcrResult,
   OcrResponse,
 } from '../types/api';
+
 import { getApiBaseUrl } from './api';
 
 function getApiError(
@@ -15,6 +16,7 @@ function getApiError(
   if (typeof error === 'string') {
     return error;
   }
+
   return error?.message ?? fallback;
 }
 
@@ -23,6 +25,7 @@ export async function extractTextFromImage(
 ): Promise<OcrResponse> {
   try {
     const formData = new FormData();
+
     formData.append(
       'image',
       new File(imageUri),
@@ -38,8 +41,10 @@ export async function extractTextFromImage(
     );
 
     let envelope: ApiResponse<BackendOcrResult>;
+
     try {
-      envelope = (await response.json()) as ApiResponse<BackendOcrResult>;
+      envelope =
+        (await response.json()) as ApiResponse<BackendOcrResult>;
     } catch {
       return {
         success: false,
@@ -58,20 +63,30 @@ export async function extractTextFromImage(
     }
 
     const ocrResult = envelope.data;
+
+    if (
+      !ocrResult.success ||
+      ocrResult.error === 'NO_TEXT' ||
+      ocrResult.error === 'OCR_FAILED' ||
+      !ocrResult.text.trim()
+    ) {
+      return {
+        success: false,
+        error:
+          ocrResult.error === 'NO_TEXT'
+            ? 'No readable text was detected in the image.'
+            : 'FactTrace could not extract text from this image.',
+      };
+    }
+
     return {
-      success: ocrResult.success,
+      success: true,
       data: {
         extractedText: ocrResult.text,
         confidence: ocrResult.confidence,
         engine: ocrResult.engine,
         ocrError: ocrResult.error,
       },
-      error:
-        ocrResult.error === 'NO_TEXT'
-          ? 'No readable text was detected in the image.'
-          : ocrResult.error === 'OCR_FAILED'
-            ? 'FactTrace could not extract text from the image.'
-            : undefined,
     };
   } catch (error) {
     return {

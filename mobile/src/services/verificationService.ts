@@ -1,11 +1,15 @@
+
 import {
   ApiResponse,
   VerifyClaimRequest,
   VerifyClaimResponse,
 } from '../types/api';
+
 import { VerificationResult } from '../types/verification';
+
 import { apiRequest } from './api';
 
+// Convert API errors into readable messages
 function getApiError(
   error: ApiResponse<VerificationResult>['error'],
   fallback: string,
@@ -13,9 +17,11 @@ function getApiError(
   if (typeof error === 'string') {
     return error;
   }
+
   return error?.message ?? fallback;
 }
 
+// Check that the backend returned a valid verification result
 function isVerificationResult(
   value: unknown,
 ): value is VerificationResult {
@@ -28,19 +34,19 @@ function isVerificationResult(
     (value.matchStatus !== 'strong_match' &&
       value.matchStatus !== 'weak_match' &&
       value.matchStatus !== 'no_match') ||
-    (('matchedClaim' in value) &&
+    ('matchedClaim' in value &&
       typeof value.matchedClaim !== 'string') ||
-    (('claimId' in value) &&
+    ('claimId' in value &&
       value.claimId !== null &&
       typeof value.claimId !== 'string') ||
-    (('matchScore' in value) &&
+    ('matchScore' in value &&
       (typeof value.matchScore !== 'number' ||
         !Number.isFinite(value.matchScore))) ||
-    (('explanation' in value) &&
+    ('explanation' in value &&
       typeof value.explanation !== 'string') ||
-    (('matchExplanation' in value) &&
+    ('matchExplanation' in value &&
       typeof value.matchExplanation !== 'string') ||
-    (('datasetNotice' in value) &&
+    ('datasetNotice' in value &&
       typeof value.datasetNotice !== 'string') ||
     !('evidence' in value) ||
     !Array.isArray(value.evidence)
@@ -92,6 +98,7 @@ function isVerificationResult(
   );
 }
 
+// Send the claim to the real backend for verification
 export async function verifyClaim(
   claimText: string,
   requestOptions: Omit<VerifyClaimRequest, 'claimText'> = {
@@ -103,6 +110,7 @@ export async function verifyClaim(
       claimText,
       ...requestOptions,
     };
+
     const response = await apiRequest<ApiResponse<unknown>>(
       '/api/verify',
       {
@@ -116,7 +124,8 @@ export async function verifyClaim(
         success: false,
         error: getApiError(
           response.error,
-          response.message ?? 'FactTrace could not verify this claim.',
+          response.message ??
+            'FactTrace could not verify this claim.',
         ),
       };
     }
@@ -124,7 +133,8 @@ export async function verifyClaim(
     if (!isVerificationResult(response.data)) {
       return {
         success: false,
-        error: 'The verification service returned an invalid result.',
+        error:
+          'The verification service returned an invalid result.',
       };
     }
 
