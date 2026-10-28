@@ -108,6 +108,7 @@ export type VerifyMatchStatus = "strong_match" | "weak_match" | "no_match";
 //one evidence card, in the exact field names the frontend's evidencesource type uses
 export interface VerifyEvidence {
   id: string; //evidence id, also used to open the evidence details screen
+  sourceId: string; //source id used for study source-opening logs
   title: string; //source title
   sourceName: string; //who published it, for example "city transport office"
   organization?: string; //kind of source as readable text, for example "official source"

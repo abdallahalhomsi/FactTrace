@@ -9,6 +9,7 @@ import VerificationHistoryScreen from '../screens/VerificationHistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
+import BrowserComparisonScreen from '../screens/BrowserComparisonScreen';
 
 import { RootStackParamList } from './types';
 
@@ -36,6 +37,10 @@ export default function AppNavigator() {
       <Stack.Screen
         name="VerificationHistory"
         component={VerificationHistoryScreen}
+      />
+      <Stack.Screen
+        name="BrowserComparison"
+        component={BrowserComparisonScreen}
       />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />

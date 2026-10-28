@@ -1,7 +1,9 @@
 import React from 'react';
 
 import {
+  Alert,
   Linking,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -53,16 +55,28 @@ export default function EvidenceDetailsScreen({
     }
 
     try {
-      const supported =
-        await Linking.canOpenURL(url);
-
-      if (supported) {
-        await Linking.openURL(url);
+      const parsedUrl = new URL(url);
+      if (
+        parsedUrl.protocol !== 'http:' &&
+        parsedUrl.protocol !== 'https:'
+      ) {
+        throw new Error('Source links must use http or https.');
       }
+
+      if (Platform.OS === 'web') {
+        window.location.assign(parsedUrl.toString());
+        return;
+      }
+
+      await Linking.openURL(parsedUrl.toString());
     } catch (error) {
       console.log(
         'Could not open source:',
         error,
+      );
+      Alert.alert(
+        'Unable to open source',
+        'FactTrace could not open this source. You can try copying its URL.',
       );
     }
   };
@@ -169,6 +183,14 @@ export default function EvidenceDetailsScreen({
             }
           />
         </View>
+
+        {result.datasetNotice ? (
+          <View style={styles.datasetNotice}>
+            <Text style={styles.datasetNoticeText}>
+              DEMONSTRATION DATA · {result.datasetNotice}
+            </Text>
+          </View>
+        ) : null}
 
         {/* HERO */}
         <LinearGradient
@@ -677,6 +699,15 @@ export default function EvidenceDetailsScreen({
                     >
                       {source.evidenceText}
                     </Text>
+                    {source.stance && (
+                      <Text style={styles.evidenceStance}>
+                        {source.stance === 'supports'
+                          ? 'Supports the submitted claim'
+                          : source.stance === 'contradicts'
+                            ? 'Contradicts the submitted claim'
+                            : 'Provides context for the submitted claim'}
+                      </Text>
+                    )}
                   </View>
 
                   {/* PROVENANCE */}
@@ -761,51 +792,41 @@ export default function EvidenceDetailsScreen({
                       </View>
                     </View>
 
-                    <View
-                      style={
-                        styles.provenanceLine
-                      }
-                    />
+                        {source.provenance && (
+                          <>
+                            <View
+                              style={styles.provenanceLine}
+                            />
 
-                    <View
-                      style={
-                        styles.provenanceRow
-                      }
-                    >
-                      <View
-                        style={
-                          styles.provenanceDot
-                        }
-                      />
+                            <View
+                              style={styles.provenanceRow}
+                            >
+                              <View style={styles.provenanceDot} />
 
-                      <View
-                        style={
-                          styles.provenanceStep
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.provenanceStepTitle
-                          }
-                        >
-                          Evidence record
-                        </Text>
+                              <View style={styles.provenanceStep}>
+                                <Text style={styles.provenanceStepTitle}>
+                                  Evidence record
+                                </Text>
 
-                        <Text
-                          style={
-                            styles.provenanceStepText
-                          }
-                        >
-                          {source.provenance ||
-                            'Source details linked to the FactTrace evidence record.'}
-                        </Text>
-                      </View>
-                    </View>
+                                <Text style={styles.provenanceStepText}>
+                                  {source.provenance}
+                                </Text>
+                              </View>
+                            </View>
+                          </>
+                        )}
                   </View>
 
                   {/* OPEN SOURCE */}
                   {source.originalUrl && (
-                    <TouchableOpacity
+                    <>
+                      <Text
+                        selectable
+                        style={styles.sourceUrl}
+                      >
+                        {source.originalUrl}
+                      </Text>
+                      <TouchableOpacity
                       activeOpacity={0.85}
                       style={
                         source.isPrimary
@@ -859,7 +880,8 @@ export default function EvidenceDetailsScreen({
                             : COLORS.blue
                         }
                       />
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </React.Fragment>
@@ -981,6 +1003,21 @@ const styles = StyleSheet.create({
 
   headerSpacer: {
     width: 45,
+  },
+
+  datasetNotice: {
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFF4E8',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+
+  datasetNoticeText: {
+    color: '#A64B00',
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '800',
   },
 
   /* HERO */
@@ -1378,6 +1415,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+  evidenceStance: {
+    marginTop: 14,
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   /* PROVENANCE */
 
   provenanceBlock: {
@@ -1459,6 +1503,13 @@ const styles = StyleSheet.create({
   },
 
   /* BUTTONS */
+
+  sourceUrl: {
+    marginTop: 15,
+    color: COLORS.blue,
+    fontSize: 12,
+    lineHeight: 18,
+  },
 
   openSourceButton: {
     marginTop: 16,

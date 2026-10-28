@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import {
   SafeAreaView,
@@ -18,6 +18,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../constants/app';
 import { MatchStatus } from '../types/verification';
+import { useAuth } from '../hooks/useAuth';
+import { saveVerificationHistory } from '../services/historyService';
+import SharingIntentionModal, {
+  SharingIntention,
+} from '../components/SharingIntentionModal';
+import { saveEvaluationDecision } from '../services/evaluationService';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -93,9 +99,51 @@ export default function VerificationResultsScreen({
   route,
 }: Props) {
   const { result } = route.params;
+  const authenticatedUser = useAuth();
 
   const [decision, setDecision] =
     useState<Decision>(null);
+
+  const [isSharingModalVisible, setIsSharingModalVisible] =
+    useState(false);
+  const [isSubmittingEvaluation, setIsSubmittingEvaluation] =
+    useState(false);
+  const [evaluationComplete, setEvaluationComplete] =
+    useState(false);
+  const [evaluationStatus, setEvaluationStatus] =
+    useState<string | null>(null);
+  const [sharingIntention, setSharingIntention] =
+    useState<SharingIntention | null>(null);
+
+  const evaluationSubmissionAttempted = useRef(false);
+  const openedSourceIds = useRef(new Set<string>());
+  const evaluation = route.params.evaluation;
+  const hasEvaluation = Boolean(evaluation);
+
+  const attemptedHistoryEntryIds = useRef(new Set<string>());
+  const historyEntryId = route.params.historyEntryId;
+
+  useEffect(() => {
+    if (
+      !historyEntryId ||
+      attemptedHistoryEntryIds.current.has(historyEntryId)
+    ) {
+      return;
+    }
+
+    if (!authenticatedUser) {
+      return;
+    }
+
+    attemptedHistoryEntryIds.current.add(historyEntryId);
+    void saveVerificationHistory(
+      authenticatedUser,
+      historyEntryId,
+      result,
+    ).catch(error => {
+      console.warn('Could not save verification history.', error);
+    });
+  }, [authenticatedUser, historyEntryId, result]);
 
   const matchTheme = getMatchTheme(
     result.matchStatus,
@@ -114,6 +162,12 @@ export default function VerificationResultsScreen({
   const handleOpenSource = (
     sourceId: string,
   ) => {
+    const source = result.evidence.find(
+      evidence => evidence.id === sourceId,
+    );
+    openedSourceIds.current.add(
+      source?.sourceId ?? sourceId,
+    );
     navigation.navigate(
       'EvidenceDetails',
       {
@@ -124,12 +178,75 @@ export default function VerificationResultsScreen({
   };
 
   const handleViewFullEvidence = () => {
+    result.evidence.forEach(source =>
+      openedSourceIds.current.add(
+        source.sourceId ?? source.id,
+      ),
+    );
     navigation.navigate(
       'EvidenceDetails',
       {
         result,
       },
     );
+  };
+
+  const handleDecision = (value: Exclude<Decision, null>) => {
+    if (decision || !hasEvaluation) {
+      return;
+    }
+
+    setDecision(value);
+    setIsSharingModalVisible(true);
+  };
+
+  const handleSharingIntention = async (
+    intention: SharingIntention,
+  ) => {
+    if (
+      evaluationSubmissionAttempted.current ||
+      !decision ||
+      !evaluation
+    ) {
+      return;
+    }
+
+    evaluationSubmissionAttempted.current = true;
+    setSharingIntention(intention);
+    setIsSubmittingEvaluation(true);
+
+    try {
+      const response = await saveEvaluationDecision({
+        condition: 'app',
+        claimId: result.claimId ?? null,
+        claimText: result.originalClaim,
+        originalOcrText: evaluation.originalOcrText,
+        inputSource: evaluation.inputSource,
+        matchStatus: result.matchStatus,
+        ocrEngine: evaluation.ocrEngine ?? null,
+        ocrError: evaluation.ocrError ?? null,
+        decision:
+          decision === 'dont-trust'
+            ? 'dont_trust'
+            : decision,
+        sharingIntention: intention,
+        sourcesOpened: [...openedSourceIds.current],
+        startedAt: evaluation.startedAt,
+        endedAt: new Date().toISOString(),
+      });
+
+      setEvaluationStatus(response.message);
+    } catch (error) {
+      setEvaluationStatus(
+        error instanceof Error
+          ? `Evaluation logging could not be confirmed: ${error.message}`
+          : 'Evaluation logging could not be confirmed. No retry was made to avoid duplicate submissions.',
+      );
+    } finally {
+      setIsSubmittingEvaluation(false);
+      setEvaluationComplete(true);
+      setIsSharingModalVisible(false);
+    }
   };
 
   return (
@@ -280,6 +397,14 @@ export default function VerificationResultsScreen({
             </Text>
           </View>
         </View>
+
+        {result.datasetNotice ? (
+          <View style={styles.datasetNotice}>
+            <Text style={styles.datasetNoticeText}>
+              DEMONSTRATION DATA · {result.datasetNotice}
+            </Text>
+          </View>
+        ) : null}
 
         {/* YOUR CLAIM */}
         <View style={styles.claimCard}>
@@ -638,7 +763,7 @@ export default function VerificationResultsScreen({
         )}
 
         {/* DECISION */}
-        {hasEvidence && (
+        {hasEvaluation && (
           <View
             style={
               styles.decisionSection
@@ -662,7 +787,9 @@ export default function VerificationResultsScreen({
                   styles.decisionSubtitle
                 }
               >
-                Based on the evidence you reviewed, record your decision.
+                {hasEvidence
+                  ? 'Based on the evidence you reviewed, record your decision.'
+                  : 'Record your decision based on the information available.'}
               </Text>
             </View>
 
@@ -673,6 +800,7 @@ export default function VerificationResultsScreen({
             >
               <TouchableOpacity
                 activeOpacity={0.8}
+                disabled={Boolean(decision)}
                 style={[
                   styles.decisionButton,
 
@@ -680,9 +808,7 @@ export default function VerificationResultsScreen({
                     'trust' &&
                     styles.trustSelected,
                 ]}
-                onPress={() =>
-                  setDecision('trust')
-                }
+                onPress={() => handleDecision('trust')}
               >
                 <View
                   style={[
@@ -720,6 +846,7 @@ export default function VerificationResultsScreen({
 
               <TouchableOpacity
                 activeOpacity={0.8}
+                disabled={Boolean(decision)}
                 style={[
                   styles.decisionButton,
 
@@ -727,11 +854,7 @@ export default function VerificationResultsScreen({
                     'dont-trust' &&
                     styles.dontTrustSelected,
                 ]}
-                onPress={() =>
-                  setDecision(
-                    'dont-trust',
-                  )
-                }
+                onPress={() => handleDecision('dont-trust')}
               >
                 <View
                   style={[
@@ -769,6 +892,7 @@ export default function VerificationResultsScreen({
 
               <TouchableOpacity
                 activeOpacity={0.8}
+                disabled={Boolean(decision)}
                 style={[
                   styles.decisionButton,
 
@@ -776,9 +900,7 @@ export default function VerificationResultsScreen({
                     'unsure' &&
                     styles.unsureSelected,
                 ]}
-                onPress={() =>
-                  setDecision('unsure')
-                }
+                onPress={() => handleDecision('unsure')}
               >
                 <View
                   style={[
@@ -882,35 +1004,58 @@ export default function VerificationResultsScreen({
           </TouchableOpacity>
         )}
 
-        {/* SCAN AGAIN */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={
-            styles.scanAgainButton
-          }
-          onPress={() =>
-            navigation.navigate(
-              'Camera',
-            )
-          }
-        >
-          <Ionicons
-            name="scan-outline"
-            size={20}
-            color={
-              COLORS.textPrimary
-            }
-          />
-
+        {evaluationStatus ? (
           <Text
-            style={
-              styles.scanAgainText
-            }
+            accessibilityRole="alert"
+            style={styles.evaluationStatus}
           >
-            Scan Another Claim
+            {evaluationStatus}
+            {sharingIntention
+              ? ` Sharing intention: ${
+                  sharingIntention === 'not_sure'
+                    ? 'Not Sure'
+                    : sharingIntention === 'yes'
+                      ? 'Yes'
+                      : 'No'
+                }.`
+              : ''}
           </Text>
-        </TouchableOpacity>
+        ) : null}
+
+        {(!hasEvaluation || evaluationComplete) && (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.scanAgainButton, styles.scanAgainPrimary]}
+              onPress={() => navigation.navigate('Camera')}
+            >
+              <Ionicons
+                name="scan-outline"
+                size={20}
+                color={COLORS.white}
+              />
+              <Text style={styles.scanAgainPrimaryText}>
+                Scan Another Claim
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.homeButton}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Text style={styles.homeButtonText}>Home</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
+
+      {hasEvaluation && (
+        <SharingIntentionModal
+          visible={isSharingModalVisible}
+          isSubmitting={isSubmittingEvaluation}
+          onSelect={handleSharingIntention}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1045,6 +1190,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E1E8F0',
     padding: 15,
+  },
+
+  datasetNotice: {
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFF4E8',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+
+  datasetNoticeText: {
+    color: '#A64B00',
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '800',
   },
 
   claimTop: {
@@ -1532,10 +1692,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  scanAgainText: {
+  scanAgainPrimary: {
+    backgroundColor: COLORS.blue,
+    borderWidth: 0,
+  },
+
+  scanAgainPrimaryText: {
     marginLeft: 7,
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  homeButton: {
+    marginTop: 10,
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#E1E8F0',
+    backgroundColor: COLORS.white,
+  },
+
+  homeButtonText: {
     color: COLORS.textPrimary,
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  evaluationStatus: {
+    marginTop: 14,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

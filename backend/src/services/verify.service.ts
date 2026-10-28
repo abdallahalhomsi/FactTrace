@@ -53,6 +53,7 @@ function toEvidenceCards(claim: ClaimDetail): VerifyEvidence[] {
     if (!s) continue; //evidence pointing to a missing source is skipped instead of breaking the screen
     cards.push({
       id: e.id,
+      sourceId: s.id,
       title: s.title,
       sourceName: s.outlet,
       organization: SOURCE_TYPE_LABEL[s.type],

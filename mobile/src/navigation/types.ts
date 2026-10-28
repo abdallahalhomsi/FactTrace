@@ -1,4 +1,5 @@
 import { VerificationResult } from '../types/verification';
+import { VerificationEvaluationContext } from '../types/api';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -12,6 +13,8 @@ export type RootStackParamList = {
 
   VerificationResults: {
     result: VerificationResult;
+    historyEntryId?: string;
+    evaluation?: VerificationEvaluationContext;
   };
 
   EvidenceDetails: {
@@ -20,6 +23,8 @@ export type RootStackParamList = {
   };
 
   VerificationHistory: undefined;
+
+  BrowserComparison: undefined;
 
   Profile: undefined;
 

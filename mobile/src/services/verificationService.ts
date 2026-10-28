@@ -1,4 +1,6 @@
+
 import {
+  ApiResponse,
   VerifyClaimRequest,
   VerifyClaimResponse,
 } from '../types/api';
@@ -7,248 +9,146 @@ import { VerificationResult } from '../types/verification';
 
 import { apiRequest } from './api';
 
-/*
-  Keep TRUE until Rand connects the real backend.
+// Convert API errors into readable messages
+function getApiError(
+  error: ApiResponse<VerificationResult>['error'],
+  fallback: string,
+): string {
+  if (typeof error === 'string') {
+    return error;
+  }
 
-  Later:
-  const USE_MOCK_API = false;
-*/
-const USE_MOCK_API = true;
+  return error?.message ?? fallback;
+}
 
-const wait = (ms: number) =>
-  new Promise(resolve =>
-    setTimeout(resolve, ms),
+// Check that the backend returned a valid verification result
+function isVerificationResult(
+  value: unknown,
+): value is VerificationResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('originalClaim' in value) ||
+    typeof value.originalClaim !== 'string' ||
+    !('matchStatus' in value) ||
+    (value.matchStatus !== 'strong_match' &&
+      value.matchStatus !== 'weak_match' &&
+      value.matchStatus !== 'no_match') ||
+    ('matchedClaim' in value &&
+      typeof value.matchedClaim !== 'string') ||
+    ('claimId' in value &&
+      value.claimId !== null &&
+      typeof value.claimId !== 'string') ||
+    ('matchScore' in value &&
+      (typeof value.matchScore !== 'number' ||
+        !Number.isFinite(value.matchScore))) ||
+    ('explanation' in value &&
+      typeof value.explanation !== 'string') ||
+    ('matchExplanation' in value &&
+      typeof value.matchExplanation !== 'string') ||
+    ('datasetNotice' in value &&
+      typeof value.datasetNotice !== 'string') ||
+    !('evidence' in value) ||
+    !Array.isArray(value.evidence)
+  ) {
+    return false;
+  }
+
+  return value.evidence.every(
+    source =>
+      typeof source === 'object' &&
+      source !== null &&
+      'id' in source &&
+      typeof source.id === 'string' &&
+      (!('sourceId' in source) ||
+        typeof source.sourceId === 'string') &&
+      'title' in source &&
+      typeof source.title === 'string' &&
+      'sourceName' in source &&
+      typeof source.sourceName === 'string' &&
+      (!('organization' in source) ||
+        typeof source.organization === 'string') &&
+      (!('author' in source) ||
+        typeof source.author === 'string') &&
+      (!('publicationDate' in source) ||
+        typeof source.publicationDate === 'string') &&
+      'summary' in source &&
+      typeof source.summary === 'string' &&
+      'evidenceText' in source &&
+      typeof source.evidenceText === 'string' &&
+      'isPrimary' in source &&
+      typeof source.isPrimary === 'boolean' &&
+      (!('originalUrl' in source) ||
+        typeof source.originalUrl === 'string') &&
+      (!('provenance' in source) ||
+        typeof source.provenance === 'string') &&
+      (!('stance' in source) ||
+        source.stance === 'supports' ||
+        source.stance === 'contradicts' ||
+        source.stance === 'context') &&
+      (!('sourceType' in source) ||
+        source.sourceType === 'news' ||
+        source.sourceType === 'fact_check' ||
+        source.sourceType === 'official' ||
+        source.sourceType === 'academic' ||
+        source.sourceType === 'social') &&
+      (!('publishedAt' in source) ||
+        source.publishedAt === null ||
+        typeof source.publishedAt === 'string'),
   );
-
-function createStrongMatch(
-  claimText: string,
-): VerificationResult {
-  return {
-    originalClaim: claimText,
-
-    matchedClaim:
-      'Example matched claim from the FactTrace evidence database.',
-
-    matchStatus: 'strong_match',
-
-    matchScore: 92,
-
-    explanation:
-      'FactTrace found a closely matching claim and relevant evidence for you to review.',
-
-    evidence: [
-      {
-        id: 'source-1',
-
-        title:
-          'Evidence relevant to the matched claim',
-
-        sourceName:
-          'Primary Evidence Source',
-
-        organization:
-          'Example Publisher',
-
-        author:
-          'Source Author',
-
-        publicationDate:
-          'October 2026',
-
-        summary:
-          'This source provides information directly related to the claim and gives context that can help you assess the evidence.',
-
-        evidenceText:
-          'This section contains the complete evidence associated with the matched claim. The final version will use evidence returned by the backend.',
-
-        originalUrl:
-          'https://example.com',
-
-        provenance:
-          'Original publication → FactTrace evidence record',
-
-        isPrimary: true,
-      },
-
-      {
-        id: 'source-2',
-
-        title:
-          'Additional supporting information',
-
-        sourceName:
-          'Supporting Evidence Source',
-
-        organization:
-          'Example Reference Organization',
-
-        publicationDate:
-          'September 2026',
-
-        summary:
-          'This source provides additional context so you can compare multiple pieces of evidence before reaching a conclusion.',
-
-        evidenceText:
-          'This supporting source contains additional information connected to the matched claim.',
-
-        originalUrl:
-          'https://example.com',
-
-        provenance:
-          'Reference publication → FactTrace evidence record',
-
-        isPrimary: false,
-      },
-    ],
-  };
 }
 
-function createWeakMatch(
-  claimText: string,
-): VerificationResult {
-  return {
-    originalClaim: claimText,
-
-    matchedClaim:
-      'A possibly related claim was found, but the wording and context do not match closely.',
-
-    matchStatus: 'weak_match',
-
-    matchScore: 58,
-
-    explanation:
-      'FactTrace found a possible match. The available evidence may be related, so review it carefully before making a decision.',
-
-    evidence: [
-      {
-        id: 'weak-source-1',
-
-        title:
-          'Possibly related supporting information',
-
-        sourceName:
-          'Related Evidence Source',
-
-        organization:
-          'Example Research Organization',
-
-        publicationDate:
-          'August 2026',
-
-        summary:
-          'This source appears related to part of the claim, but the match is not strong enough to treat it as an exact match.',
-
-        evidenceText:
-          'The available evidence overlaps with some parts of the submitted claim, but differences in wording or context remain.',
-
-        originalUrl:
-          'https://example.com',
-
-        provenance:
-          'Related publication → FactTrace evidence record',
-
-        isPrimary: true,
-      },
-    ],
-  };
-}
-
-function createNoMatch(
-  claimText: string,
-): VerificationResult {
-  return {
-    originalClaim: claimText,
-
-    matchStatus: 'no_match',
-
-    matchScore: 18,
-
-    explanation:
-      'FactTrace could not find a closely matching claim or relevant evidence in the available records.',
-
-    evidence: [],
-  };
-}
-
+// Send the claim to the real backend for verification
 export async function verifyClaim(
   claimText: string,
+  requestOptions: Omit<VerifyClaimRequest, 'claimText'> = {
+    source: 'manual',
+  },
 ): Promise<VerifyClaimResponse> {
-  /*
-    MOCK DEVELOPMENT MODE
+  try {
+    const requestBody: VerifyClaimRequest = {
+      claimText,
+      ...requestOptions,
+    };
 
-    Use these words anywhere in the claim:
+    const response = await apiRequest<ApiResponse<unknown>>(
+      '/api/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      },
+    );
 
-    "weak"  -> weak match
-    "none"  -> no match
-    "error" -> verification failure
-
-    Everything else -> strong match
-  */
-  if (USE_MOCK_API) {
-    await wait(900);
-
-    const normalized =
-      claimText.toLowerCase();
-
-    if (normalized.includes('error')) {
+    if (!response.success || !response.data) {
       return {
         success: false,
+        error: getApiError(
+          response.error,
+          response.message ??
+            'FactTrace could not verify this claim.',
+        ),
+      };
+    }
 
+    if (!isVerificationResult(response.data)) {
+      return {
+        success: false,
         error:
-          'Mock verification error for testing.',
-      };
-    }
-
-    if (normalized.includes('none')) {
-      return {
-        success: true,
-
-        data:
-          createNoMatch(
-            claimText,
-          ),
-      };
-    }
-
-    if (normalized.includes('weak')) {
-      return {
-        success: true,
-
-        data:
-          createWeakMatch(
-            claimText,
-          ),
+          'The verification service returned an invalid result.',
       };
     }
 
     return {
       success: true,
-
-      data:
-        createStrongMatch(
-          claimText,
-        ),
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unable to reach the verification service.',
     };
   }
-
-  /*
-    REAL BACKEND MODE
-
-    Rand can enable this later.
-  */
-
-  const requestBody: VerifyClaimRequest = {
-    claimText,
-  };
-
-  return apiRequest<VerifyClaimResponse>(
-    '/api/verify',
-    {
-      method: 'POST',
-
-      body: JSON.stringify(
-        requestBody,
-      ),
-    },
-  );
 }
