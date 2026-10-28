@@ -1,128 +1,85 @@
 import { fetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 
-import { OcrResponse } from '../types/api';
-import { API_BASE_URL } from './api';
+import {
+  ApiResponse,
+  BackendOcrResult,
+  OcrResponse,
+} from '../types/api';
+import { getApiBaseUrl } from './api';
 
-/*
-  Keep TRUE until Rand connects
-  Manal/Ayesha's real OCR endpoint.
-*/
-const USE_MOCK_OCR = true;
-
-/*
-  Change ONLY this value when testing:
-
-  'success'
-  'empty'
-  'error'
-*/
-const MOCK_OCR_MODE:
-  | 'success'
-  | 'empty'
-  | 'error' = 'success';
-
-const wait = (ms: number) =>
-  new Promise(resolve =>
-    setTimeout(resolve, ms),
-  );
+function getApiError(
+  error: ApiResponse<BackendOcrResult>['error'],
+  fallback: string,
+): string {
+  if (typeof error === 'string') {
+    return error;
+  }
+  return error?.message ?? fallback;
+}
 
 export async function extractTextFromImage(
   imageUri: string,
 ): Promise<OcrResponse> {
-  /*
-    MOCK OCR
-  */
-  if (USE_MOCK_OCR) {
-    await wait(1200);
-
-    if (
-      MOCK_OCR_MODE ===
-      'error'
-    ) {
-      return {
-        success: false,
-
-        error:
-          'FactTrace could not extract text from this image.',
-      };
-    }
-
-    if (
-      MOCK_OCR_MODE ===
-      'empty'
-    ) {
-      return {
-        success: false,
-
-        error:
-          'No readable text was detected in the image.',
-      };
-    }
-
-    return {
-      success: true,
-
-      data: {
-        extractedText:
-          'This is example text extracted from the captured claim.',
-      },
-    };
-  }
-
-  /*
-    REAL OCR
-
-    Rand can enable this later.
-  */
-
   try {
-    const imageFile =
-      new File(imageUri);
-
-    const formData =
-      new FormData();
-
+    const formData = new FormData();
     formData.append(
       'image',
-      imageFile,
+      new File(imageUri),
       'claim.jpg',
     );
 
-    const response =
-      await fetch(
-        `${API_BASE_URL}/api/ocr`,
-        {
-          method: 'POST',
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/ocr`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
 
-          body: formData,
-        },
-      );
-
-    if (!response.ok) {
+    let envelope: ApiResponse<BackendOcrResult>;
+    try {
+      envelope = (await response.json()) as ApiResponse<BackendOcrResult>;
+    } catch {
       return {
         success: false,
-
-        error:
-          `OCR request failed with status ${response.status}`,
+        error: 'The OCR service returned an invalid response.',
       };
     }
 
-    const data =
-      (await response.json()) as OcrResponse;
+    if (!response.ok || !envelope.success || !envelope.data) {
+      return {
+        success: false,
+        error: getApiError(
+          envelope.error,
+          `OCR request failed with status ${response.status}.`,
+        ),
+      };
+    }
 
-    return data;
+    const ocrResult = envelope.data;
+    return {
+      success: ocrResult.success,
+      data: {
+        extractedText: ocrResult.text,
+        confidence: ocrResult.confidence,
+        engine: ocrResult.engine,
+        ocrError: ocrResult.error,
+      },
+      error:
+        ocrResult.error === 'NO_TEXT'
+          ? 'No readable text was detected in the image.'
+          : ocrResult.error === 'OCR_FAILED'
+            ? 'FactTrace could not extract text from the image.'
+            : undefined,
+    };
   } catch (error) {
-    console.log(
-      'OCR service error:',
-      error,
-    );
-
     return {
       success: false,
-
       error:
-        'Unable to extract text from the image.',
+        error instanceof Error
+          ? error.message
+          : 'Unable to reach the OCR service.',
     };
   }
 }

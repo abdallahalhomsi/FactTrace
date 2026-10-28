@@ -1,11 +1,11 @@
 import React, {
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -29,11 +29,24 @@ import { COLORS } from '../constants/app';
 
 import { verifyClaim } from '../services/verificationService';
 import { extractTextFromImage } from '../services/ocrService';
+import { createHistoryEntryId } from '../services/historyService';
+import { BackendOcrResult, OcrResponse } from '../types/api';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
   'ClaimReview'
 >;
+
+function getVerificationErrorMessage(message: string): string {
+  if (/failed to fetch|network request failed|networkerror/i.test(message)) {
+    const apiBaseUrl =
+      process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ||
+      (Platform.OS === 'web' ? 'http://localhost:3000' : null);
+    return `FactTrace could not reach ${apiBaseUrl ?? 'the configured backend'}${apiBaseUrl ? '/api/verify' : ''}. Start the backend with “npm run dev” in the backend folder, check EXPO_PUBLIC_API_BASE_URL, then try again.`;
+  }
+
+  return message;
+}
 
 export default function ClaimReviewScreen({
   navigation,
@@ -51,14 +64,61 @@ export default function ClaimReviewScreen({
   const [isChecking, setIsChecking] =
     useState(false);
 
+  const [verificationError, setVerificationError] =
+    useState<string | null>(null);
+
   const [isExtracting, setIsExtracting] =
     useState(false);
 
   const [ocrError, setOcrError] =
     useState<string | null>(null);
 
+  const [originalOcrText, setOriginalOcrText] =
+    useState<string | undefined>();
+
+  const [ocrMetadata, setOcrMetadata] =
+    useState<OcrResponse['data'] | null>(null);
+
+  const [ocrErrorCode, setOcrErrorCode] =
+    useState<BackendOcrResult['error']>(null);
+
+  const taskStartedAt = useRef(
+    new Date().toISOString(),
+  );
+
   const isFromCamera =
     Boolean(imageUri);
+
+  const applyOcrResponse = (
+    response: OcrResponse,
+  ) => {
+    setOcrMetadata(response.data ?? null);
+    setOcrErrorCode(
+      response.data?.ocrError ??
+        (response.success ? null : 'OCR_FAILED'),
+    );
+    setOriginalOcrText(
+      response.data?.extractedText || undefined,
+    );
+
+    if (
+      response.success &&
+      response.data?.extractedText
+    ) {
+      setClaimText(response.data.extractedText);
+      setOcrError(
+        response.data.ocrError === 'PARTIAL'
+          ? 'Some text may be incomplete. Review and correct it before verifying.'
+          : null,
+      );
+      return;
+    }
+
+    setOcrError(
+      response.error ||
+        'No readable text was detected. You can enter the claim manually.',
+    );
+  };
 
   /*
     AUTOMATIC OCR
@@ -88,20 +148,7 @@ export default function ClaimReviewScreen({
           return;
         }
 
-        if (
-          response.success &&
-          response.data?.extractedText
-        ) {
-          setClaimText(
-            response.data.extractedText,
-          );
-        } else {
-          setOcrError(
-            response.message ||
-              response.error ||
-              'No readable text was detected.',
-          );
-        }
+        applyOcrResponse(response);
       } catch (error) {
         console.log(
           'OCR error:',
@@ -144,20 +191,7 @@ export default function ClaimReviewScreen({
           imageUri,
         );
 
-      if (
-        response.success &&
-        response.data?.extractedText
-      ) {
-        setClaimText(
-          response.data.extractedText,
-        );
-      } else {
-        setOcrError(
-          response.message ||
-            response.error ||
-            'No readable text was detected.',
-        );
-      }
+      applyOcrResponse(response);
     } catch (error) {
       console.log(
         'OCR retry error:',
@@ -185,25 +219,31 @@ export default function ClaimReviewScreen({
         return;
       }
 
+      setVerificationError(null);
       try {
         setIsChecking(true);
 
         const response =
           await verifyClaim(
             cleanedClaim,
+            {
+              source: isFromCamera ? 'ocr' : 'manual',
+              originalOcrText,
+              ocrConfidence: ocrMetadata?.confidence,
+            },
           );
 
         if (
           !response.success ||
           !response.data
         ) {
-          Alert.alert(
-            'Could not check evidence',
-            response.message ||
-              response.error ||
-              'Please try again.',
+          setVerificationError(
+            getVerificationErrorMessage(
+              response.message ||
+                response.error ||
+                'FactTrace could not check this claim. Please try again.',
+            ),
           );
-
           return;
         }
 
@@ -212,18 +252,25 @@ export default function ClaimReviewScreen({
           {
             result:
               response.data,
+            historyEntryId:
+              createHistoryEntryId(),
+            evaluation: {
+              inputSource: isFromCamera ? 'ocr' : 'manual',
+              originalOcrText,
+              ocrEngine: ocrMetadata?.engine,
+              ocrError: isFromCamera
+                ? ocrErrorCode
+                : null,
+              startedAt: taskStartedAt.current,
+            },
           },
         );
       } catch (error) {
-        console.log(
-          'Verification error:',
-          error,
-        );
-
-        Alert.alert(
-          'Connection problem',
-          'FactTrace could not check the claim. Please try again.',
-        );
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'FactTrace could not check the claim.';
+        setVerificationError(getVerificationErrorMessage(message));
       } finally {
         setIsChecking(false);
       }
@@ -726,7 +773,10 @@ export default function ClaimReviewScreen({
                     }
                     value={claimText}
                     onChangeText={
-                      setClaimText
+                      value => {
+                        setClaimText(value);
+                        setVerificationError(null);
+                      }
                     }
                     placeholder={
                       isFromCamera
@@ -950,6 +1000,36 @@ export default function ClaimReviewScreen({
                 )}
             </LinearGradient>
           </TouchableOpacity>
+
+          {verificationError ? (
+            <View
+              accessibilityRole="alert"
+              style={styles.verificationErrorCard}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={21}
+                color={COLORS.red}
+              />
+              <View style={styles.verificationErrorContent}>
+                <Text style={styles.verificationErrorTitle}>
+                  Could not check evidence
+                </Text>
+                <Text style={styles.verificationErrorText}>
+                  {verificationError}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={buttonDisabled}
+                  onPress={() => void handleCheckEvidence()}
+                >
+                  <Text style={styles.verificationRetryText}>
+                    Try Again
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1551,5 +1631,42 @@ const styles =
       marginTop: 3,
       color: '#DCE8FF',
       fontSize: 11,
+    },
+
+    verificationErrorCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      columnGap: 10,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: '#F3C6C3',
+      borderRadius: 14,
+      backgroundColor: '#FFF5F4',
+      padding: 14,
+    },
+
+    verificationErrorContent: {
+      flex: 1,
+    },
+
+    verificationErrorTitle: {
+      color: COLORS.red,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    verificationErrorText: {
+      marginTop: 4,
+      color: '#713B38',
+      fontSize: 13,
+      lineHeight: 19,
+    },
+
+    verificationRetryText: {
+      alignSelf: 'flex-start',
+      marginTop: 10,
+      color: COLORS.blue,
+      fontSize: 13,
+      fontWeight: '700',
     },
   });

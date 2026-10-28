@@ -17,4 +17,21 @@ export type VerificationResult = {
   explanation?: string;
 
   evidence: EvidenceSource[];
+
+  claimId?: string | null;
+
+  matchExplanation?: string;
+
+  weakReason?: 'low_ocr_confidence' | 'low_similarity' | 'both';
+
+  overallStance?: 'supports' | 'contradicts' | 'mixed' | 'unclear';
+
+  datasetNotice?: string;
+
+  provenanceSignals?: {
+    key: string;
+    label: string;
+    detail: string;
+    level: 'positive' | 'neutral' | 'warning';
+  }[];
 };

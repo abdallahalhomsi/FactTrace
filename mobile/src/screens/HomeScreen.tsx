@@ -2,6 +2,7 @@ import React from 'react';
 
 import {
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,15 +17,22 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../constants/app';
+import { useAuth } from '../hooks/useAuth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
+  const user = useAuth();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
 
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* HEADER */}
         <View style={styles.header}>
           <View>
@@ -235,6 +243,33 @@ export default function HomeScreen({ navigation }: Props) {
               color={COLORS.textMuted}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('BrowserComparison')}
+          >
+            <View style={styles.actionIconBlue}>
+              <Ionicons
+                name="search-outline"
+                size={23}
+                color={COLORS.blue}
+              />
+            </View>
+
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>Browser Comparison</Text>
+              <Text style={styles.actionSubtitle}>
+                Record a manual research task
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={21}
+              color={COLORS.textMuted}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* GUEST CARD */}
@@ -249,22 +284,25 @@ export default function HomeScreen({ navigation }: Props) {
 
           <View style={styles.accountTextContainer}>
             <Text style={styles.accountTitle}>
-              Using FactTrace as a guest
+              {user ? 'Your Account' : 'Using FactTrace as a guest'}
             </Text>
 
             <Text style={styles.accountDescription}>
-              You can verify claims without an account. Log in to save and
-              access your history.
+              {user
+                ? `${user.displayName} · your profile and history are saved on this device.`
+                : 'You can verify claims without an account. Create an account to save your history on this device.'}
             </Text>
           </View>
 
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.loginButton}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() =>
+              navigation.navigate(user ? 'Profile' : 'Login')
+            }
           >
             <Text style={styles.loginButtonText}>
-              Log In
+              {user ? 'Profile' : 'Log In'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -331,7 +369,7 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -344,7 +382,12 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
+    backgroundColor: '#F5F8FC',
+  },
+
+  content: {
     paddingHorizontal: 22,
+    paddingBottom: 28,
     backgroundColor: '#F5F8FC',
   },
 
