@@ -17,7 +17,10 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { COLORS } from '../constants/app';
 import { RootStackParamList } from '../navigation/types';
-import { signUp } from '../services/authService';
+import {
+  MIN_PASSWORD_LENGTH,
+  signUp,
+} from '../services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 
@@ -26,6 +29,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function SignUpScreen({ navigation }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,10 +48,17 @@ export default function SignUpScreen({ navigation }: Props) {
       setError('Enter a valid email address.');
       return;
     }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      );
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
     try {
-      await signUp(normalizedName, normalizedEmail);
+      await signUp(normalizedName, normalizedEmail, password);
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
@@ -117,9 +128,25 @@ export default function SignUpScreen({ navigation }: Props) {
               accessibilityLabel="Email"
             />
 
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="new-password"
+              secureTextEntry
+              style={styles.input}
+              placeholder="At least 8 characters"
+              placeholderTextColor={COLORS.textSecondary}
+              value={password}
+              onChangeText={setPassword}
+              editable={!isSubmitting}
+              accessibilityLabel="Password"
+            />
+
             <Text style={styles.accountNote}>
-              Your account and history are stored on this device and won’t sync
-              to other devices.
+              Use at least {MIN_PASSWORD_LENGTH} characters. This local demo
+              stores a password hash on this device; it is not server
+              authentication and won’t sync to other devices. Don’t reuse a
+              password you use elsewhere.
             </Text>
           </View>
 

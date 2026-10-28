@@ -30,7 +30,11 @@ import { COLORS } from '../constants/app';
 import { verifyClaim } from '../services/verificationService';
 import { extractTextFromImage } from '../services/ocrService';
 import { createHistoryEntryId } from '../services/historyService';
-import { BackendOcrResult, OcrResponse } from '../types/api';
+import {
+  ApiResponse,
+  BackendOcrResult,
+  OcrResponse,
+} from '../types/api';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -46,6 +50,17 @@ function getVerificationErrorMessage(message: string): string {
   }
 
   return message;
+}
+
+function getApiErrorMessage(
+  error: ApiResponse<unknown>['error'],
+  fallback: string,
+): string {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return error?.message ?? fallback;
 }
 
 export default function ClaimReviewScreen({
@@ -89,6 +104,9 @@ export default function ClaimReviewScreen({
   const isFromCamera =
     Boolean(imageUri);
 
+  const hasOcrText =
+    Boolean(originalOcrText?.trim());
+
   const applyOcrResponse = (
     response: OcrResponse,
   ) => {
@@ -115,8 +133,10 @@ export default function ClaimReviewScreen({
     }
 
     setOcrError(
-      response.error ||
+      getApiErrorMessage(
+        response.error,
         'No readable text was detected. You can enter the claim manually.',
+      ),
     );
   };
 
@@ -227,9 +247,13 @@ export default function ClaimReviewScreen({
           await verifyClaim(
             cleanedClaim,
             {
-              source: isFromCamera ? 'ocr' : 'manual',
-              originalOcrText,
-              ocrConfidence: ocrMetadata?.confidence,
+              source: hasOcrText ? 'ocr' : 'manual',
+              ...(hasOcrText
+                ? {
+                    originalOcrText,
+                    ocrConfidence: ocrMetadata?.confidence,
+                  }
+                : {}),
             },
           );
 
@@ -240,8 +264,10 @@ export default function ClaimReviewScreen({
           setVerificationError(
             getVerificationErrorMessage(
               response.message ||
-                response.error ||
-                'FactTrace could not check this claim. Please try again.',
+                getApiErrorMessage(
+                  response.error,
+                  'FactTrace could not check this claim. Please try again.',
+                ),
             ),
           );
           return;
@@ -255,12 +281,14 @@ export default function ClaimReviewScreen({
             historyEntryId:
               createHistoryEntryId(),
             evaluation: {
-              inputSource: isFromCamera ? 'ocr' : 'manual',
-              originalOcrText,
-              ocrEngine: ocrMetadata?.engine,
-              ocrError: isFromCamera
-                ? ocrErrorCode
-                : null,
+              inputSource: hasOcrText ? 'ocr' : 'manual',
+              ...(hasOcrText
+                ? {
+                    originalOcrText,
+                    ocrEngine: ocrMetadata?.engine,
+                    ocrError: ocrErrorCode,
+                  }
+                : {}),
               startedAt: taskStartedAt.current,
             },
           },
@@ -643,7 +671,9 @@ export default function ClaimReviewScreen({
                     styles.ocrErrorTitle
                   }
                 >
-                  Text extraction failed
+                  {ocrErrorCode === 'PARTIAL' && hasOcrText
+                    ? 'Text may be incomplete'
+                    : 'Text extraction failed'}
                 </Text>
 
                 <Text
