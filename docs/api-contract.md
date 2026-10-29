@@ -3,7 +3,7 @@
 Base URL: `http://<laptop-ip>:3000/api` on the same Wi-Fi, or the ngrok URL + `/api`.
 Types live in `backend/src/types/shared.ts` and `backend/src/types/api.ts`. Mirror both in `mobile/src/types/`.
 
-Status: endpoints are live but backed by **mock data** (3 placeholder claims, in-memory decisions). Shapes are what the real backend will return; only the data changes.
+Status: endpoints are live but backed by **mock data** (7 placeholder claims, in-memory decisions). Shapes are what the real backend will return; only the data changes.
 
 **Flexible by design.** The frontend isn't final, so the backend sends everything a screen might need and the app decides what to show. Decision and sharing options come from `GET /config`, so changing them needs no app or route change.
 
@@ -75,11 +75,12 @@ Send back the `value`, never the label. The options are defined in `backend/src/
 Agreed format: JSON with the photo as base64.
 
 ```ts
-const photo = await camera.takePictureAsync({ base64: true, quality: 0.7 });
+const photo = await camera.takePictureAsync({ quality: 0.7 });
+//shrink to about 1600px wide with expo-image-manipulator, then send the result as base64
 fetch(`${API}/ocr`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ image: photo.base64 }), // a "data:image/jpeg;base64," prefix is also fine
+  body: JSON.stringify({ image: shrunkPhotoBase64 }), // a "data:image/jpeg;base64," prefix is also fine
 });
 ```
 A multipart upload (file in field `image`) also works, if that turns out easier.
@@ -91,6 +92,7 @@ A multipart upload (file in field `image`) also works, if that turns out easier.
 - `PARTIAL` still returns text: show it with a "please check this text" warning.
 - Keep `text`, `confidence`, `engine` and `error`: `text` and `confidence` go to `/verify` (or `/claims/match`) as `originalOcrText` and `ocrConfidence`; `engine` and `error` go to `/decisions` as `ocrEngine` and `ocrError`.
 - Raw base64 without the `data:` prefix is preferred; the prefixed form also works.
+- Shrink photos to about 1600px wide (JPEG quality around 0.7) before sending, for example with `expo-image-manipulator`. At 1600px Tesseract takes about 0.6 to 1.2s; full resolution phone photos are noticeably slower and the upload is much bigger.
 - Images are processed in memory and never stored.
 
 ### `POST /verify` (recommended for the app)
@@ -99,6 +101,7 @@ One call that matches the claim and returns everything the results screen needs,
 ```json
 { "claimText": "honey never spoils", "source": "ocr", "originalOcrText": "honey never spoils", "ocrConfidence": 0.3 }
 ```
+QR scans: `{ "source": "qr", "claimId": "claim_02" }` (no text needed).
 
 `data: VerifyResponse`
 ```json
@@ -111,6 +114,7 @@ One call that matches the claim and returns everything the results screen needs,
   "evidence": [
     {
       "id": "ev_03a",
+      "sourceId": "src_03a",
       "title": "Why honey lasts",
       "sourceName": "Example Journal of Food Science",
       "organization": "Academic source",
@@ -136,7 +140,7 @@ One call that matches the claim and returns everything the results screen needs,
 ```
 - `matchStatus`: `strong_match` | `weak_match` | `no_match`. `matchScore`: 0 to 100.
 - Fields up to `evidence` match the frontend's existing `VerificationResult` / `EvidenceSource` types exactly. `author` and `publicationDate` are left out when unknown (optional in those types).
-- Extras the app can use or ignore: `claimId` (send it to `/decisions`), `matchExplanation` (how sure the match is, in plain words), `weakReason`, `overallStance`, `datasetNotice`, `provenanceSignals`, and per evidence `stance`, `sourceType`, `publishedAt`. Evidence is sorted primary first.
+- Extras the app can use or ignore: `claimId` (send it to `/decisions`), `matchExplanation` (how sure the match is, in plain words), `weakReason`, `overallStance`, `datasetNotice`, `provenanceSignals`, and per evidence `sourceId` (log it in `sourcesOpened`), `stance`, `sourceType`, `publishedAt`. Evidence is sorted primary first.
 - `no_match`: `evidence` and `provenanceSignals` are empty and there is no `matchedClaim`. `factCheck` will be added here once the Fact Check fallback is ready.
 - Dr. Göktaş asked that a database match is never presented as independent verification and that uncertain matches are recognisable: show `datasetNotice` on the results screen, and on `weak_match` show `matchedClaim` with `matchExplanation` ("Is this the claim you saw?").
 
@@ -209,7 +213,23 @@ Body: `DecisionRequest`
 `201`, `data: { decisionId, durationMs }`
 
 ## Mock claim ids
-`claim_01` (misleading), `claim_02` (false), `claim_03` (true). Use these for QR test codes.
+Placeholder data (example.org sources) until the real claims are seeded. Use these ids for QR test codes.
+
+| id | claim | answer | overallStance |
+|---|---|---|---|
+| `claim_01` | Drinking eight glasses of water a day is required for good health. | misleading | contradicts |
+| `claim_02` | Sabancı University campus will be closed to all students for the entire month of December. | false | contradicts |
+| `claim_03` | Honey never spoils if it is stored in a sealed container. | true | supports |
+| `claim_04` | The city will introduce free public transport next month. (Figma claim) | misleading | contradicts |
+| `claim_05` | A new study proves that using your phone before bed causes permanent memory loss. | false | contradicts |
+| `claim_06` | Working from home makes employees more productive. | misleading | mixed |
+| `claim_07` | The campus library will stay open 24 hours a day during final exams. | true | unclear |
+
+Test inputs for each match status (send to `/api/verify` with `source: "manual"`):
+- strong: the full claim text, e.g. `The city will introduce free public transport next month.`
+- weak: a partial version, e.g. `free public transport in the city`
+- no match: unrelated text, e.g. `The moon is made of cheese`
+- weak because of OCR: full claim text with `source: "ocr"`, the same `originalOcrText`, and `ocrConfidence: 0.3`
 
 ## Running the backend
 ```
