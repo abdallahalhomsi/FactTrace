@@ -10,6 +10,7 @@ import { getClaim, postMatch } from "../controllers/claims.controller";
 import { postDecision } from "../controllers/decisions.controller";
 import { postVerify } from "../controllers/verify.controller";
 import { imageUpload } from "../middleware/upload"; //reads the photo before the ocr controller runs
+import { postSession } from "../controllers/sessions.controller";
 
 export const router = Router();
 
@@ -23,3 +24,4 @@ router.get("/claims/:id", getClaim); //claim id in, evidence and sources out
 router.post("/verify", postVerify); //match and evidence in one call, in the frontend's results format
 
 router.post("/decisions", postDecision); //save the participant's decision
+router.post("/sessions", postSession);

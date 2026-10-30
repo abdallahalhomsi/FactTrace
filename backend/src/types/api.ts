@@ -184,6 +184,22 @@ export interface DecisionResponse {
   durationMs: number; //how long the task took in milliseconds
 }
 
+//which condition the participant did first (for counterbalancing)
+export type ConditionOrder = "app_first" | "browser_first";
+
+//what the app sends to POST /sessions before a participant starts
+export interface SessionRequest {
+  participantId: string; //P07 format
+  conditionOrder: ConditionOrder; //app_first or browser_first
+  notes?: string; //optional, e.g. "phone died mid-session"
+}
+
+//what POST /sessions returns
+export interface SessionResponse {
+  participantId: string;
+  saved: true;
+}
+
 //one answer button the app can show
 export interface ChoiceOptionDto {
   value: string; //what to send back to the backend
