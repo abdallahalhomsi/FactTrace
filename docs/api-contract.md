@@ -216,8 +216,11 @@ Body: `DecisionRequest`
 - `condition`: `app` | `browser` (the browser baseline uses the same endpoint; send the `claimId` being checked so accuracy can be scored, `sourcesOpened` holds URLs)
 - `participantId` must look like `P07` (P + 1 to 3 digits, stored uppercase). Anything else is rejected, so names or student IDs can't be saved by mistake
 - `endedAt` must not be before `startedAt`; timestamps must be full ISO strings (`new Date().toISOString()`)
+- weakMatchConfirmed: boolean, only meaningful when matchStatus === "weak_match". The user's answer to "Is this the claim you saw?" — true for Yes, false for No. Omit or null when not a weak match.
+- ocrAttempts: number, how many times the user tapped "Retake Photo" on this claim before submitting. 0 if they didn't retake. Omit for QR and typed claims.
 - unknown extra fields are ignored, not stored
 - the server works out `durationMs` from the timestamps and `wasCorrect` against the claim's stored answer; neither is taken from the app, and `wasCorrect` is never sent back
+
 
 `201`, `data: { decisionId, durationMs }`
 
