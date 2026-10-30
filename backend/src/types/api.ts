@@ -161,6 +161,15 @@ export interface DecisionRequest {
   matchStatus?: MatchStatus; //what matching returned
   ocrEngine?: OcrEngine | null; //which engine read the photo (from the /ocr result), null if no photo was used
   ocrError?: OcrError; //ocr outcome from the /ocr result: no_text, ocr_failed, partial or null
+  ocrConfidence?: number | null; //confidence from the /ocr result, 0 to 1
+  ocrRetakes?: number | null; //times the user tapped retake photo on this claim, 0 means no retake (counted by the app)
+  matchScore?: number | null; //matchscore from the /verify result, 0 to 100 (stored as 0 to 1)
+  weakReason?: "low_ocr_confidence" | "low_similarity" | "both" | null; //weakreason from the /verify result
+  weakMatchConfirmed?: boolean | null; //answer to "is this the claim you saw?", only on weak matches
+  clientRecordId?: string; //id the app makes for this answer, stops the same answer being saved twice
+  trialIndex?: number; //which claim this is for the participant: 1, 2, 3 and so on
+  isPractice?: boolean; //true for a warm up claim that is not counted in the results
+  appVersion?: string; //app version, so results before and after a design change can be compared
   decision: string; //the participant's verdict, one of the values from get /api/config
   sharingIntention: string; //would they share it, one of the values from get /api/config
   sourcesOpened: string[]; //source ids (app) or urls (browser) the participant opened

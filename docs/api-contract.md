@@ -3,7 +3,7 @@
 Base URL: `http://<laptop-ip>:3000/api` on the same Wi-Fi, or the ngrok URL + `/api`.
 Types live in `backend/src/types/shared.ts` and `backend/src/types/api.ts`. Mirror both in `mobile/src/types/`.
 
-Status: endpoints are live but backed by **mock data** (7 placeholder claims, in-memory decisions). Shapes are what the real backend will return; only the data changes.
+Status: endpoints are live but backed by **mock data** (7 placeholder claims, in-memory decisions). The MySQL schema is in `database/schema.sql`. Shapes are what the real backend will return; only the data changes.
 
 **Flexible by design.** The frontend isn't final, so the backend sends everything a screen might need and the app decides what to show. Decision and sharing options come from `GET /config`, so changing them needs no app or route change.
 
@@ -194,35 +194,71 @@ Body: `DecisionRequest`
 {
   "participantId": "P07",
   "condition": "app",
-  "claimId": "claim_03",
-  "claimText": "Honey never spoils if it is stored sealed.",
-  "originalOcrText": "Honey never spoils if it is stored sealed.",
+  "claimId": "claim_04",
+  "claimText": "The city will introduce free public transport next month.",
+  "originalOcrText": "The city wil introduce free public transport next month.",
   "inputSource": "ocr",
-  "matchStatus": "MATCH",
+  "matchStatus": "weak_match",
+  "matchScore": 67,
+  "weakReason": "both",
+  "weakMatchConfirmed": true,
   "ocrEngine": "cloud_vision",
   "ocrError": null,
-  "decision": "trust",
+  "ocrConfidence": 0.42,
+  "ocrRetakes": 1,
+  "decision": "dont_trust",
   "sharingIntention": "no",
-  "sourcesOpened": ["src_03a"],
-  "weakMatchConfirmed": true,
-  "ocrAttempts": 1,
-  "startedAt": "2026-10-26T10:00:00.000Z",
-  "endedAt": "2026-10-26T10:01:30.000Z"
+  "sourcesOpened": ["src_04a"],
+  "startedAt": "2026-10-30T10:00:00.000Z",
+  "endedAt": "2026-10-30T10:01:30.000Z",
+  "clientRecordId": "lq3k9x-7f2a1c",
+  "trialIndex": 3,
+  "isPractice": false,
+  "appVersion": "0.2.0"
 }
 ```
-- `decision` and `sharingIntention`: a `value` from `GET /config`, exactly as written (snake_case)
-- `matchStatus`: either spelling works (MATCH or strong_match etc.). Internally, matchStatus is stored as MATCH | WEAK_MATCH | NO_MATCH (the shared.ts enum). /verify returns the snake_case form (strong_match | weak_match | no_match) for the frontend; /decisions accepts either and normalizes to the enum before storage.
-- `ocrEngine` and `ocrError`: copy `engine` and `error` from the `/ocr` result (omit or null for QR and typed claims)
-- `condition`: `app` | `browser` (the browser baseline uses the same endpoint; send the `claimId` being checked so accuracy can be scored, `sourcesOpened` holds URLs)
-- `participantId` must look like `P07` (P + 1 to 3 digits, stored uppercase). Anything else is rejected, so names or student IDs can't be saved by mistake
-- `endedAt` must not be before `startedAt`; timestamps must be full ISO strings (`new Date().toISOString()`)
-- weakMatchConfirmed: boolean, only meaningful when matchStatus === "weak_match". The user's answer to "Is this the claim you saw?" — true for Yes, false for No. Omit or null when not a weak match.
-- ocrAttempts: number, how many times the user tapped "Retake Photo" on this claim before submitting. 0 if they didn't retake. Omit for QR and typed claims.
-- unknown extra fields are ignored, not stored
-- the server works out `durationMs` from the timestamps and `wasCorrect` against the claim's stored answer; neither is taken from the app, and `wasCorrect` is never sent back
 
+**Required:** `participantId`, `condition`, `claimId` (may be `null`), `claimText`, `decision`, `sharingIntention`, `sourcesOpened`, `startedAt`, `endedAt`. Everything else is optional; old request bodies keep working.
+
+| field | sent by | rule |
+|---|---|---|
+| `participantId` | app | must look like `P07` (P + 1 to 3 digits, stored uppercase); anything else is rejected, so names or student IDs can't be saved by mistake |
+| `condition` | app | `app` \| `browser`. The browser baseline uses the same endpoint; send the `claimId` being checked so accuracy can be scored, and put URLs in `sourcesOpened` |
+| `decision`, `sharingIntention` | app | a `value` from `GET /config`, exactly as written (snake_case) |
+| `matchStatus` | app, from `/verify` | either spelling (`strong_match` or `MATCH` etc.). Stored as `MATCH` \| `WEAK_MATCH` \| `NO_MATCH` (the `shared.ts` enum) |
+| `matchScore` | app, from `/verify` | **0 to 100, exactly as `/verify` returns it**. The server stores it as 0 to 1 (67 becomes 0.67) |
+| `weakReason` | app, from `/verify` | `low_ocr_confidence` \| `low_similarity` \| `both`, or null |
+| `weakMatchConfirmed` | app | the user's answer to "Is this the claim you saw?": `true` or `false` on a weak match. On any other match status the server stores `null`, whatever is sent |
+| `ocrEngine`, `ocrError` | app, from `/ocr` | copy `engine` and `error`; omit or null for QR and typed claims |
+| `ocrConfidence` | app, from `/ocr` | copy `confidence` (0 to 1); omit or null for QR and typed claims |
+| `ocrRetakes` | app (counted on the phone) | how many times the user tapped "Retake Photo" on this claim before submitting: `0` = no retake. Omit or null for QR and typed claims. The app has to count this; the server can't tell a retake from a photo of a different claim |
+| `clientRecordId` | app | a unique id the app makes for this answer (the local `recordId`). If the same id is sent again, for example after a timeout, the server returns the first save instead of storing it twice |
+| `trialIndex` | app | which claim this is for the participant: 1, 2, 3 and so on (counted per participant, across both conditions) |
+| `isPractice` | app | `true` for a warm-up claim; stored but left out of the results. Default `false` |
+| `appVersion` | app | for example `"0.2.0"`. Bump it when the design changes, so results before and after can be compared |
+| `startedAt`, `endedAt` | app | full ISO strings (`new Date().toISOString()`); `endedAt` must not be before `startedAt` |
+
+Unknown extra fields are ignored, not stored.
+
+**Worked out by the server, never taken from the app:**
+
+| stored as | rule |
+|---|---|
+| `duration_ms` | `endedAt` minus `startedAt`, in milliseconds |
+| `correct_answer` | the claim's stored answer at the moment the decision is saved (a snapshot, so later fixes to a claim don't change old results); null if `claimId` is null |
+| `was_correct` | `trust` is correct for a `true` claim, `dont_trust` for `false` or `misleading`; `unsure` or no claim gives null. Never sent back to the app |
+| `text_was_edited` | `originalOcrText` and `claimText` differ after trimming spaces at both ends; null if there was no OCR text |
+| `sources_opened_count` | number of different entries in `sourcesOpened` (duplicates count once) |
+| `fact_check_found` | `true` if the `/verify` result had `factCheck.found === true`, otherwise false (set by the backend logging) |
 
 `201`, `data: { decisionId, durationMs }`
+
+### `POST /sessions` (planned, Manaal)
+Creates one row per participant before they start, so the condition order is recorded.
+```json
+{ "participantId": "P07", "conditionOrder": "app_first", "notes": "optional, up to 500 characters" }
+```
+`conditionOrder`: `app_first` \| `browser_first`. Decisions are still saved if no session exists.
 
 ## Mock claim ids
 Placeholder data (example.org sources) until the real claims are seeded. Use these ids for QR test codes.
