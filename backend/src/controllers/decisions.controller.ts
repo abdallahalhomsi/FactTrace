@@ -59,6 +59,7 @@ export function postDecision(req: Request, res: Response): void {
     .custom("ocrRetakes", optionalNumber(body.ocrRetakes, 0, 50, true), "must be a whole number from 0 to 50 or null")
     .custom("matchScore", optionalNumber(body.matchScore, 0, 100), "must be a number from 0 to 100 (as returned by /verify) or null")
     .custom("weakMatchConfirmed", optionalBoolean(body.weakMatchConfirmed), "must be true, false or null")
+    .custom("factCheckFound", optionalBoolean(body.factCheckFound), "must be true, false or null")
     .custom("trialIndex", optionalNumber(body.trialIndex, 1, 999, true), "must be a whole number from 1 to 999")
     .custom("isPractice", optionalBoolean(body.isPractice), "must be true or false")
     .string("clientRecordId", { optional: true, maxLength: 64 })
@@ -93,6 +94,8 @@ export function postDecision(req: Request, res: Response): void {
     weakReason: (body.weakReason as DecisionRequest["weakReason"]) ?? null,
     //only kept on weak matches, any other match status stores null so the column stays meaningful
     weakMatchConfirmed: MATCH_STATUS_TO_BACKEND[String(body.matchStatus)] === "WEAK_MATCH" ? ((body.weakMatchConfirmed as boolean | undefined) ?? null) : null,
+    //fact check only runs on no matches, so any other match status stores null
+    factCheckFound: MATCH_STATUS_TO_BACKEND[String(body.matchStatus)] === "NO_MATCH" ? ((body.factCheckFound as boolean | undefined) ?? null) : null,
     clientRecordId: body.clientRecordId as string | undefined,
     trialIndex: body.trialIndex as number | undefined,
     isPractice: (body.isPractice as boolean | undefined) ?? false, //not sent means a real, counted answer

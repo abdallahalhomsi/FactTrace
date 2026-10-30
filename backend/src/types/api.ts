@@ -166,6 +166,7 @@ export interface DecisionRequest {
   matchScore?: number | null; //matchscore from the /verify result, 0 to 100 (stored as 0 to 1)
   weakReason?: "low_ocr_confidence" | "low_similarity" | "both" | null; //weakreason from the /verify result
   weakMatchConfirmed?: boolean | null; //answer to "is this the claim you saw?", only on weak matches
+  factCheckFound?: boolean | null; //true if the /verify result had factcheck.found true, only on no matches
   clientRecordId?: string; //id the app makes for this answer, stops the same answer being saved twice
   trialIndex?: number; //which claim this is for the participant: 1, 2, 3 and so on
   isPractice?: boolean; //true for a warm up claim that is not counted in the results

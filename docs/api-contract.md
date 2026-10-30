@@ -205,7 +205,7 @@ Body: `DecisionRequest`
   "ocrEngine": "cloud_vision",
   "ocrError": null,
   "ocrConfidence": 0.42,
-  "ocrRetakes": 1,
+  "ocrRetakes": 0,
   "decision": "dont_trust",
   "sharingIntention": "no",
   "sourcesOpened": ["src_04a"],
@@ -229,6 +229,7 @@ Body: `DecisionRequest`
 | `matchScore` | app, from `/verify` | **0 to 100, exactly as `/verify` returns it**. The server stores it as 0 to 1 (67 becomes 0.67) |
 | `weakReason` | app, from `/verify` | `low_ocr_confidence` \| `low_similarity` \| `both`, or null |
 | `weakMatchConfirmed` | app | the user's answer to "Is this the claim you saw?": `true` or `false` on a weak match. On any other match status the server stores `null`, whatever is sent |
+| `factCheckFound` | app, from `/verify` | `factCheck?.found === true` from the `/verify` result: `true` or `false` on a no match. On any other match status the server stores `null`, whatever is sent |
 | `ocrEngine`, `ocrError` | app, from `/ocr` | copy `engine` and `error`; omit or null for QR and typed claims |
 | `ocrConfidence` | app, from `/ocr` | copy `confidence` (0 to 1); omit or null for QR and typed claims |
 | `ocrRetakes` | app (counted on the phone) | how many times the user tapped "Retake Photo" on this claim before submitting: `0` = no retake. Omit or null for QR and typed claims. The app has to count this; the server can't tell a retake from a photo of a different claim |
@@ -249,7 +250,6 @@ Unknown extra fields are ignored, not stored.
 | `was_correct` | `trust` is correct for a `true` claim, `dont_trust` for `false` or `misleading`; `unsure` or no claim gives null. Never sent back to the app |
 | `text_was_edited` | `originalOcrText` and `claimText` differ after trimming spaces at both ends; null if there was no OCR text |
 | `sources_opened_count` | number of different entries in `sourcesOpened` (duplicates count once) |
-| `fact_check_found` | `true` if the `/verify` result had `factCheck.found === true`, otherwise false (set by the backend logging) |
 
 `201`, `data: { decisionId, durationMs }`
 
