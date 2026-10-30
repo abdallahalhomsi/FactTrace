@@ -40,7 +40,7 @@ QR scan ────────────────────────
 Manual entry ─────────────────────────┤
                                       ▼
                      POST /verify (one call) ──► strong / weak match ──► Screens 4 + 5
-                         (or /claims/match + GET /claims/:id) └─► no match ──► "no match" screen (+ factCheck, coming soon)
+                         (or /claims/match + GET /claims/:id) └─► no match ──► "no match" screen (+ factCheck)
                                                                │
                          decision + sharing popup ◄────────────┘
                                       ▼
@@ -135,13 +135,20 @@ QR scans: `{ "source": "qr", "claimId": "claim_02" }` (no text needed).
   "weakReason": "both",
   "overallStance": "supports",
   "datasetNotice": "These results come from a curated set of claims prepared for this study. They are not an independent verification of the claim.",
-  "provenanceSignals": [ ... ]
+  "provenanceSignals": [ ... ],
+  "factCheck": {
+    "found": true,
+    "rating": "This is not true. There is no evidence that 5G WiFi networks are linked to the new coronavirus.",
+    "publisher": "Full Fact",
+    "url": "https://fullfact.org/health/5G-not-accelerating-coronavirus/",
+    "reviewDate": "2020-03-31T00:00:00Z"
+  }
 }
 ```
 - `matchStatus`: `strong_match` | `weak_match` | `no_match`. `matchScore`: 0 to 100.
 - Fields up to `evidence` match the frontend's existing `VerificationResult` / `EvidenceSource` types exactly. `author` and `publicationDate` are left out when unknown (optional in those types).
 - Extras the app can use or ignore: `claimId` (send it to `/decisions`), `matchExplanation` (how sure the match is, in plain words), `weakReason`, `overallStance`, `datasetNotice`, `provenanceSignals`, and per evidence `sourceId` (log it in `sourcesOpened`), `stance`, `sourceType`, `publishedAt`. Evidence is sorted primary first.
-- `no_match`: `evidence` and `provenanceSignals` are empty and there is no `matchedClaim`. `factCheck` will be added here once the Fact Check fallback is ready.
+- no_match: evidence and provenanceSignals are empty and there is no matchedClaim. If Google's Fact Check Tools API found a review for the claim, the response includes factCheck: FactCheckResult (found: true, rating, publisher, url, reviewDate). If not found or the API times out (3s), the field is absent — treat "absent" as "no fact check found".
 - Dr. Göktaş asked that a database match is never presented as independent verification and that uncertain matches are recognisable: show `datasetNotice` on the results screen, and on `weak_match` show `matchedClaim` with `matchExplanation` ("Is this the claim you saw?").
 
 ### `POST /claims/match`
@@ -156,9 +163,9 @@ QR scans: `{ "source": "qr", "claimId": "claim_02" }` (no text needed).
 ```json
 { "status": "MATCH", "score": 1, "claimId": "claim_03" }
 { "status": "WEAK_MATCH", "score": 0.5, "claimId": "claim_03", "reason": "low_similarity" }
-{ "status": "NO_MATCH", "score": 0.12, "claimId": null }
+{ "status": "NO_MATCH", "score": 0.12, "claimId": null, "factCheck": { "found": true, "rating": "...", "publisher": "...", "url": "...", "reviewDate": "..." } }
 ```
-On `NO_MATCH`, the backend will also include `factCheck` (a `FactCheckResult`: `found`, `rating`, `publisher`, `url`, `reviewDate`) from the Google Fact Check fallback, in the same response. Not implemented yet (Manaal), so for now it is absent; the app should treat a missing `factCheck` as "no fact check found".
+On NO_MATCH, the backend calls Google's Fact Check Tools API with a 3s timeout. If a review is found, the response includes factCheck: FactCheckResult (found: true, rating, publisher, url, reviewDate). If not found or the API times out, the field is absent — the app should treat a missing factCheck as "no fact check found". The backend never throws on Fact Check failure.
 `reason` (only on `WEAK_MATCH`):
 - `low_similarity`: the text only partly matches a stored claim
 - `low_ocr_confidence`: the text matches, but OCR confidence was below 0.5 and the user didn't edit it
@@ -197,6 +204,8 @@ Body: `DecisionRequest`
   "decision": "trust",
   "sharingIntention": "no",
   "sourcesOpened": ["src_03a"],
+  "weakMatchConfirmed": true,
+  "ocrAttempts": 1,
   "startedAt": "2026-10-26T10:00:00.000Z",
   "endedAt": "2026-10-26T10:01:30.000Z"
 }
