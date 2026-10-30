@@ -5,6 +5,7 @@
 
 import { MatchRequest, MatchResult } from "../types/shared"; //types agreed with manaal
 import { claimExists, listClaimsForMatching } from "./claim.service"; //claim lookups
+import { factCheck } from "./factcheck.service";
 
 export const MATCH_THRESHOLD = 0.7; //score at or above this is a confident match
 export const WEAK_MATCH_THRESHOLD = 0.4; //score at or above this (but below 0.7) is a weak match
@@ -64,6 +65,14 @@ export async function matchClaim(req: MatchRequest): Promise<MatchResult> {
   if (score >= WEAK_MATCH_THRESHOLD) {
     return { status: "WEAK_MATCH", score, claimId: best.claimId, reason: lowOcr ? "both" : "low_similarity" }; //only a partial match
   }
-  //todo: when manaal's factcheck service is ready, no_match results call it here and add the result as factcheck
-  return { status: "NO_MATCH", score, claimId: null }; //nothing close enough
+// Fact Check fallback: when no claim matches, ask Google's Fact Check
+// Tools API. Failures are silent (found: false), so this never blocks
+// the response.
+const factCheckResult = await factCheck(req.claimText);
+return {
+  status: "NO_MATCH",
+  score,
+  claimId: null,
+  ...(factCheckResult.found ? { factCheck: factCheckResult } : {}),
+};
 }
