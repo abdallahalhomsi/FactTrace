@@ -40,7 +40,7 @@ export async function factCheck(claimText: string): Promise<FactCheckResult> {
   }
 
   const apiKey = process.env.FACT_CHECK_API_KEY;
-  console.log("[factcheck] API key present:", !!apiKey, "| query:", trimmed.slice(0, 40));
+  //console.log("[factcheck] API key present:", !!apiKey, "| query:", trimmed.slice(0, 40));
   if (!apiKey) {
     console.warn("[factcheck] FACT_CHECK_API_KEY not set; skipping fact check");
     return { found: false };
