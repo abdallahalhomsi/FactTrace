@@ -16,3 +16,15 @@ export const pool = mysql.createPool({
 // On INSERT, catch ER_DUP_ENTRY matching that constraint, SELECT the existing
 // row by client_record_id, and return its decision_id + duration_ms.
 // This makes the /decisions endpoint idempotent under client retries.
+
+
+
+export async function checkConnection(): Promise<void> {
+  const conn = await pool.getConnection();
+  try {
+    await conn.ping();
+    console.log("[mysql] connection OK");
+  } finally {
+    conn.release();
+  }
+}

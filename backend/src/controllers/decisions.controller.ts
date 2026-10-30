@@ -39,7 +39,7 @@ function optionalBoolean(value: unknown): boolean {
 //participant codes must look like p1 to p999 (any case), so a name or student id can never be saved by mistake
 const PARTICIPANT_ID = /^[pP]\d{1,3}$/;
 
-export function postDecision(req: Request, res: Response): void {
+export async function postDecision(req: Request, res: Response): Promise<void> {
   const body = asObject(req.body); //make sure the body is a json object
   const start = Date.parse(String(body.startedAt)); //start time as a number, nan if invalid
   const end = Date.parse(String(body.endedAt)); //end time as a number, nan if invalid
@@ -107,5 +107,6 @@ export function postDecision(req: Request, res: Response): void {
     endedAt: body.endedAt as string,
   };
 
-  sendSuccess(res, recordDecision(decision), 201); //201 means something new was created
+  const response = await recordDecision(decision); //save to mysql
+  sendSuccess(res, response, 201); //201 means something new was created
 }

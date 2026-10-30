@@ -29,3 +29,4 @@ service-account*.json
 /backend/secrets
 
 backend/samples/Screenshot 2026-10-26 114253.png
+*.csv
