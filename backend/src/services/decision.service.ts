@@ -1,57 +1,99 @@
-//saves the participant's decision
-//mock version: keeps decisions in memory, so they are lost when the server restarts
-//manaal's study logging will replace this with mysql, the controller and route stay the same
+//saves the participant's decision to MySQL
+//the controller and route stay the same as the mock version
 
-import { randomUUID } from "crypto"; //makes unique ids
-import { ClaimAnswer, DecisionRequest, DecisionResponse } from "../types/api"; //request and response shapes
-import { scoreDecision } from "../config/study"; //decides if a choice was right
-import { getClaimAnswer } from "./claim.service"; //looks up the stored correct answer
+import { randomUUID } from "crypto";
+import { RowDataPacket } from "mysql2";
+import { DecisionRequest, DecisionResponse } from "../types/api";
+import { scoreDecision } from "../config/study";
+import { getClaimAnswer } from "./claim.service";
+import { pool } from "../db/mysql";
 
-//a saved decision: what the app sent plus a few fields the server adds
-interface StoredDecision extends DecisionRequest {
-  decisionId: string; //unique id
-  durationMs: number; //how long the task took
-  receivedAt: string; //when the server got it
-  wasCorrect: boolean | null; //accuracy for the study, compared with the claim's stored answer: null for unsure or when there is no claim id
-  correctAnswer: ClaimAnswer | null; //snapshot of the claim's answer when the decision was saved
-  textWasEdited: boolean | null; //did the participant change the ocr text, null if there was no ocr text
-  sourcesOpenedCount: number; //how many different sources were opened
-  matchScore01: number | null; //match score turned from 0 to 100 into 0 to 1, rounded to 3 decimals for the database
-}
-
-//the server computed values, kept in one function so the mysql insert can use exactly the same rules
+//the server computed values, kept in one function so the insert uses exactly the same rules
 export function computeServerFields(input: DecisionRequest) {
-  const correctAnswer = input.claimId ? getClaimAnswer(input.claimId) : null; //null when there is no claim
+  const correctAnswer = input.claimId ? getClaimAnswer(input.claimId) : null;
   return {
-    durationMs: Date.parse(input.endedAt) - Date.parse(input.startedAt), //end minus start, the controller already checked end is not before start
+    durationMs: Date.parse(input.endedAt) - Date.parse(input.startedAt),
     correctAnswer,
-    wasCorrect: correctAnswer ? scoreDecision(input.decision, correctAnswer) : null, //null for unsure or no claim
-    //only meaningful when there was ocr text: compares after trimming spaces at both ends
-    textWasEdited: input.originalOcrText !== undefined && input.originalOcrText !== null ? input.originalOcrText.trim() !== input.claimText.trim() : null,
-    sourcesOpenedCount: new Set(input.sourcesOpened).size, //duplicates count once
-    matchScore01: typeof input.matchScore === "number" ? Math.round(input.matchScore * 10) / 1000 : null, //67 becomes 0.67
+    wasCorrect: correctAnswer ? scoreDecision(input.decision, correctAnswer) : null,
+    textWasEdited:
+      input.originalOcrText !== undefined && input.originalOcrText !== null
+        ? input.originalOcrText.trim() !== input.claimText.trim()
+        : null,
+    sourcesOpenedCount: new Set(input.sourcesOpened).size,
+    matchScore01:
+      typeof input.matchScore === "number"
+        ? Math.round(input.matchScore * 10) / 1000
+        : null,
   };
 }
 
-const decisions: StoredDecision[] = []; //in-memory list, cleared on restart
+export async function recordDecision(input: DecisionRequest): Promise<DecisionResponse> {
+  const server = computeServerFields(input);
+  const decisionId = randomUUID();
+  const receivedAt = new Date();
 
-export function recordDecision(input: DecisionRequest): DecisionResponse {
-  //same clientrecordid sent again (for example the phone retried): return the first save instead of storing it twice
-  const existing = input.clientRecordId ? decisions.find((d) => d.clientRecordId === input.clientRecordId) : undefined;
-  if (existing) return { decisionId: existing.decisionId, durationMs: existing.durationMs };
+  try {
+    await pool.execute(
+      `INSERT INTO decisions (
+        decision_id, client_record_id, participant_id, study_condition,
+        trial_index, is_practice, app_version, claim_id, claim_text,
+        original_ocr_text, text_was_edited, input_source,
+        match_status, match_score, weak_reason, weak_match_confirmed,
+        fact_check_found, ocr_engine, ocr_error, ocr_confidence, ocr_retakes,
+        decision, sharing_intention, sources_opened, sources_opened_count,
+        started_at, ended_at, duration_ms, correct_answer, was_correct, received_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        decisionId,
+        input.clientRecordId ?? null,
+        input.participantId,
+        input.condition,
+        input.trialIndex ?? null,
+        input.isPractice ?? false,
+        input.appVersion ?? null,
+        input.claimId,
+        input.claimText,
+        input.originalOcrText ?? null,
+        server.textWasEdited,
+        input.inputSource ?? null,
+        input.matchStatus ?? null,
+        server.matchScore01,
+        input.weakReason ?? null,
+        input.weakMatchConfirmed ?? null,
+        input.factCheckFound ?? null,
+        input.ocrEngine ?? null,
+        input.ocrError ?? null,
+        input.ocrConfidence ?? null,
+        input.ocrRetakes ?? null,
+        input.decision,
+        input.sharingIntention,
+        JSON.stringify(input.sourcesOpened),
+        server.sourcesOpenedCount,
+        new Date(input.startedAt),
+        new Date(input.endedAt),
+        server.durationMs,
+        server.correctAnswer,
+        server.wasCorrect,
+        receivedAt,
+      ]
+    );
 
-  const server = computeServerFields(input); //all values the server works out itself
-  const stored: StoredDecision = {
-    ...input, //everything the app sent
-    ...server,
-    decisionId: randomUUID(), //new unique id
-    receivedAt: new Date().toISOString(), //current time
-  };
-  decisions.push(stored); //save it
-  return { decisionId: stored.decisionId, durationMs: server.durationMs }; //tell the app it worked, never the accuracy
-}
-
-//returns every saved decision, only for checking things while developing (no route uses it)
-export function getAllDecisions(): readonly StoredDecision[] {
-  return decisions;
+    return { decisionId, durationMs: server.durationMs };
+  } catch (err: any) {
+    //Duplicate clientRecordId from a client retry: return the first save
+if (
+  err.code === "ER_DUP_ENTRY" &&
+  typeof err.message === "string" &&
+  err.message.includes("uq_decisions_client_record") &&
+  input.clientRecordId
+) {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT decision_id, duration_ms FROM decisions WHERE client_record_id = ?",
+        [input.clientRecordId]
+      );
+      const row = rows[0];
+      return { decisionId: row.decision_id, durationMs: row.duration_ms };
+    }
+    throw err;
+  }
 }
