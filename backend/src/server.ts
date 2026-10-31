@@ -3,13 +3,16 @@
 
 import { ENV } from "./config/env"; //settings (also loads .env)
 import { createApp } from "./app"; //the express app
-
+import { checkConnection } from "./db/mysql";
 const app = createApp(); //build the app
 
 //listen on 0.0.0.0 (every network card) so phones on the same wifi or through ngrok can reach the laptop
 const server = app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`FactTrace backend listening on http://localhost:${ENV.port}/api (${ENV.nodeEnv})`);
 });
+checkConnection().catch((err) =>
+  console.error("[mysql] startup connection check failed:", err.message)
+);
 
 //print a clear message instead of a long crash if the port is already used (usually the server is already running)
 server.on("error", (err: NodeJS.ErrnoException) => {

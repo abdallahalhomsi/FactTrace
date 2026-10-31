@@ -1,10 +1,15 @@
+# USAGE:
+#   docker compose up -d
+#   Default password is facttrace123 if MYSQL_PASSWORD is not set in .env.
+#   To use a custom password: docker compose --env-file backend/.env up -d
+
 version: "3.8"
 services:
   mysql:
     image: mysql:8.0
     container_name: facttrace-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-facttrace123}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-facttrace}
     ports:
       - "3306:3306"

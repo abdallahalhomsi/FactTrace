@@ -8,7 +8,6 @@ export async function recordSession(input: SessionRequest): Promise<SessionRespo
     `INSERT INTO study_sessions (participant_id, condition_order, notes)
      VALUES (?, ?, ?)
      ON DUPLICATE KEY UPDATE
-       condition_order = VALUES(condition_order),
        notes = VALUES(notes)`,
     [
       input.participantId,

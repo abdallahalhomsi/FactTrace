@@ -20,12 +20,12 @@ async function main() {
 
   // CSV rows
   for (const row of decisions) {
-    const values = columns.map((col) => {
+        const values = columns.map((col) => {
       const val = row[col];
       if (val === null || val === undefined) return "";
       if (val instanceof Date) return val.toISOString();
-      if (typeof val === "object") return JSON.stringify(val);
-      const str = String(val);
+      const str =
+        typeof val === "object" ? JSON.stringify(val) : String(val);
       // Escape quotes and commas
       return str.includes(",") || str.includes('"') || str.includes("\n")
         ? `"${str.replace(/"/g, '""')}"`

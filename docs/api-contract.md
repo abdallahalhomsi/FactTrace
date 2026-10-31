@@ -253,7 +253,7 @@ Unknown extra fields are ignored, not stored.
 
 `201`, `data: { decisionId, durationMs }`
 
-### `POST /sessions` (planned, Manaal)
+### `POST /sessions`
 Creates one row per participant before they start, so the condition order is recorded.
 ```json
 { "participantId": "P07", "conditionOrder": "app_first", "notes": "optional, up to 500 characters" }
