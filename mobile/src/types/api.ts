@@ -10,14 +10,16 @@ export type ApiResponse<T> = {
 
 // Verification request
 export type VerifyClaimRequest = {
-  claimText: string;
+  claimText?: string;
   source: 'ocr' | 'qr' | 'manual';
+  claimId?: string;
   originalOcrText?: string;
   ocrConfidence?: number | null;
 };
 
 // Verification response
-export type VerifyClaimResponse = ApiResponse<VerificationResult>;
+export type VerifyClaimResponse =
+  ApiResponse<VerificationResult>;
 
 // OCR response returned by the backend
 export type BackendOcrResult = {
@@ -25,7 +27,11 @@ export type BackendOcrResult = {
   text: string;
   confidence: number | null;
   engine: 'cloud_vision' | 'tesseract';
-  error: 'NO_TEXT' | 'OCR_FAILED' | 'PARTIAL' | null;
+  error:
+    | 'NO_TEXT'
+    | 'OCR_FAILED'
+    | 'PARTIAL'
+    | null;
 };
 
 // OCR response used by the frontend
@@ -44,11 +50,27 @@ export type DecisionRequest = {
   claimText: string;
   originalOcrText?: string;
   inputSource?: 'ocr' | 'qr' | 'manual';
-  matchStatus?: 'strong_match' | 'weak_match' | 'no_match';
-  ocrEngine?: 'cloud_vision' | 'tesseract' | null;
-  ocrError?: 'NO_TEXT' | 'OCR_FAILED' | 'PARTIAL' | null;
-  decision: 'trust' | 'dont_trust' | 'unsure';
-  sharingIntention: 'yes' | 'no' | 'not_sure';
+  matchStatus?:
+    | 'strong_match'
+    | 'weak_match'
+    | 'no_match';
+  ocrEngine?:
+    | 'cloud_vision'
+    | 'tesseract'
+    | null;
+  ocrError?:
+    | 'NO_TEXT'
+    | 'OCR_FAILED'
+    | 'PARTIAL'
+    | null;
+  decision:
+    | 'trust'
+    | 'dont_trust'
+    | 'unsure';
+  sharingIntention:
+    | 'yes'
+    | 'no'
+    | 'not_sure';
   sourcesOpened: string[];
   startedAt: string;
   endedAt: string;
