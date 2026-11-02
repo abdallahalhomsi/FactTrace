@@ -76,7 +76,7 @@ The recommendations below address cognitive load, scannability, and error preven
 * **Critical Design Consideration**: `VerificationResultsScreen.tsx` displays `matchScore` (0–100) prominently adjacent to the match badge.
 * **Identified Usability Risk**: Non-expert users frequently conflate algorithmic search similarity with factual truth. If a widely known false myth is stored in the database, the system will correctly return a high similarity score (e.g., "95% match"), which participants may easily misinterpret as "95% true."
 * **Proposed Recommendation**:
-  1. Add an unambiguous secondary label directly below the score: *"Search similarity to verified database record, not a truth rating."*
+  1. Add an unambiguous secondary label directly below the score: *"Search similarity to database record, not a truth rating."*
   2. Maintain explicit explanatory phrasing: *"Matching record found in database. Review the supporting evidence below to evaluate truthfulness."*
 
 ---
@@ -127,7 +127,7 @@ Design layout rules applied across the screens:
 3. **Buttons**:
    * Primary Action: Background `#0284C7` with `#FFFFFF` text.
    * Secondary / Outlined Action: Background `transparent`, border 1.5px `#475569`, text `#CBD5E1`.
-   * Action Row ("Trust" / "Don't Trust" / "Flag"): Button containers sized to prevent text wrapping on single lines.
+   * Action Row ("Trust" / "Don't Trust" / "Unsure"): Button containers sized to prevent text wrapping on single lines.
 4. **Modals & Overlays (`SharingIntentionModal.tsx`)**: Backdrop overlay set to `rgba(15, 23, 42, 0.60)` so underlying verification results remain legible beneath the prompt. Equal-width answer buttons (94px each).
 
 ---
