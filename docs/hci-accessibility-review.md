@@ -1,12 +1,6 @@
 # FactTrace — UI/UX and Accessibility Review
 
-**CS 449 / CS 549 — Human-Computer Interaction**  
-
-**Prepared by:** Mazen Zeybek  
-
-**Student ID:** 33539  
-
-**Date:** November 2026  
+**CS 449 / CS 549 — Human-Computer Interaction**
 
 ---
 
