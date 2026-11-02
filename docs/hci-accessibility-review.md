@@ -4,60 +4,60 @@
 
 ---
 
-## 1. What I worked on
+## 1. Overview
 
-My part of FactTrace focuses on the interface and how people understand the verification results. I completed dark-mode designs for the ten main mobile screens in Figma. I also looked through the React Native frontend to identify accessibility issues and parts of the experience that could be clearer.
+This document summarizes the UI/UX and accessibility work completed for FactTrace. It covers dark-mode designs for the ten main mobile screens, a review of accessibility-related details in the React Native frontend, and recommendations for making verification results easier to understand.
 
-This is a review of the code and designs, **not a complete accessibility test**. The changes I suggest here have not been implemented in the app by this branch. I also haven't run the usability pilot yet.
+The accessibility findings are based on code and design inspection, **not a complete accessibility test**. Suggested application changes have not been implemented on this branch, and the usability pilot is still pending.
 
 **Figma:** https://www.figma.com/design/YNwaYpHs4NycdOqFUOayoT
 
 ## 2. Accessibility checks
 
-I started with text contrast, since some of the gray text in our light theme may be difficult to read. WCAG 2.1 AA requires a contrast ratio of at least **4.5:1 for normal-size text**.
+Text contrast was reviewed because some gray text in the current light theme may be difficult to read. WCAG 2.1 AA requires a contrast ratio of at least **4.5:1 for normal-size text**.
 
-| Color in the app | Background | Contrast | My finding |
+| Color in the app | Background | Contrast | Finding |
 | --- | --- | --- | --- |
 | `textSecondary` (`#7A8798`) | `#F4F7FB` | **3.40:1** | Below AA for normal text |
 | `textMuted` (`#98A4B3`) | `#F4F7FB` | **2.36:1** | Below AA for normal text |
 | Suggested replacement `#475569` | `#F4F7FB` | **7.05:1** | Meets AAA for normal text |
 | Suggested replacement `#475569` | White (`#FFFFFF`) | **7.58:1** | Meets AAA for normal text |
 
-I recommend using a darker gray like `#475569` where the existing light gray tokens are used for normal text on these backgrounds. Before changing the tokens everywhere, we should check the screens where they appear.
+A darker gray such as `#475569` is recommended for normal text currently using these lighter gray tokens on the listed backgrounds. The screens where these tokens appear should be checked before the values are changed throughout the app.
 
-I also found a possible issue with text-field borders. The current `#DEE5ED` border has only **1.27:1** contrast against white. This might make input boxes hard to recognize, but I'd need to inspect the rendered app and focus states before calling it a confirmed WCAG 1.4.11 failure. A darker focus border would make the active field clearer.
+A possible issue was also identified with text-field borders. The current `#DEE5ED` border has only **1.27:1** contrast against white. This may make input boxes harder to recognize, but the rendered interface and focus states need to be inspected before classifying it as a confirmed WCAG 1.4.11 failure. A darker focus border could make the active field clearer.
 
-The frontend already does some things well: the primary text color has strong contrast (around **14.94:1** on the light background); the verification decision buttons have a `minHeight` of 88 in the code I reviewed; and match badges include text labels instead of relying only on color.
+The existing frontend also has accessibility strengths: the primary text color has strong contrast (approximately **14.94:1** on the light background); the verification decision buttons specify a `minHeight` of 88 in the reviewed code; and match badges include text labels rather than relying only on color.
 
-I have **not** tested screen readers, text resizing, or every interaction state yet, so I don't want to claim that the whole app passes accessibility standards.
+Screen-reader behavior, text resizing, and every interaction state have **not** yet been tested. This review does not establish that the entire app meets accessibility standards.
 
-## 3. Usability improvements I recommend
+## 3. Usability recommendations
 
-These are things I noticed from looking at the interface. **They are design recommendations, not observations from a real participant test yet.**
+The following points come from inspecting the interface. **They are design recommendations, not observations from a participant test.**
 
-### Make the match statuses easier to scan
+### Make match statuses easier to scan
 
-The results screen uses words such as “Strong Match,” “Possible Match,” and “No Match” alongside a small colored dot. I would keep the text and add a different icon to each status (for example, check-circle, alert-circle, and help-circle). This would make the statuses easier to tell apart at a glance without depending on color alone.
+The results screen shows labels such as “Strong Match,” “Possible Match,” and “No Match” alongside a small colored dot. Keeping the text and adding a distinct icon for each status (for example, check-circle, alert-circle, and help-circle) could make the states easier to distinguish at a glance without depending on color alone.
 
-### Make the evidence stance more obvious
+### Make evidence stance more obvious
 
-When someone opens Evidence Details, they should quickly understand whether a source **supports**, **disputes**, or only gives **context** for the claim. I'd make that information more visible with a short labeled badge above the evidence description.
+The Evidence Details screen should make it easy to see whether a source **supports**, **disputes**, or provides **context** for a claim. A short labeled badge above the evidence description could make this information more visible.
 
 ### Explain the match percentage
 
-I think “92% match” could be misunderstood as “92% true.” In FactTrace, the number means how closely the submitted text matches a record in the database, **not how true the claim is**. I recommend showing an explanation next to it, such as:
+A “92% match” could be mistaken for “92% true.” In FactTrace, the percentage represents how closely the submitted text matches a record in the database, **not how true the claim is**. An explanation near the score is recommended:
 
 > Text similarity to a database record — not a truth rating. Review the evidence before deciding.
 
-This matters because the app is meant to help users investigate sources rather than just trust a score.
+This distinction matters because the app is intended to help users investigate evidence rather than treat a matching score as a truth verdict.
 
 ## 4. Dark-mode Figma designs
 
-I finished the dark-mode designs for all ten main screens: Home, Camera, Review Claim, Verification Results, Evidence Details, Sharing Intention, Verification History, Profile, Create Account, and Log In.
+Dark-mode designs have been completed for all ten main screens: Home, Camera, Review Claim, Verification Results, Evidence Details, Sharing Intention, Verification History, Profile, Create Account, and Log In.
 
 **Figma file:** https://www.figma.com/design/YNwaYpHs4NycdOqFUOayoT
 
-I used a consistent palette across the screens and fixed small issues with buttons, status labels, profile spacing, the circular avatar, and back arrows.
+A consistent palette was used across the screens, and layout details were refined, including button widths, status labels, profile spacing, the circular avatar, and back arrows.
 
 | Part of the UI | Color |
 | --- | --- |
@@ -70,21 +70,21 @@ I used a consistent palette across the screens and fixed small issues with butto
 | Accent blue | `#38BDF8` |
 | Success / warning / error text | `#86EFAC` / `#FDE047` / `#FCA5A5` |
 
-These colors are a **design reference** for a possible `DARK_COLORS` theme in `mobile/src/constants/app.ts`. The designs are complete in Figma, but this branch **does not implement dark-mode switching** in React Native. Rand and the team would need to decide how to connect the theme to the existing frontend.
+These colors provide a **design reference** for a possible `DARK_COLORS` theme in `mobile/src/constants/app.ts`. The Figma designs are complete, but this branch **does not implement dark-mode switching** in React Native. Frontend integration would need to be discussed with Rand and the rest of the team.
 
 ## 5. Usability pilot — planned
 
-I plan to test the main flow with **one student outside our group**, in a short session of around ten minutes. The idea is to see what someone understands easily and where they hesitate.
+A short pilot with **one student outside the project group** is planned, lasting approximately ten minutes. The goal is to find which parts of the main verification flow are easy to understand and where a new user hesitates.
 
-I'll use the claim **“Drinking eight glasses of water a day is required for good health.”** It is in our mock dataset as `claim_01`, with the answer marked *misleading* and an overall stance of *contradicts*. The linked evidence sources are demonstration records, not real external authorities. Before the pilot, I'll check that the scan/OCR and results flow works end to end.
+The proposed test claim is **“Drinking eight glasses of water a day is required for good health.”** It is included in the mock dataset as `claim_01`, marked *misleading* with an overall stance of *contradicts*. Its linked evidence sources are demonstration records, not real external authorities. The scan/OCR and results flow should be checked end to end before the pilot.
 
-I'll ask the participant to do three things:
+The participant will be asked to complete three tasks:
 
 1. **Scan and verify:** Scan the printed claim, review the OCR text, and continue to the results.
 2. **Inspect evidence:** Find whether the evidence supports or contradicts the claim and identify the listed publisher.
 3. **Decide and share:** Choose Trust, Don't Trust, or Unsure, then answer the sharing question.
 
-I won't tell them which buttons to press. I'll note whether each task was completed, where they paused or made mistakes, and anything useful they said.
+The participant should complete the tasks without being told which buttons to press. The observation record will note task completion, hesitation or errors, and relevant participant comments.
 
 | Task | Completed? | Time | Hesitations or errors | Participant's words |
 | --- | --- | --- | --- | --- |
@@ -94,19 +94,19 @@ I won't tell them which buttons to press. I'll note whether each task was comple
 
 ## 6. Design iteration — after the pilot
 
-I haven't completed this part yet because I need real feedback first. After testing, I'll document:
+This section remains incomplete until real participant feedback is collected. The design iteration will document:
 
-- **What I observed:** The specific moment the participant got confused or stuck.
+- **What was observed:** The specific moment when the participant became confused or encountered difficulty.
 - **Why it matters:** How the issue affects the verification experience.
-- **What I changed:** A concrete update to the Figma design or recommendation.
-- **What happened after the change:** Any follow-up check I actually perform. If I can't retest, I'll say so.
+- **What changed:** A concrete update to the Figma design or a related recommendation.
+- **What happened after the change:** Any follow-up check that was actually performed. If no retest takes place, that limitation will be stated.
 
-I don't want to invent feedback or claim that an improvement has been validated before testing it.
+Participant feedback and validation results will not be invented or presented as completed before testing.
 
-## 7. What happens next
+## 7. Next steps
 
-**Done:** Ten dark-mode screens in Figma and this initial accessibility/usability review. The GitHub branch contains documentation only; I haven't changed frontend or backend code.
+**Completed:** Ten dark-mode screens in Figma and this initial accessibility/usability review. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
 
-**For Rand and Abdallah to review:** Better light-mode text contrast, clearer match-status icons and evidence labels, the explanation of database match scores, and the proposed dark-mode palette.
+**For team review:** Improvements to light-mode text contrast, match-status icons, evidence labels, explanations of database match scores, and the proposed dark-mode palette.
 
-**Still on my side:** Run the pilot with a participant, document what happened, and make at least one design iteration based on the results.
+**Remaining:** Run the usability pilot with a participant, document the findings, and make at least one evidence-based design iteration.
