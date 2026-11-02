@@ -105,6 +105,10 @@ export const DARK_COLORS = {
 ```
 
 ### 4.2 Figma Visual Guidelines
+
+The full set of all 10 dark-mode screens has been finalized, reviewed, and laid out in the official Figma file:
+* **Figma Design File:** [FactTrace Mobile UI & Dark Mode (10 Screens)](https://www.figma.com/design/YNwaYpHs4NycdOqFUOayoT)
+
 When applying dark mode across the 10 Figma screens:
 1. **Canvas / Background**: Set main frame fills to `#0F172A`.
 2. **Cards (Match Card, Evidence Previews)**: Set fills to `#1E293B` with a 1px border stroke of `#334155` and a corner radius of `16px`. Avoid pure black shadows; use subtle elevation borders.
