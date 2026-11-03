@@ -31,7 +31,21 @@ The existing frontend also has accessibility strengths: the primary text color h
 
 Screen-reader behavior, text resizing, and every interaction state have **not** yet been tested. This review does not establish that the entire app meets accessibility standards.
 
-## 3. Usability recommendations
+## 3. Course-slide HCI checklist
+
+To connect this review to the principles taught in CS 449 / CS 549, the current implementation was compared against key usability concepts from the lecture slides.
+
+| Usability principle & slide reference | Current finding in FactTrace | Status | Proposed improvement |
+| --- | --- | --- | --- |
+| **Touch targets (Fitts's Law)**<br>*Week 5 Notes, Slides 8–15* | Core buttons satisfy minimum touch bounds. Decision buttons have a `minHeight` of 88, and the primary scan button is 64. | **Pass** | Maintain current target dimensions in any future layout adjustments. |
+| **Color blindness & redundant coding**<br>*Week 3 Notes, Slide 69* | Decision buttons combine text labels, colors, and distinct icons (checkmark, cross, help). Match levels use colored dots with text labels. | **Pass** | Add distinctive icons to match badges as well to reinforce scanning without color. |
+| **Visibility of system status**<br>*Week 2 Notes, Slide 11; Week 5, Slide 80* | Clear loading spinners and status messages appear during camera capture, OCR text extraction, and backend verification. | **Pass** | Keep immediate visual feedback across all network and processing states. |
+| **Text sizing & legibility**<br>*Week 3 Notes, Slide 26; Supplementary, Slides 15–16* | Several supporting labels across the app are styled between 9px and 10.5px (such as card hints, metadata labels, and provenance details). | **Needs Improvement** | Increase small text to at least 12px to improve readability on smaller mobile screens. |
+| **Error recovery & plain language**<br>*Week 2 Notes, Slide 10 (Heuristic #9)* | When network calls fail, the app displays developer instructions (`npm run dev`, `EXPO_PUBLIC_API_BASE_URL`). | **Needs Improvement** | Replace technical debugging text with user-friendly messages and a clear retry action. |
+| **Mental models & score interpretation**<br>*Week 3 Notes, Slides 34–38; Week 5, Slides 80–84* | The “92% match” label might be misunderstood by users as a truth rating rather than text similarity to a database record. | **Needs Improvement** | Display a short note clarifying that the percentage measures text similarity, not truthfulness. |
+| **User control vs. evaluation protocol**<br>*Week 2 Notes, Slide 9 (Heuristic #3)* | The sharing modal cannot be dismissed without picking an option. This is intentional for collecting complete research trials, but restricts user control. | **Design Tradeoff** | Keep for evaluation data collection, but consider an explicit skip or cancel option for normal app use. |
+
+## 4. Usability recommendations
 
 The following points come from inspecting the interface. **They are design recommendations, not observations from a participant test.**
 
@@ -51,7 +65,7 @@ A “92% match” could be mistaken for “92% true.” In FactTrace, the percen
 
 This distinction matters because the app is intended to help users investigate evidence rather than treat a matching score as a truth verdict.
 
-## 4. Dark-mode Figma designs
+## 5. Dark-mode Figma designs
 
 Dark-mode designs have been completed for all ten main screens: Home, Camera, Review Claim, Verification Results, Evidence Details, Sharing Intention, Verification History, Profile, Create Account, and Log In.
 
@@ -72,7 +86,7 @@ A consistent palette was used across the screens, and layout details were refine
 
 These colors provide a **design reference** for a possible `DARK_COLORS` theme in `mobile/src/constants/app.ts`. The Figma designs are complete, but this branch **does not implement dark-mode switching** in React Native. Frontend integration would need to be discussed with Rand and the rest of the team.
 
-## 5. Usability pilot — planned
+## 6. Usability pilot — planned
 
 A short pilot with **one student outside the project group** is planned, lasting approximately ten minutes. The goal is to find which parts of the main verification flow are easy to understand and where a new user hesitates.
 
@@ -92,7 +106,7 @@ The participant should complete the tasks without being told which buttons to pr
 | Inspect evidence | Pending | Pending | Pending | Pending |
 | Decide and share | Pending | Pending | Pending | Pending |
 
-## 6. Design iteration — after the pilot
+## 7. Design iteration — after the pilot
 
 This section remains incomplete until real participant feedback is collected. The design iteration will document:
 
@@ -103,10 +117,10 @@ This section remains incomplete until real participant feedback is collected. Th
 
 Participant feedback and validation results will not be invented or presented as completed before testing.
 
-## 7. Next steps
+## 8. Next steps
 
-**Completed:** Ten dark-mode screens in Figma and this initial accessibility/usability review. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
+**Completed:** Ten dark-mode screens in Figma, this accessibility review, and the course-slide HCI checklist. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
 
-**For team review:** Improvements to light-mode text contrast, match-status icons, evidence labels, explanations of database match scores, and the proposed dark-mode palette.
+**For team review:** Improvements to light-mode text contrast, small font sizes, developer-facing error messages, match-status icons, evidence labels, explanations of database match scores, and the proposed dark-mode palette.
 
 **Remaining:** Run the usability pilot with a participant, document the findings, and make at least one evidence-based design iteration.
