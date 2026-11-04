@@ -596,6 +596,12 @@ docker exec -i facttrace-mysql mysql -u root -pfacttrace123 facttrace < backend/
 
 ```bash
 docker exec -it facttrace-mysql mysql -u root -pfacttrace123 facttrace
+```  
+**Export the full dataset to CSV:**  
+
+```bash
+cd backend  
+npx tsx src/scripts/export-csv.ts > decisions.csv  
 ```
 
 # Verification States
