@@ -6,9 +6,9 @@
 
 ## 1. Overview
 
-This document summarizes the UI/UX and accessibility work completed for FactTrace. It covers dark-mode designs for the ten main mobile screens, a review of accessibility-related details in the React Native frontend, and recommendations for making verification results easier to understand.
+This document summarizes the UI/UX, accessibility, and usability review completed for FactTrace. It covers dark-mode designs for the ten main mobile screens, a code inspection of accessibility details in the React Native frontend, an HCI checklist based on course lecture principles, and findings from an initial usability pilot session with an external participant.
 
-The accessibility findings are based on code and design inspection, **not a complete accessibility test**. Suggested application changes have not been implemented on this branch, and the usability pilot is still pending.
+The accessibility findings are based on code and design inspection, **not a complete accessibility test**. The design improvements proposed in this document have not been implemented in the application code on this branch.
 
 **Figma:** https://www.figma.com/design/YNwaYpHs4NycdOqFUOayoT
 
@@ -31,7 +31,21 @@ The existing frontend also has accessibility strengths: the primary text color h
 
 Screen-reader behavior, text resizing, and every interaction state have **not** yet been tested. This review does not establish that the entire app meets accessibility standards.
 
-## 3. Usability recommendations
+## 3. Course-slide HCI checklist
+
+To connect this review to the principles taught in CS 449 / CS 549, the current implementation was compared against key usability concepts from the lecture slides.
+
+| Usability principle & slide reference | Current finding in FactTrace | Status | Proposed improvement |
+| --- | --- | --- | --- |
+| **Touch targets (Fitts's Law)**<br>*Week 5 Notes, Slides 8–15* | Core buttons satisfy minimum touch bounds. Decision buttons have a `minHeight` of 88, and the primary scan button is 64. | **Pass** | Maintain current target dimensions in any future layout adjustments. |
+| **Color blindness & redundant coding**<br>*Week 3 Notes, Slide 69* | Decision buttons combine text labels, colors, and distinct icons (checkmark, cross, help). Match levels use colored dots with text labels. | **Pass** | Add distinctive icons to match badges as well to reinforce scanning without color. |
+| **Visibility of system status**<br>*Week 2 Notes, Slide 11; Week 5, Slide 80* | Clear loading spinners and status messages appear during camera capture, OCR text extraction, and backend verification. | **Pass** | Keep immediate visual feedback across all network and processing states. |
+| **Text sizing & legibility**<br>*Week 3 Notes, Slide 26; Supplementary, Slides 15–16* | Several supporting labels across the app are styled between 9px and 10.5px (such as card hints, metadata labels, and provenance details). | **Needs Improvement** | Increase small text to at least 12px to improve readability on smaller mobile screens. |
+| **Error recovery & plain language**<br>*Week 2 Notes, Slide 10 (Heuristic #9)* | When network calls fail, the app displays developer instructions (`npm run dev`, `EXPO_PUBLIC_API_BASE_URL`). | **Needs Improvement** | Replace technical debugging text with user-friendly messages and a clear retry action. |
+| **Mental models & score interpretation**<br>*Week 3 Notes, Slides 34–38; Week 5, Slides 80–84* | The “92% match” label might be misunderstood by users as a truth rating rather than text similarity to a database record. | **Needs Improvement** | Display a short note clarifying that the percentage measures text similarity, not truthfulness. |
+| **User control vs. evaluation protocol**<br>*Week 2 Notes, Slide 9 (Heuristic #3)* | The sharing modal cannot be dismissed without picking an option. This is intentional for collecting complete research trials, but restricts user control. | **Design Tradeoff** | Keep for evaluation data collection, but consider an explicit skip or cancel option for normal app use. |
+
+## 4. Usability recommendations
 
 The following points come from inspecting the interface. **They are design recommendations, not observations from a participant test.**
 
@@ -51,7 +65,7 @@ A “92% match” could be mistaken for “92% true.” In FactTrace, the percen
 
 This distinction matters because the app is intended to help users investigate evidence rather than treat a matching score as a truth verdict.
 
-## 4. Dark-mode Figma designs
+## 5. Dark-mode Figma designs
 
 Dark-mode designs have been completed for all ten main screens: Home, Camera, Review Claim, Verification Results, Evidence Details, Sharing Intention, Verification History, Profile, Create Account, and Log In.
 
@@ -72,41 +86,32 @@ A consistent palette was used across the screens, and layout details were refine
 
 These colors provide a **design reference** for a possible `DARK_COLORS` theme in `mobile/src/constants/app.ts`. The Figma designs are complete, but this branch **does not implement dark-mode switching** in React Native. Frontend integration would need to be discussed with Rand and the rest of the team.
 
-## 5. Usability pilot — planned
+## 6. Usability pilot findings
 
-A short pilot with **one student outside the project group** is planned, lasting approximately ten minutes. The goal is to find which parts of the main verification flow are easy to understand and where a new user hesitates.
+A pilot session was conducted with one participant outside the FactTrace team using the test claim *“Drinking eight glasses of water a day is required for good health”* (`claim_01`). The participant walked through the core verification flow: scanning the printed claim, reviewing the text, inspecting the matched result and evidence, and selecting a decision.
 
-The proposed test claim is **“Drinking eight glasses of water a day is required for good health.”** It is included in the mock dataset as `claim_01`, marked *misleading* with an overall stance of *contradicts*. Its linked evidence sources are demonstration records, not real external authorities. The scan/OCR and results flow should be checked end to end before the pilot.
+No task completion times or formal measurements were recorded. Findings were limited to what was directly observed during the session:
 
-The participant will be asked to complete three tasks:
+1. **Home screen crowding:** The participant noted that the Home screen felt crowded, with too much information competing for attention.
+2. **Unresponsive source URL:** On the Evidence Details screen, the participant tapped the blue URL text displayed above the “Open Original Source” button expecting it to open the source, but nothing happened.
+3. **General experience:** The participant reported that the rest of the verification experience was good and easy to follow.
 
-1. **Scan and verify:** Scan the printed claim, review the OCR text, and continue to the results.
-2. **Inspect evidence:** Find whether the evidence supports or contradicts the claim and identify the listed publisher.
-3. **Decide and share:** Choose Trust, Don't Trust, or Unsure, then answer the sharing question.
+## 7. Evidence-based design iteration
 
-The participant should complete the tasks without being told which buttons to press. The observation record will note task completion, hesitation or errors, and relevant participant comments.
+Based on the participant's direct feedback and principles from the course lecture slides, two interface improvements are proposed. These have not yet been implemented in the application code.
 
-| Task | Completed? | Time | Hesitations or errors | Participant's words |
-| --- | --- | --- | --- | --- |
-| Scan and verify | Pending | Pending | Pending | Pending |
-| Inspect evidence | Pending | Pending | Pending | Pending |
-| Decide and share | Pending | Pending | Pending | Pending |
+### 1. Home screen decluttering (Aesthetic and Minimalist Design)
+- **Observed issue:** The participant noted that the Home screen felt crowded and had too much information competing for attention. The screen currently contains seven separate vertical blocks, including decorative diagrams and marketing cards.
+- **Course principles:** Nielsen’s Heuristic #8 (*Aesthetic and minimalist design*, Week 2 Notes, Slide 10) and Visual Search complexity / Hick's Law (Week 5 Notes, Slides 40–46). Extra units of information diminish the visibility of primary actions.
+- **Proposed improvements:** Simplify the hero card by removing decorative elements, and remove the redundant “Why FactTrace?” marketing cards. All existing navigation (Scan a Claim, Enter Claim Manually, Verification History, Browser Comparison, and Account Login) is preserved while giving the primary scan action clear visual prominence.
 
-## 6. Design iteration — after the pilot
+### 2. Source URL touch interaction (Affordance and Gulf of Execution)
+- **Observed issue:** The participant tapped the blue source URL expecting it to open, but only the button below was interactive.
+- **Course principles:** Affordance and Signifiers (Supplementary Materials, Slides 26–27) and Norman’s Gulf of Execution (Week 5 Notes, Slides 79–84). Blue URL text carries an established perceived affordance of clickability. When tapping produces no result, the user's intention fails to map to an executable action.
+- **Proposed improvements:** Make the blue URL text tappable by wrapping it in a touchable component that calls the existing `openSource()` handler. For demonstration records (such as mock `example.org` links), show a brief notice explaining that the source is a demonstration record for evaluation purposes.
 
-This section remains incomplete until real participant feedback is collected. The design iteration will document:
+## 8. Next steps
 
-- **What was observed:** The specific moment when the participant became confused or encountered difficulty.
-- **Why it matters:** How the issue affects the verification experience.
-- **What changed:** A concrete update to the Figma design or a related recommendation.
-- **What happened after the change:** Any follow-up check that was actually performed. If no retest takes place, that limitation will be stated.
+**Completed:** Ten dark-mode screens in Figma, the accessibility review, the course-slide HCI checklist, the usability pilot with one external participant, and documented proposed improvements based on real feedback. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
 
-Participant feedback and validation results will not be invented or presented as completed before testing.
-
-## 7. Next steps
-
-**Completed:** Ten dark-mode screens in Figma and this initial accessibility/usability review. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
-
-**For team review:** Improvements to light-mode text contrast, match-status icons, evidence labels, explanations of database match scores, and the proposed dark-mode palette.
-
-**Remaining:** Run the usability pilot with a participant, document the findings, and make at least one evidence-based design iteration.
+**For team review:** Proposed improvements to light-mode text contrast, small font sizes, developer-facing error messages, Home screen decluttering, source URL tap interaction, match-status icons, explanations of database match scores, and the proposed dark-mode palette.
