@@ -583,6 +583,21 @@ The application is now ready to use.
 
 ---
 
+## Inspecting Study Data
+
+During the study, use `backend/src/scripts/inspect.sql` to check progress, verify data, and catch problems.
+
+**Run all queries:**
+
+```bash
+docker exec -i facttrace-mysql mysql -u root -pfacttrace123 facttrace < backend/src/scripts/inspect.sql
+```
+**Run individual queries interactively:**
+
+```bash
+docker exec -it facttrace-mysql mysql -u root -pfacttrace123 facttrace
+```
+
 # Verification States
 
 FactTrace currently supports three matching states.
