@@ -24,7 +24,16 @@ function tokens(text: string): Set<string> {
       .replace(/[^\p{L}\p{N}\s]/gu, " ") //turns punctuation into spaces
       .split(/\s+/) //split on any whitespace
       .filter((t) => t.length > 1 && !STOP_WORDS.has(t)) //drop single letters and stop words
+      .map(baseWord) //"spiders" and "spider", "sleeping" and "sleep" count as the same word
   );
+}
+
+//cuts common english endings so different forms of a word match, kept simple on purpose
+function baseWord(word: string): string {
+  if (word.length > 5 && word.endsWith("ing")) return word.slice(0, -3); //sleeping becomes sleep
+  if (word.length > 4 && word.endsWith("ies")) return word.slice(0, -3) + "y"; //studies becomes study
+  if (word.length > 3 && word.endsWith("s") && !word.endsWith("ss") && !word.endsWith("us")) return word.slice(0, -1); //spiders becomes spider
+  return word;
 }
 
 //dice score: 2 x shared words / (words in a + words in b), gives 0 (nothing shared) to 1 (same words)
