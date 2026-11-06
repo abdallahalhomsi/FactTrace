@@ -6,6 +6,7 @@
 SET NAMES utf8mb4;
 
 -- one row per claim in the curated dataset
+-- study_set and study_position mark the claims participants see, in order (null for claims only in the database)
 -- claim_id is also what a qr code contains, for example claim_04
 CREATE TABLE claims (
   claim_id              VARCHAR(20)   NOT NULL,
@@ -19,11 +20,15 @@ CREATE TABLE claims (
   origin_first_seen_at  DATE          NULL,
   origin_url            VARCHAR(2048) NULL,
   study_medium          ENUM('printed','screen','qr') NULL,
+  study_set             ENUM('practice','A','B') NULL,
+  study_position        TINYINT UNSIGNED NULL,
   is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
   created_at            DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at            DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (claim_id),
-  CONSTRAINT chk_claims_id CHECK (claim_id REGEXP '^claim_[0-9]{2,3}$')
+  UNIQUE KEY uq_claims_study_slot (study_set, study_position),
+  CONSTRAINT chk_claims_id CHECK (claim_id REGEXP '^claim_[0-9]{2,3}$'),
+  CONSTRAINT chk_claims_study CHECK ((study_set IS NULL) = (study_position IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- one row per source (article, report, fact check, official page)
