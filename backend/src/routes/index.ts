@@ -11,6 +11,7 @@ import { postDecision } from "../controllers/decisions.controller";
 import { postVerify } from "../controllers/verify.controller";
 import { imageUpload } from "../middleware/upload"; //reads the photo before the ocr controller runs
 import { postSession } from "../controllers/sessions.controller";
+import { getStudyClaims } from "../controllers/study.controller"; //sends the study claims in order
 
 export const router = Router();
 
@@ -25,3 +26,4 @@ router.post("/verify", postVerify); //match and evidence in one call, in the fro
 
 router.post("/decisions", postDecision); //save the participant's decision
 router.post("/sessions", postSession);
+router.get("/study/claims", getStudyClaims); //practice claims and the two study sets, in order

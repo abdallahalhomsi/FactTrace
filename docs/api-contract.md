@@ -1,9 +1,9 @@
-# FactTrace API Contract (v0, mock backend)
+# FactTrace API Contract (v1)
 
 Base URL: `http://<laptop-ip>:3000/api` on the same Wi-Fi, or the ngrok URL + `/api`.
 Types live in `backend/src/types/shared.ts` and `backend/src/types/api.ts`. Mirror both in `mobile/src/types/`.
 
-Status: endpoints are live but backed by **mock data** (7 placeholder claims, in-memory decisions). The MySQL schema is in `database/schema.sql`. Shapes are what the real backend will return; only the data changes.
+Status: endpoints are live and backed by MySQL. Claims come from `database/seed_claims.sql` (50 real claims, each checked against fact checks or official sources) and are loaded into memory when the server starts, so restart the backend after changing claims. Decisions and sessions are saved to MySQL. The schema is in `database/schema.sql`.
 
 **Flexible by design.** The frontend isn't final, so the backend sends everything a screen might need and the app decides what to show. Decision and sharing options come from `GET /config`, so changing them needs no app or route change.
 
@@ -260,30 +260,89 @@ Creates one row per participant before they start, so the condition order is rec
 ```
 `conditionOrder`: `app_first` \| `browser_first`. Decisions are still saved if no session exists.
 
-## Mock claim ids
-Placeholder data (example.org sources) until the real claims are seeded. Use these ids for QR test codes.
+### `GET /study/claims`
+The claims participants see, in a fixed order, without answers. Use this to run the participant flow, and send each `claimId` to `/decisions` in **both** conditions (so the browser condition no longer has to guess the claim from typed text).
+```json
+{
+  "practice": [{ "claimId": "claim_01", "text": "Light from the Sun takes about 8 minutes to reach Earth.", "position": 1 }, ...],
+  "setA": [{ "claimId": "claim_11", "text": "...", "position": 1 }, ...],
+  "setB": [{ "claimId": "claim_16", "text": "...", "position": 1 }, ...]
+}
+```
+- 2 practice claims (send `isPractice: true`), then 7 claims per set, each set 3 true / 2 false / 2 misleading.
+- Counterbalancing: participants with `conditionOrder: "app_first"` do set A in the app, then set B in the browser. `browser_first` participants do set A in the browser, then set B in the app. So set A is always first and the tool alternates.
+- `trialIndex` in `/decisions` counts across both conditions: practice 1 and 2, then 3 to 16.
 
-| id | claim | answer | overallStance |
+## Claim ids
+All 50 claims in `database/seed_claims.sql`. Use these ids for QR test codes. The answer column is for the team only; the API never sends it.
+
+| id | claim | answer | study set |
 |---|---|---|---|
-| `claim_01` | Drinking eight glasses of water a day is required for good health. | misleading | contradicts |
-| `claim_02` | Sabancı University campus will be closed to all students for the entire month of December. | false | contradicts |
-| `claim_03` | Honey never spoils if it is stored in a sealed container. | true | supports |
-| `claim_04` | The city will introduce free public transport next month. (Figma claim) | misleading | contradicts |
-| `claim_05` | A new study proves that using your phone before bed causes permanent memory loss. | false | contradicts |
-| `claim_06` | Working from home makes employees more productive. | misleading | mixed |
-| `claim_07` | The campus library will stay open 24 hours a day during final exams. | true | unclear |
+| `claim_01` | Light from the Sun takes about 8 minutes to reach Earth. | true | practice 1 |
+| `claim_02` | The Eiffel Tower gets slightly taller in summer because its iron expands in the heat. | true |  |
+| `claim_03` | Octopuses have three hearts. | true | A 4 |
+| `claim_04` | Bananas are naturally slightly radioactive. | true |  |
+| `claim_05` | A day on Venus is longer than a year on Venus. | true | B 7 |
+| `claim_06` | Sharks have existed on Earth longer than trees. | true |  |
+| `claim_07` | Wombats produce cube-shaped droppings. | true |  |
+| `claim_08` | The United Nations approved Turkey's request to be officially called Türkiye in 2022. | true |  |
+| `claim_09` | Göbekli Tepe in southeastern Türkiye is more than twice as old as Stonehenge. | true | A 7 |
+| `claim_10` | Türkiye drinks more tea per person than any other country. | true |  |
+| `claim_11` | Since December 2024, new phones sold in the EU must have a USB-C charging port. | true | A 1 |
+| `claim_12` | The University of Oxford is older than the Aztec Empire. | true |  |
+| `claim_13` | Cleopatra lived closer in time to the Moon landing than to the building of the Great Pyramid. | true |  |
+| `claim_14` | The Netherlands has more bicycles than people. | true |  |
+| `claim_15` | Scotland's national animal is the unicorn. | true | B 4 |
+| `claim_16` | A UN-backed report says the ozone layer is on track to recover within a few decades. | true | B 1 |
+| `claim_17` | Mosquitoes were found in Iceland for the first time in 2025. | true |  |
+| `claim_18` | The original Coca-Cola recipe contained cocaine. | true |  |
+| `claim_19` | The average person swallows eight spiders a year while sleeping. | false | practice 2 |
+| `claim_20` | The Great Wall of China is visible from space with the naked eye. | false |  |
+| `claim_21` | Goldfish have a memory span of only three seconds. | false |  |
+| `claim_22` | Lightning never strikes the same place twice. | false |  |
+| `claim_23` | Humans only use 10 percent of their brains. | false |  |
+| `claim_24` | Finland is introducing a four-day working week with six-hour days. | false | A 2 |
+| `claim_25` | NASA confirmed that Earth will go dark for six days in December. | false | B 2 |
+| `claim_26` | 5G mobile networks spread the coronavirus. | false |  |
+| `claim_27` | The 1969 Moon landing was filmed in a studio and never happened. | false |  |
+| `claim_28` | The white trails behind planes are chemicals sprayed in a secret government programme. | false |  |
+| `claim_29` | The MMR vaccine causes autism. | false |  |
+| `claim_30` | Drinking hot water protects you from the coronavirus. | false |  |
+| `claim_31` | A WhatsApp video called Martinelli will hack your phone if you open it. | false |  |
+| `claim_32` | Marie Antoinette said "Let them eat cake" when told the people had no bread. | false | B 5 |
+| `claim_33` | Albert Einstein said insanity is doing the same thing over and over and expecting different results. | false | A 5 |
+| `claim_34` | Lemmings commit mass suicide by jumping off cliffs. | false |  |
+| `claim_35` | Eating carrots improves your eyesight and helps you see in the dark. | misleading |  |
+| `claim_36` | Chameleons change colour to blend in with their surroundings. | misleading |  |
+| `claim_37` | Drinking coffee dehydrates you. | misleading |  |
+| `claim_38` | Taking vitamin C every day prevents colds. | misleading | B 3 |
+| `claim_39` | The WHO says processed meat is as dangerous as smoking. | misleading | A 3 |
+| `claim_40` | Mount Everest is the tallest mountain on Earth. | misleading | A 6 |
+| `claim_41` | Istanbul is the only city in the world located on two continents. | misleading | B 6 |
+| `claim_42` | You need to drink eight glasses of water a day to stay healthy. | misleading |  |
+| `claim_43` | Working from home makes employees more productive. | misleading |  |
+| `claim_44` | A glass of red wine every day is good for your heart. | misleading |  |
+| `claim_45` | Pluto lost its planet status because it is too small. | misleading |  |
+| `claim_46` | MSG in food causes headaches. | misleading |  |
+| `claim_47` | Microwaving food destroys its nutrients. | misleading |  |
+| `claim_48` | Humans share 60 percent of their DNA with bananas. | misleading |  |
+| `claim_49` | Japan kept a remote train station open just for one high school student until she graduated. | misleading |  |
+| `claim_50` | A Dutch researcher predicted the February 2023 earthquake in Türkiye. | misleading |  |
 
 Test inputs for each match status (send to `/api/verify` with `source: "manual"`):
-- strong: the full claim text, e.g. `The city will introduce free public transport next month.`
-- weak: a partial version, e.g. `free public transport in the city`
+- strong: the full claim text, e.g. `Mount Everest is the tallest mountain on Earth.`
+- weak: a partial version, e.g. `Einstein said insanity is doing the same thing`
 - no match: unrelated text, e.g. `The moon is made of cheese`
 - weak because of OCR: full claim text with `source: "ocr"`, the same `originalOcrText`, and `ocrConfidence: 0.3`
 
 ## Running the backend
 ```
+docker compose up -d        # from the repo root: starts MySQL and loads schema.sql + seed_claims.sql on first run
 cd backend
 npm install
 copy .env.example .env      (macOS/Linux: cp .env.example .env)
 npm run dev                 # http://localhost:3000/api
 ```
-No Google key needed for development: OCR falls back to Tesseract (bundled, works offline).
+No Google key needed for development: OCR falls back to Tesseract (bundled, works offline). The backend stops at startup with a clear message if MySQL is not running or has no claims.
+
+Already have the database from before this change? Recreate it so the new claims load: `docker compose down -v` then `docker compose up -d` (this also deletes test decisions).

@@ -200,6 +200,21 @@ export interface SessionResponse {
   saved: true;
 }
 
+//one claim a participant checks, in the order they see it (never includes the answer)
+export interface StudyClaim {
+  claimId: string; //send this as claimid to /decisions, in the browser condition too
+  text: string; //the claim exactly as shown to the participant
+  position: number; //order inside its list, starting at 1
+}
+
+//what get /api/study/claims returns: the practice claims and the two study sets
+//half the participants do set a in the app and set b in the browser, the other half the opposite
+export interface StudyClaimsResponse {
+  practice: StudyClaim[]; //warm up claims, send isPractice true for these
+  setA: StudyClaim[]; //study set a
+  setB: StudyClaim[]; //study set b
+}
+
 //one answer button the app can show
 export interface ChoiceOptionDto {
   value: string; //what to send back to the backend

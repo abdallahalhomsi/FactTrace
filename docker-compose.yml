@@ -16,6 +16,6 @@ services:
     volumes:
       - facttrace_mysql_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./database/seed_mock.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - ./database/seed_claims.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 volumes:
   facttrace_mysql_data:

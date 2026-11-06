@@ -18,8 +18,10 @@ function tokens(text: string): Set<string> {
   return new Set(
     text
       .toLowerCase() //capital and small letters count as the same word
-      .normalize("NFKD") //splits accented letters, so "café" becomes "cafe" plus an accent mark
-      .replace(/[^\p{L}\p{N}\s]/gu, " ") //turns punctuation and accent marks into spaces
+      .replace(/ı/g, "i") //turkish dotless i, so "sabancı" and "sabanci" match
+      .normalize("NFKD") //splits accented letters, so "türkiye" becomes "turkiye" plus an accent mark
+      .replace(/\p{M}/gu, "") //removes the accent marks without splitting the word
+      .replace(/[^\p{L}\p{N}\s]/gu, " ") //turns punctuation into spaces
       .split(/\s+/) //split on any whitespace
       .filter((t) => t.length > 1 && !STOP_WORDS.has(t)) //drop single letters and stop words
   );
