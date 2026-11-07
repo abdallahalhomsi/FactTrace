@@ -1,5 +1,4 @@
-
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 
 import {
   Alert,
@@ -20,7 +19,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { EvidenceSource } from '../types/evidence';
 
 import {
@@ -43,6 +43,13 @@ export default function EvidenceDetailsScreen({
   navigation,
   route,
 }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+
+  const styles = useMemo(
+    () => createStyles(COLORS, isDark),
+    [COLORS, isDark],
+  );
+
   const result = route.params?.result;
   const sourceId = route.params?.sourceId;
   const evidenceTrackingKey = route.params?.evidenceTrackingKey;
@@ -66,11 +73,6 @@ export default function EvidenceDetailsScreen({
     ? [selectedSource]
     : allSources;
 
-  /*
-    RESTORE WALKTHROUGH PROGRESS
-
-    No automatic scrolling or floating overlays.
-  */
   useEffect(() => {
     if (!isWalkthrough) return;
 
@@ -99,12 +101,6 @@ export default function EvidenceDetailsScreen({
     };
   }, [isWalkthrough]);
 
-  /*
-    CONTINUE TUTORIAL
-
-    After inspecting the source, the user explicitly
-    continues to the return-to-results step.
-  */
   const continueTour = async () => {
     try {
       await saveWalkthroughState({
@@ -114,7 +110,6 @@ export default function EvidenceDetailsScreen({
 
       setTourStep('evidence_return');
 
-      // Scroll only after the user taps Continue.
       requestAnimationFrame(() => {
         scrollRef.current?.scrollToEnd({
           animated: true,
@@ -133,12 +128,6 @@ export default function EvidenceDetailsScreen({
     }
   };
 
-  /*
-    RETURN TO RESULTS
-
-    The decision step unlocks only after the user
-    completes the source-inspection lesson.
-  */
   const returnFromTour = async () => {
     if (isWalkthrough) {
       try {
@@ -154,6 +143,7 @@ export default function EvidenceDetailsScreen({
           'Could not save walkthrough return step.',
           error,
         );
+
         return;
       }
     }
@@ -161,12 +151,6 @@ export default function EvidenceDetailsScreen({
     navigation.goBack();
   };
 
-  /*
-    SKIP WALKTHROUGH
-
-    Only tutorial status is updated.
-    No verification, evidence tracking, or study data is saved.
-  */
   const skipTour = async () => {
     try {
       await saveWalkthroughState({
@@ -190,14 +174,6 @@ export default function EvidenceDetailsScreen({
     }
   };
 
-  /*
-    OPEN REAL SOURCE
-
-    Practice evidence is fictional and has no external link.
-
-    For normal checks, retain the original-link behavior
-    and evidence-source tracking.
-  */
   const openSource = async (source: EvidenceSource) => {
     if (isWalkthrough) return;
 
@@ -218,7 +194,6 @@ export default function EvidenceDetailsScreen({
       }
 
       if (Platform.OS === 'web') {
-        // Keep the current FactTrace screen open.
         const openedWindow = window.open(
           parsedUrl.toString(),
           '_blank',
@@ -235,9 +210,8 @@ export default function EvidenceDetailsScreen({
         await Linking.openURL(parsedUrl.toString());
       }
 
-      // Only real source openings are tracked.
       if (evidenceTrackingKey) {
-        recordEvidenceSourceOpened(
+        void recordEvidenceSourceOpened(
           evidenceTrackingKey,
           source.sourceId ?? source.id,
         );
@@ -250,18 +224,15 @@ export default function EvidenceDetailsScreen({
 
       Alert.alert(
         'Unable to open source',
-        'FactTrace could not open this source. You can try copying its URL.',
+        'FactTrace could not open this source. Please try again.',
       );
     }
   };
 
-  /*
-    MISSING RESULT
-  */
   if (!result) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
 
         <View style={styles.errorScreen}>
           <View style={styles.errorIcon}>
@@ -277,8 +248,7 @@ export default function EvidenceDetailsScreen({
           </Text>
 
           <Text style={styles.errorText}>
-            FactTrace could not load the evidence details
-            for this claim.
+            FactTrace could not load the evidence details for this claim.
           </Text>
 
           <TouchableOpacity
@@ -297,7 +267,7 @@ export default function EvidenceDetailsScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <ScrollView
         ref={scrollRef}
@@ -305,7 +275,6 @@ export default function EvidenceDetailsScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER */}
         <View style={styles.header}>
           <TouchableOpacity
             activeOpacity={0.8}
@@ -336,16 +305,6 @@ export default function EvidenceDetailsScreen({
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* DATASET NOTICE */}
-        {result.datasetNotice ? (
-          <View style={styles.datasetNotice}>
-            <Text style={styles.datasetNoticeText}>
-              DEMONSTRATION DATA · {result.datasetNotice}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* WALKTHROUGH GUIDE */}
         {isWalkthrough ? (
           <View style={styles.practiceGuide}>
             <View style={styles.practiceGuideHeader}>
@@ -373,7 +332,6 @@ export default function EvidenceDetailsScreen({
           </View>
         ) : null}
 
-        {/* HERO */}
         <LinearGradient
           colors={['#102B49', '#123D67', '#17568C']}
           start={{ x: 0, y: 0 }}
@@ -448,7 +406,6 @@ export default function EvidenceDetailsScreen({
           </View>
         </LinearGradient>
 
-        {/* ORIGINAL CLAIM */}
         <View style={styles.claimCard}>
           <View style={styles.claimHeader}>
             <View style={styles.claimIcon}>
@@ -475,7 +432,6 @@ export default function EvidenceDetailsScreen({
           </Text>
         </View>
 
-        {/* MATCHED CLAIM */}
         {result.matchedClaim ? (
           <View style={styles.matchedClaimCard}>
             <View style={styles.matchedClaimHeader}>
@@ -504,7 +460,6 @@ export default function EvidenceDetailsScreen({
           </View>
         ) : null}
 
-        {/* SOURCES */}
         {displayedSources.length > 0 ? (
           displayedSources.map((source, index) => (
             <React.Fragment key={source.id}>
@@ -538,7 +493,6 @@ export default function EvidenceDetailsScreen({
                 ) : null}
               </View>
 
-              {/* SOURCE CARD */}
               <View
                 style={[
                   styles.sourceCard,
@@ -548,7 +502,6 @@ export default function EvidenceDetailsScreen({
                     styles.walkthroughHighlight,
                 ]}
               >
-                {/* SOURCE IDENTITY */}
                 <View style={styles.sourceTop}>
                   <View
                     style={
@@ -594,7 +547,6 @@ export default function EvidenceDetailsScreen({
                   ) : null}
                 </View>
 
-                {/* SOURCE TITLE */}
                 <View style={styles.sourceTitleBlock}>
                   <Text style={styles.sourceTitleLabel}>
                     SOURCE TITLE
@@ -605,7 +557,6 @@ export default function EvidenceDetailsScreen({
                   </Text>
                 </View>
 
-                {/* SOURCE METADATA */}
                 <View style={styles.metadataGrid}>
                   <View style={styles.metadataItem}>
                     <Ionicons
@@ -659,7 +610,6 @@ export default function EvidenceDetailsScreen({
                   </View>
                 </View>
 
-                {/* SUMMARY */}
                 {source.summary ? (
                   <View style={styles.summaryBlock}>
                     <View style={styles.evidenceBlockHeader}>
@@ -680,7 +630,6 @@ export default function EvidenceDetailsScreen({
                   </View>
                 ) : null}
 
-                {/* EVIDENCE TEXT */}
                 <View style={styles.evidenceBlock}>
                   <View style={styles.evidenceBlockHeader}>
                     <Ionicons
@@ -709,7 +658,6 @@ export default function EvidenceDetailsScreen({
                   ) : null}
                 </View>
 
-                {/* PROVENANCE */}
                 <View style={styles.provenanceBlock}>
                   <View style={styles.provenanceHeader}>
                     <View style={styles.provenanceIcon}>
@@ -772,72 +720,61 @@ export default function EvidenceDetailsScreen({
                   ) : null}
                 </View>
 
-                {/* OPEN ORIGINAL SOURCE — NORMAL MODE ONLY */}
                 {!isWalkthrough && source.originalUrl ? (
-                  <>
-                    <Text
-                      selectable
-                      style={styles.sourceUrl}
-                    >
-                      {source.originalUrl}
-                    </Text>
-
-                    <TouchableOpacity
-                      activeOpacity={0.85}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={
+                      source.isPrimary
+                        ? styles.openSourceButton
+                        : styles.secondarySourceButton
+                    }
+                    onPress={() => void openSource(source)}
+                  >
+                    <View
                       style={
                         source.isPrimary
-                          ? styles.openSourceButton
-                          : styles.secondarySourceButton
+                          ? styles.openSourceIcon
+                          : styles.secondaryOpenSourceIcon
                       }
-                      onPress={() => void openSource(source)}
                     >
-                      <View
-                        style={
-                          source.isPrimary
-                            ? styles.openSourceIcon
-                            : styles.secondaryOpenSourceIcon
-                        }
-                      >
-                        <Ionicons
-                          name="open-outline"
-                          size={20}
-                          color={
-                            source.isPrimary
-                              ? COLORS.white
-                              : COLORS.blue
-                          }
-                        />
-                      </View>
-
-                      <Text
-                        style={
-                          source.isPrimary
-                            ? styles.openSourceText
-                            : styles.secondarySourceText
-                        }
-                      >
-                        Open Original Source
-                      </Text>
-
                       <Ionicons
-                        name={
-                          source.isPrimary
-                            ? 'arrow-forward'
-                            : 'chevron-forward'
-                        }
-                        size={19}
+                        name="open-outline"
+                        size={20}
                         color={
                           source.isPrimary
                             ? COLORS.white
                             : COLORS.blue
                         }
                       />
-                    </TouchableOpacity>
-                  </>
+                    </View>
+
+                    <Text
+                      style={
+                        source.isPrimary
+                          ? styles.openSourceText
+                          : styles.secondarySourceText
+                      }
+                    >
+                      Open Original Source
+                    </Text>
+
+                    <Ionicons
+                      name={
+                        source.isPrimary
+                          ? 'arrow-forward'
+                          : 'chevron-forward'
+                      }
+                      size={19}
+                      color={
+                        source.isPrimary
+                          ? COLORS.white
+                          : COLORS.blue
+                      }
+                    />
+                  </TouchableOpacity>
                 ) : null}
               </View>
 
-              {/* PRACTICE CONTINUE */}
               {isWalkthrough &&
               index === 0 &&
               tourStep === 'evidence_details' ? (
@@ -875,13 +812,11 @@ export default function EvidenceDetailsScreen({
             </Text>
 
             <Text style={styles.emptyText}>
-              FactTrace did not receive any evidence
-              sources for this claim.
+              FactTrace did not receive any evidence sources for this claim.
             </Text>
           </View>
         )}
 
-        {/* BACK TO RESULTS */}
         <View
           style={
             isWalkthrough &&
@@ -923,801 +858,787 @@ export default function EvidenceDetailsScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-
-  scrollView: {
-    flex: 1,
-  },
-
-  content: {
-    paddingHorizontal: 22,
-    paddingBottom: 40,
-  },
-
-  /* WALKTHROUGH */
-
-  practiceGuide: {
-    marginTop: 16,
-    padding: 15,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EDCC77',
-    backgroundColor: '#FFF9EB',
-  },
-
-  practiceGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-
-  practiceGuideTitle: {
-    flex: 1,
-    color: '#162E4A',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  practiceGuideText: {
-    marginTop: 9,
-    color: '#785814',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  practiceSkip: {
-    color: COLORS.blue,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  walkthroughHighlight: {
-    borderWidth: 3,
-    borderColor: '#FFD166',
-    borderRadius: 18,
-    padding: 3,
-  },
-
-  practiceContinue: {
-    marginTop: 14,
-    minHeight: 54,
-    borderRadius: 15,
-    backgroundColor: COLORS.blue,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-  },
-
-  practiceContinueText: {
-    flex: 1,
-    marginRight: 10,
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  bottomSkip: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-
-  /* HEADER */
-
-  header: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  backButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 15,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#1B3655',
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
     },
-    elevation: 2,
-  },
 
-  headerTextArea: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 21,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-
-  headerSubtitle: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 11.5,
-  },
-
-  headerSpacer: {
-    width: 45,
-  },
-
-  datasetNotice: {
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: '#FFF4E8',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-
-  datasetNoticeText: {
-    color: '#A64B00',
-    fontSize: 10,
-    lineHeight: 15,
-    fontWeight: '800',
-  },
-
-  /* HERO */
-
-  heroCard: {
-    marginTop: 23,
-    borderRadius: 23,
-    padding: 19,
-    overflow: 'hidden',
-    shadowColor: '#0B2542',
-    shadowOpacity: 0.18,
-    shadowRadius: 15,
-    shadowOffset: {
-      width: 0,
-      height: 7,
+    scrollView: {
+      flex: 1,
     },
-    elevation: 6,
-  },
 
-  heroCircleLarge: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 24,
-    borderColor: 'rgba(255,255,255,0.03)',
-    right: -45,
-    top: -60,
-  },
-
-  heroCircleSmall: {
-    position: 'absolute',
-    width: 75,
-    height: 75,
-    borderRadius: 38,
-    backgroundColor: 'rgba(255,255,255,0.025)',
-    right: 18,
-    bottom: -26,
-  },
-
-  heroIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  heroTitle: {
-    marginTop: 15,
-    color: COLORS.white,
-    fontSize: 24,
-    fontWeight: '800',
-  },
-
-  heroDescription: {
-    marginTop: 7,
-    color: '#C7D6E6',
-    fontSize: 13,
-    lineHeight: 18,
-    maxWidth: '94%',
-  },
-
-  heroStats: {
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  heroStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  heroStatNumber: {
-    color: COLORS.white,
-    fontSize: 19,
-    fontWeight: '800',
-  },
-
-  heroStatLabel: {
-    marginTop: 3,
-    color: '#B8CDE2',
-    fontSize: 10.5,
-    fontWeight: '600',
-  },
-
-  heroDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-
-  /* CLAIM */
-
-  claimCard: {
-    marginTop: 17,
-    borderRadius: 18,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: '#E1E8F0',
-    padding: 15,
-  },
-
-  claimHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  claimHeaderText: {
-    flex: 1,
-  },
-
-  claimIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: '#EDF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-
-  claimLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
-  claimHelper: {
-    marginTop: 2,
-    color: COLORS.textMuted,
-    fontSize: 10,
-  },
-
-  claimText: {
-    marginTop: 13,
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
-  },
-
-  /* MATCHED CLAIM */
-
-  matchedClaimCard: {
-    marginTop: 11,
-    borderRadius: 18,
-    backgroundColor: '#F6F3FF',
-    borderWidth: 1,
-    borderColor: '#E4DDFB',
-    padding: 15,
-  },
-
-  matchedClaimHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  matchedClaimHeaderText: {
-    flex: 1,
-  },
-
-  matchedClaimIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: '#E9E2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-
-  matchedClaimLabel: {
-    color: '#6553A6',
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
-  matchedClaimHelper: {
-    marginTop: 2,
-    color: COLORS.textMuted,
-    fontSize: 10,
-  },
-
-  matchedClaimText: {
-    marginTop: 13,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '600',
-  },
-
-  /* SECTION */
-
-  sectionHeader: {
-    marginTop: 23,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  sectionHeaderText: {
-    flex: 1,
-  },
-
-  sectionTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-
-  sectionSubtitle: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 11,
-  },
-
-  primaryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF4DF',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 9,
-    marginLeft: 8,
-  },
-
-  primaryBadgeText: {
-    marginLeft: 4,
-    color: '#A56200',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-
-  /* SOURCE CARD */
-
-  sourceCard: {
-    borderRadius: 19,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: '#E1E8F0',
-    padding: 15,
-    shadowColor: '#18334E',
-    shadowOpacity: 0.04,
-    shadowRadius: 9,
-    shadowOffset: {
-      width: 0,
-      height: 3,
+    content: {
+      paddingHorizontal: 22,
+      paddingBottom: 40,
     },
-    elevation: 1,
-  },
 
-  sourceTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    practiceGuide: {
+      marginTop: 16,
+      padding: 15,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark
+        ? COLORS.border
+        : '#EDCC77',
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF9EB',
+    },
 
-  sourceIconBlue: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    backgroundColor: '#EDF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    practiceGuideHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
 
-  sourceIconPurple: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    backgroundColor: '#F2EEFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    practiceGuideTitle: {
+      flex: 1,
+      color: isDark
+        ? COLORS.textPrimary
+        : '#162E4A',
+      fontSize: 15,
+      fontWeight: '800',
+    },
 
-  sourceIdentity: {
-    flex: 1,
-    marginLeft: 11,
-  },
+    practiceGuideText: {
+      marginTop: 9,
+      color: isDark
+        ? COLORS.textSecondary
+        : '#785814',
+      fontSize: 12,
+      lineHeight: 18,
+    },
 
-  sourceName: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
+    practiceSkip: {
+      color: COLORS.blue,
+      fontSize: 12,
+      fontWeight: '700',
+    },
 
-  sourceOrganization: {
-    marginTop: 3,
-    color: COLORS.textSecondary,
-    fontSize: 11,
-  },
+    walkthroughHighlight: {
+      borderWidth: 3,
+      borderColor: isDark
+        ? COLORS.border
+        : '#FFD166',
+      borderRadius: 18,
+      padding: 3,
+    },
 
-  verifiedSourceIcon: {
-    marginLeft: 8,
-  },
+    practiceContinue: {
+      marginTop: 14,
+      minHeight: 54,
+      borderRadius: 15,
+      backgroundColor: COLORS.blue,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+    },
 
-  sourceTitleBlock: {
-    marginTop: 15,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#F7F9FC',
-  },
+    practiceContinueText: {
+      flex: 1,
+      marginRight: 10,
+      color: COLORS.white,
+      fontSize: 13,
+      fontWeight: '700',
+    },
 
-  sourceTitleLabel: {
-    color: COLORS.textMuted,
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-  },
+    bottomSkip: {
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 8,
+    },
 
-  sourceTitleText: {
-    marginTop: 5,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
+    header: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  /* METADATA */
+    backButton: {
+      width: 45,
+      height: 45,
+      borderRadius: 15,
+      backgroundColor: COLORS.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
 
-  metadataGrid: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 9,
-  },
+    headerTextArea: {
+      flex: 1,
+      alignItems: 'center',
+    },
 
-  metadataItem: {
-    flex: 1,
-    minHeight: 62,
-    borderRadius: 13,
-    backgroundColor: '#F6F8FB',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    headerTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 21,
+      fontWeight: '800',
+      letterSpacing: -0.3,
+    },
 
-  metadataTextArea: {
-    flex: 1,
-    marginLeft: 8,
-  },
+    headerSubtitle: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 11.5,
+    },
 
-  metadataLabel: {
-    color: COLORS.textMuted,
-    fontSize: 9.5,
-    fontWeight: '600',
-  },
+    headerSpacer: {
+      width: 45,
+    },
 
-  metadataValue: {
-    marginTop: 2,
-    color: COLORS.textPrimary,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-  },
+    heroCard: {
+      marginTop: 23,
+      borderRadius: 23,
+      padding: 19,
+      overflow: 'hidden',
+      shadowColor: '#0B2542',
+      shadowOpacity: 0.18,
+      shadowRadius: 15,
+      shadowOffset: {
+        width: 0,
+        height: 7,
+      },
+      elevation: 6,
+    },
 
-  /* SUMMARY AND EVIDENCE */
+    heroCircleLarge: {
+      position: 'absolute',
+      width: 150,
+      height: 150,
+      borderRadius: 75,
+      borderWidth: 24,
+      borderColor: 'rgba(255,255,255,0.03)',
+      right: -45,
+      top: -60,
+    },
 
-  summaryBlock: {
-    marginTop: 15,
-    borderRadius: 15,
-    backgroundColor: '#F5F8FC',
-    padding: 13,
-  },
+    heroCircleSmall: {
+      position: 'absolute',
+      width: 75,
+      height: 75,
+      borderRadius: 38,
+      backgroundColor: 'rgba(255,255,255,0.025)',
+      right: 18,
+      bottom: -26,
+    },
 
-  evidenceBlock: {
-    marginTop: 12,
-    borderRadius: 15,
-    backgroundColor: '#F5F8FC',
-    padding: 13,
-  },
+    heroIcon: {
+      width: 45,
+      height: 45,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  evidenceBlockHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    heroTitle: {
+      marginTop: 15,
+      color: COLORS.white,
+      fontSize: 24,
+      fontWeight: '800',
+    },
 
-  evidenceBlockTitle: {
-    marginLeft: 7,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    heroDescription: {
+      marginTop: 7,
+      color: '#C7D6E6',
+      fontSize: 13,
+      lineHeight: 18,
+      maxWidth: '94%',
+    },
 
-  evidenceText: {
-    marginTop: 9,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    heroStats: {
+      marginTop: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  evidenceStance: {
-    marginTop: 14,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    heroStat: {
+      flex: 1,
+      alignItems: 'center',
+    },
 
-  /* PROVENANCE */
+    heroStatNumber: {
+      color: COLORS.white,
+      fontSize: 19,
+      fontWeight: '800',
+    },
 
-  provenanceBlock: {
-    marginTop: 15,
-    borderRadius: 15,
-    backgroundColor: '#F6F3FF',
-    padding: 13,
-  },
+    heroStatLabel: {
+      marginTop: 3,
+      color: '#B8CDE2',
+      fontSize: 10.5,
+      fontWeight: '600',
+    },
 
-  provenanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    heroDivider: {
+      width: 1,
+      height: 30,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+    },
 
-  provenanceIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: '#E9E2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    claimCard: {
+      marginTop: 17,
+      borderRadius: 18,
+      backgroundColor: COLORS.surface,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: 15,
+    },
 
-  provenanceHeaderText: {
-    marginLeft: 9,
-    flex: 1,
-  },
+    claimHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  provenanceTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    claimHeaderText: {
+      flex: 1,
+    },
 
-  provenanceSubtitle: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 10.5,
-  },
+    claimIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 11,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EDF4FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
 
-  provenanceRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
+    claimLabel: {
+      color: COLORS.textSecondary,
+      fontSize: 10.5,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+    },
 
-  provenanceDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#7357D9',
-    marginTop: 4,
-  },
+    claimHelper: {
+      marginTop: 2,
+      color: COLORS.textMuted,
+      fontSize: 10,
+    },
 
-  provenanceStep: {
-    flex: 1,
-    marginLeft: 9,
-  },
+    claimText: {
+      marginTop: 13,
+      color: COLORS.textPrimary,
+      fontSize: 15,
+      lineHeight: 22,
+      fontWeight: '600',
+    },
 
-  provenanceStepTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
+    matchedClaimCard: {
+      marginTop: 11,
+      borderRadius: 18,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F6F3FF',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: 15,
+    },
 
-  provenanceStepText: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 10.5,
-    lineHeight: 15,
-  },
+    matchedClaimHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  provenanceLine: {
-    width: 1,
-    height: 18,
-    marginLeft: 4,
-    marginTop: 3,
-    marginBottom: -7,
-    backgroundColor: '#CFC4F5',
-  },
+    matchedClaimHeaderText: {
+      flex: 1,
+    },
 
-  /* SOURCE BUTTONS */
+    matchedClaimIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 11,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#E9E2FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
 
-  sourceUrl: {
-    marginTop: 15,
-    color: COLORS.blue,
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    matchedClaimLabel: {
+      color: isDark
+        ? '#C4B5FD'
+        : '#6553A6',
+      fontSize: 10.5,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+    },
 
-  openSourceButton: {
-    marginTop: 16,
-    minHeight: 56,
-    borderRadius: 15,
-    backgroundColor: COLORS.blue,
-    paddingHorizontal: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    matchedClaimHelper: {
+      marginTop: 2,
+      color: COLORS.textMuted,
+      fontSize: 10,
+    },
 
-  openSourceIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    matchedClaimText: {
+      marginTop: 13,
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      lineHeight: 21,
+      fontWeight: '600',
+    },
 
-  openSourceText: {
-    flex: 1,
-    marginLeft: 10,
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
+    sectionHeader: {
+      marginTop: 23,
+      marginBottom: 10,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
 
-  secondarySourceButton: {
-    marginTop: 16,
-    minHeight: 52,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#D7E3F4',
-    backgroundColor: '#F4F8FE',
-    paddingHorizontal: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    sectionHeaderText: {
+      flex: 1,
+    },
 
-  secondaryOpenSourceIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 10,
-    backgroundColor: '#E7F0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    sectionTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 18,
+      fontWeight: '800',
+    },
 
-  secondarySourceText: {
-    flex: 1,
-    marginLeft: 9,
-    color: COLORS.blue,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    sectionSubtitle: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 11,
+    },
 
-  backToResultsButton: {
-    marginTop: 18,
-    minHeight: 52,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#E1E8F0',
-    backgroundColor: COLORS.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    primaryBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF4DF',
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 9,
+      marginLeft: 8,
+    },
 
-  backToResultsText: {
-    marginLeft: 8,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    primaryBadgeText: {
+      marginLeft: 4,
+      color: isDark
+        ? COLORS.orange
+        : '#A56200',
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+    },
 
-  /* EMPTY STATE */
+    sourceCard: {
+      borderRadius: 19,
+      backgroundColor: COLORS.surface,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: 15,
+    },
 
-  emptyCard: {
-    marginTop: 22,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E1E8F0',
-    backgroundColor: COLORS.white,
-    padding: 24,
-    alignItems: 'center',
-  },
+    sourceTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#EDF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    sourceIconBlue: {
+      width: 43,
+      height: 43,
+      borderRadius: 13,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EDF4FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  emptyTitle: {
-    marginTop: 12,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
+    sourceIconPurple: {
+      width: 43,
+      height: 43,
+      borderRadius: 13,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F2EEFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  emptyText: {
-    marginTop: 6,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
+    sourceIdentity: {
+      flex: 1,
+      marginLeft: 11,
+    },
 
-  /* ERROR STATE */
+    sourceName: {
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
 
-  errorScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 35,
-  },
+    sourceOrganization: {
+      marginTop: 3,
+      color: COLORS.textSecondary,
+      fontSize: 11,
+    },
 
-  errorIcon: {
-    width: 62,
-    height: 62,
-    borderRadius: 19,
-    backgroundColor: '#EDF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    verifiedSourceIcon: {
+      marginLeft: 8,
+    },
 
-  errorTitle: {
-    marginTop: 16,
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
-  },
+    sourceTitleBlock: {
+      marginTop: 15,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F7F9FC',
+    },
 
-  errorText: {
-    marginTop: 7,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
+    sourceTitleLabel: {
+      color: COLORS.textMuted,
+      fontSize: 9.5,
+      fontWeight: '800',
+      letterSpacing: 0.7,
+    },
 
-  errorButton: {
-    marginTop: 20,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    borderRadius: 13,
-    backgroundColor: COLORS.blue,
-  },
+    sourceTitleText: {
+      marginTop: 5,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '700',
+    },
 
-  errorButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+    metadataGrid: {
+      marginTop: 12,
+      flexDirection: 'row',
+      gap: 9,
+    },
+
+    metadataItem: {
+      flex: 1,
+      minHeight: 62,
+      borderRadius: 13,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F6F8FB',
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    metadataTextArea: {
+      flex: 1,
+      marginLeft: 8,
+    },
+
+    metadataLabel: {
+      color: COLORS.textMuted,
+      fontSize: 9.5,
+      fontWeight: '600',
+    },
+
+    metadataValue: {
+      marginTop: 2,
+      color: COLORS.textPrimary,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '600',
+    },
+
+    summaryBlock: {
+      marginTop: 15,
+      borderRadius: 15,
+      backgroundColor: COLORS.background,
+      padding: 13,
+    },
+
+    evidenceBlock: {
+      marginTop: 12,
+      borderRadius: 15,
+      backgroundColor: COLORS.background,
+      padding: 13,
+    },
+
+    evidenceBlockHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    evidenceBlockTitle: {
+      marginLeft: 7,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    evidenceText: {
+      marginTop: 9,
+      color: COLORS.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    evidenceStance: {
+      marginTop: 14,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    provenanceBlock: {
+      marginTop: 15,
+      borderRadius: 15,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F6F3FF',
+      padding: 13,
+    },
+
+    provenanceHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    provenanceIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 11,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#E9E2FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    provenanceHeaderText: {
+      marginLeft: 9,
+      flex: 1,
+    },
+
+    provenanceTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    provenanceSubtitle: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 10.5,
+    },
+
+    provenanceRow: {
+      marginTop: 14,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+
+    provenanceDot: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor: '#7357D9',
+      marginTop: 4,
+    },
+
+    provenanceStep: {
+      flex: 1,
+      marginLeft: 9,
+    },
+
+    provenanceStepTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 11.5,
+      fontWeight: '700',
+    },
+
+    provenanceStepText: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 10.5,
+      lineHeight: 15,
+    },
+
+    provenanceLine: {
+      width: 1,
+      height: 18,
+      marginLeft: 4,
+      marginTop: 3,
+      marginBottom: -7,
+      backgroundColor: isDark
+        ? COLORS.border
+        : '#CFC4F5',
+    },
+
+    openSourceButton: {
+      marginTop: 16,
+      minHeight: 56,
+      borderRadius: 15,
+      backgroundColor: COLORS.blue,
+      paddingHorizontal: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    openSourceIcon: {
+      width: 35,
+      height: 35,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.16)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    openSourceText: {
+      flex: 1,
+      marginLeft: 10,
+      color: COLORS.white,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    secondarySourceButton: {
+      marginTop: 16,
+      minHeight: 52,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#F4F8FE',
+      paddingHorizontal: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    secondaryOpenSourceIcon: {
+      width: 35,
+      height: 35,
+      borderRadius: 10,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#E7F0FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    secondarySourceText: {
+      flex: 1,
+      marginLeft: 9,
+      color: COLORS.blue,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    backToResultsButton: {
+      marginTop: 18,
+      minHeight: 52,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    backToResultsText: {
+      marginLeft: 8,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    emptyCard: {
+      marginTop: 22,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+      padding: 24,
+      alignItems: 'center',
+    },
+
+    emptyIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EDF4FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    emptyTitle: {
+      marginTop: 12,
+      color: COLORS.textPrimary,
+      fontSize: 16,
+      fontWeight: '800',
+    },
+
+    emptyText: {
+      marginTop: 6,
+      color: COLORS.textSecondary,
+      fontSize: 12,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+
+    errorScreen: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 35,
+    },
+
+    errorIcon: {
+      width: 62,
+      height: 62,
+      borderRadius: 19,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EDF4FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    errorTitle: {
+      marginTop: 16,
+      color: COLORS.textPrimary,
+      fontSize: 20,
+      fontWeight: '800',
+    },
+
+    errorText: {
+      marginTop: 7,
+      color: COLORS.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+    },
+
+    errorButton: {
+      marginTop: 20,
+      paddingHorizontal: 22,
+      paddingVertical: 13,
+      borderRadius: 13,
+      backgroundColor: COLORS.blue,
+    },
+
+    errorButtonText: {
+      color: COLORS.white,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+  });

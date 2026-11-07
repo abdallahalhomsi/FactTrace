@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import {
   ActivityIndicator,
@@ -10,7 +9,8 @@ import {
   View,
 } from 'react-native';
 
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 
 export type SharingIntention = 'yes' | 'no' | 'not_sure';
 
@@ -40,6 +40,13 @@ export default function SharingIntentionModal({
   onSkip,
   onSelect,
 }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+
+  const styles = useMemo(
+    () => createStyles(COLORS, isDark),
+    [COLORS, isDark],
+  );
+
   return (
     <Modal
       visible={visible}
@@ -90,7 +97,10 @@ export default function SharingIntentionModal({
           </View>
 
           {error ? (
-            <Text accessibilityRole="alert" style={styles.error}>
+            <Text
+              accessibilityRole="alert"
+              style={styles.error}
+            >
               {error}
             </Text>
           ) : null}
@@ -116,76 +126,93 @@ export default function SharingIntentionModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 22,
-    backgroundColor: 'rgba(16, 34, 56, 0.48)',
-  },
-  card: {
-    minHeight: 360,
-    justifyContent: 'center',
-    borderRadius: 22,
-    backgroundColor: COLORS.white,
-    padding: 22,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '800',
-  },
-  description: {
-    marginTop: 10,
-    color: COLORS.textSecondary,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  note: {
-    marginTop: 18,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  options: {
-    flexDirection: 'row',
-    columnGap: 8,
-    marginTop: 22,
-  },
-  option: {
-    flex: 1,
-    minHeight: 49,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 13,
-    backgroundColor: COLORS.blueLight,
-    paddingHorizontal: 4,
-  },
-  optionText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  error: {
-    marginTop: 12,
-    color: COLORS.red,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  practiceSkip: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 10,
-  },
-  practiceSkipText: {
-    color: COLORS.blue,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  footer: {
-    marginTop: 24,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 22,
+      backgroundColor: 'rgba(16, 34, 56, 0.48)',
+    },
+
+    card: {
+      minHeight: 360,
+      justifyContent: 'center',
+      borderRadius: 22,
+      backgroundColor: COLORS.surface,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: COLORS.border,
+      padding: 22,
+    },
+
+    title: {
+      color: COLORS.textPrimary,
+      fontSize: 22,
+      lineHeight: 28,
+      fontWeight: '800',
+    },
+
+    description: {
+      marginTop: 10,
+      color: COLORS.textSecondary,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+
+    note: {
+      marginTop: 18,
+      color: COLORS.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    options: {
+      flexDirection: 'row',
+      columnGap: 8,
+      marginTop: 22,
+    },
+
+    option: {
+      flex: 1,
+      minHeight: 49,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 13,
+      backgroundColor: COLORS.blueLight,
+      paddingHorizontal: 4,
+    },
+
+    optionText: {
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    error: {
+      marginTop: 12,
+      color: COLORS.red,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+
+    practiceSkip: {
+      alignItems: 'center',
+      paddingVertical: 12,
+      marginTop: 10,
+    },
+
+    practiceSkipText: {
+      color: COLORS.blue,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    footer: {
+      marginTop: 24,
+      color: COLORS.textSecondary,
+      fontSize: 12,
+    },
+  });

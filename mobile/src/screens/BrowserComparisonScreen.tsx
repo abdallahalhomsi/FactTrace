@@ -1,5 +1,4 @@
-
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
@@ -20,7 +19,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import SharingIntentionModal, {
   SharingIntention,
 } from '../components/SharingIntentionModal';
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
 import { exportEvaluationRecords } from '../services/evaluationExport';
 import {
@@ -38,18 +38,33 @@ type Props = NativeStackScreenProps<
 >;
 
 type Verdict = DecisionRequest['decision'];
-type ConsultedSource = { title: string; url: string };
 
-const VERDICTS: { value: Verdict; label: string }[] = [
-  { value: 'trust', label: 'Trust' },
-  { value: 'dont_trust', label: "Don't Trust" },
-  { value: 'unsure', label: 'Unsure' },
+type ConsultedSource = {
+  title: string;
+  url: string;
+};
+
+const VERDICTS: {
+  value: Verdict;
+  label: string;
+}[] = [
+  {
+    value: 'trust',
+    label: 'Trust',
+  },
+  {
+    value: 'dont_trust',
+    label: "Don't Trust",
+  },
+  {
+    value: 'unsure',
+    label: 'Unsure',
+  },
 ];
 
-// Supplied by the actual study flow when that integration is available.
-// These are not generated or assigned by the browser screen.
 type BrowserStudyContext = {
   participantId: string;
+  conditionOrder: 'app_first' | 'browser_first';
   claimId: string;
   claimText: string;
   trialIndex: number;
@@ -73,10 +88,12 @@ const BROWSER_DRAFT_KEY =
 
 const STUDY_CODE_PATTERN = /^[pP]\d{1,3}$/;
 
-// Serialize writes so an old draft cannot overwrite a newer one.
-let draftWriteQueue: Promise<void> = Promise.resolve();
+let draftWriteQueue: Promise<void> =
+  Promise.resolve();
 
-function storeDraft(draft: BrowserDraft | null): Promise<void> {
+function storeDraft(
+  draft: BrowserDraft | null,
+): Promise<void> {
   draftWriteQueue = draftWriteQueue
     .catch(() => undefined)
     .then(() =>
@@ -85,7 +102,9 @@ function storeDraft(draft: BrowserDraft | null): Promise<void> {
             BROWSER_DRAFT_KEY,
             JSON.stringify(draft),
           )
-        : AsyncStorage.removeItem(BROWSER_DRAFT_KEY),
+        : AsyncStorage.removeItem(
+            BROWSER_DRAFT_KEY,
+          ),
     );
 
   return draftWriteQueue;
@@ -94,7 +113,9 @@ function storeDraft(draft: BrowserDraft | null): Promise<void> {
 function trialSignature(
   study: BrowserStudyContext | undefined,
 ): string | undefined {
-  if (!study) return undefined;
+  if (!study) {
+    return undefined;
+  }
 
   return JSON.stringify([
     study.sessionId ?? null,
@@ -108,7 +129,6 @@ function trialSignature(
 }
 
 function newLocalTrialKey(): string {
-  // Local decision identifier, not a study assignment ID.
   return `${Date.now().toString(36)}-${Math.random()
     .toString(36)
     .slice(2)}`;
@@ -118,78 +138,146 @@ export default function BrowserComparisonScreen({
   navigation,
   route,
 }: Props) {
-  // Standalone navigation has no params.
-  // A connected study flow can supply a real assignment.
+  const {
+    colors: COLORS,
+    isDark,
+  } = useAppTheme();
+
+  const styles = useMemo(
+    () =>
+      createStyles(
+        COLORS,
+        isDark,
+      ),
+    [COLORS, isDark],
+  );
+
   const studyContext = (
     route.params as unknown as
-      | { studyContext?: BrowserStudyContext }
+      | {
+          studyContext?: BrowserStudyContext;
+        }
       | undefined
   )?.studyContext;
 
   const isWalkthrough =
-    Boolean(route.params?.walkthrough) && !studyContext;
+    Boolean(route.params?.walkthrough) &&
+    !studyContext;
 
-  const signature = trialSignature(studyContext);
+  const signature =
+    trialSignature(studyContext);
 
-  const [claimText, setClaimText] = useState(
+  const [
+    claimText,
+    setClaimText,
+  ] = useState(
     studyContext?.claimText ?? '',
   );
 
-  const [participantCode, setParticipantCode] = useState(
+  const [
+    participantCode,
+    setParticipantCode,
+  ] = useState(
     studyContext?.participantId ?? '',
   );
 
-  const [startedAt, setStartedAt] = useState<string | null>(
+  const [
+    startedAt,
+    setStartedAt,
+  ] = useState<string | null>(
     null,
   );
 
-  const [localTrialKey, setLocalTrialKey] = useState<
-    string | null
-  >(null);
+  const [
+    localTrialKey,
+    setLocalTrialKey,
+  ] = useState<string | null>(
+    null,
+  );
 
-  const [localTrialNumber, setLocalTrialNumber] = useState<
-    number | null
-  >(null);
+  const [
+    localTrialNumber,
+    setLocalTrialNumber,
+  ] = useState<number | null>(
+    null,
+  );
 
-  const [sourceTitle, setSourceTitle] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
+  const [
+    sourceTitle,
+    setSourceTitle,
+  ] = useState('');
 
-  const [sources, setSources] = useState<ConsultedSource[]>(
+  const [
+    sourceUrl,
+    setSourceUrl,
+  ] = useState('');
+
+  const [
+    sources,
+    setSources,
+  ] = useState<ConsultedSource[]>(
     [],
   );
 
-  const [decision, setDecision] = useState<Verdict | null>(
+  const [
+    decision,
+    setDecision,
+  ] = useState<Verdict | null>(
     null,
   );
 
-  const [isSharingModalVisible, setSharingModalVisible] =
-    useState(false);
+  const [
+    isSharingModalVisible,
+    setSharingModalVisible,
+  ] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
 
-  const [recordIdToRetry, setRecordIdToRetry] = useState<
-    string | null
-  >(null);
+  const [
+    hasSubmitted,
+    setHasSubmitted,
+  ] = useState(false);
 
-  const [isRestoring, setIsRestoring] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [
+    recordIdToRetry,
+    setRecordIdToRetry,
+  ] = useState<string | null>(
+    null,
+  );
 
-  const submissionAttempted = useRef(false);
-  const allowLeaving = useRef(false);
+  const [
+    isRestoring,
+    setIsRestoring,
+  ] = useState(true);
 
-  // Research timing stops when the verdict is chosen.
-  const verdictSelectedAt = useRef<string | null>(null);
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null,
+  );
 
-  /*
-    RESTORE UNFINISHED RESEARCH
+  const [
+    status,
+    setStatus,
+  ] = useState<string | null>(
+    null,
+  );
 
-    Never restore a draft belonging to a different assigned
-    participant, claim, or trial.
+  const submissionAttempted =
+    useRef(false);
 
-    Walkthrough mode never reads or writes actual research data.
-  */
+  const allowLeaving =
+    useRef(false);
+
+  const verdictSelectedAt =
+    useRef<string | null>(
+      null,
+    );
+
   useEffect(() => {
     let alive = true;
 
@@ -216,8 +304,12 @@ export default function BrowserComparisonScreen({
     }
 
     setIsRestoring(true);
-    setClaimText(studyContext?.claimText ?? '');
-    setParticipantCode(studyContext?.participantId ?? '');
+    setClaimText(
+      studyContext?.claimText ?? '',
+    );
+    setParticipantCode(
+      studyContext?.participantId ?? '',
+    );
     setStartedAt(null);
     setLocalTrialKey(null);
     setLocalTrialNumber(null);
@@ -230,107 +322,156 @@ export default function BrowserComparisonScreen({
     setStatus(null);
     setError(null);
 
-    submissionAttempted.current = false;
-    allowLeaving.current = false;
-    verdictSelectedAt.current = null;
+    submissionAttempted.current =
+      false;
 
-    const restore = async () => {
-      try {
-        await draftWriteQueue.catch(() => undefined);
+    allowLeaving.current =
+      false;
 
-        const raw = await AsyncStorage.getItem(
-          BROWSER_DRAFT_KEY,
-        );
+    verdictSelectedAt.current =
+      null;
 
-        if (!raw) return;
+    const restore =
+      async () => {
+        try {
+          await draftWriteQueue.catch(
+            () => undefined,
+          );
 
-        const draft = JSON.parse(
-          raw,
-        ) as Partial<BrowserDraft>;
+          const raw =
+            await AsyncStorage.getItem(
+              BROWSER_DRAFT_KEY,
+            );
 
-        if (
-          typeof draft.localTrialKey !== 'string' ||
-          typeof draft.startedAt !== 'string' ||
-          typeof draft.claimText !== 'string' ||
-          typeof draft.participantCode !== 'string' ||
-          !Array.isArray(draft.sources) ||
-          draft.studySignature !== signature
-        ) {
-          return;
-        }
+          if (!raw) {
+            return;
+          }
 
-        if (!alive) return;
+          const draft =
+            JSON.parse(
+              raw,
+            ) as Partial<BrowserDraft>;
 
-        setLocalTrialKey(draft.localTrialKey);
-        setClaimText(draft.claimText);
-        setParticipantCode(draft.participantCode);
-        setStartedAt(draft.startedAt);
+          if (
+            typeof draft.localTrialKey !==
+              'string' ||
+            typeof draft.startedAt !==
+              'string' ||
+            typeof draft.claimText !==
+              'string' ||
+            typeof draft.participantCode !==
+              'string' ||
+            !Array.isArray(
+              draft.sources,
+            ) ||
+            draft.studySignature !==
+              signature
+          ) {
+            return;
+          }
 
-        setSources(
-          draft.sources.filter(
-            source =>
-              typeof source.url === 'string' &&
-              typeof source.title === 'string',
-          ),
-        );
+          if (!alive) {
+            return;
+          }
 
-        const saved =
-          await getEvaluationRecordByLocalTrialKey(
+          setLocalTrialKey(
             draft.localTrialKey,
           );
 
-        if (!alive || !saved) return;
+          setClaimText(
+            draft.claimText,
+          );
 
-        if (
-          saved.serverStatus === 'submitted' ||
-          saved.serverStatus === 'not_submitted'
+          setParticipantCode(
+            draft.participantCode,
+          );
+
+          setStartedAt(
+            draft.startedAt,
+          );
+
+          setSources(
+            draft.sources.filter(
+              source =>
+                typeof source.url ===
+                  'string' &&
+                typeof source.title ===
+                  'string',
+            ),
+          );
+
+          const saved =
+            await getEvaluationRecordByLocalTrialKey(
+              draft.localTrialKey,
+            );
+
+          if (
+            !alive ||
+            !saved
+          ) {
+            return;
+          }
+
+          if (
+            saved.serverStatus ===
+              'submitted' ||
+            saved.serverStatus ===
+              'not_submitted'
+          ) {
+            setHasSubmitted(
+              true,
+            );
+
+            setLocalTrialNumber(
+              saved.localTrialNumber ??
+                null,
+            );
+
+            setStatus(
+              saved.serverMessage,
+            );
+          } else {
+            setRecordIdToRetry(
+              saved.recordId,
+            );
+
+            setStatus(
+              'This trial already has a locally saved decision. Retry the same submission; do not create a new answer.',
+            );
+
+            submissionAttempted.current =
+              true;
+          }
+        } catch (
+          restoreError
         ) {
-          setHasSubmitted(true);
-          setLocalTrialNumber(
-            saved.localTrialNumber ?? null,
-          );
-          setStatus(saved.serverMessage);
-        } else {
-          setRecordIdToRetry(saved.recordId);
-
-          setStatus(
-            'This trial already has a locally saved decision. ' +
-              'Retry the same submission; do not create a new answer.',
+          console.warn(
+            'Could not restore the unfinished browser trial.',
+            restoreError,
           );
 
-          submissionAttempted.current = true;
+          if (alive) {
+            setError(
+              'The previous browser task could not be restored from this device.',
+            );
+          }
+        } finally {
+          if (alive) {
+            setIsRestoring(false);
+          }
         }
-      } catch (restoreError) {
-        console.warn(
-          'Could not restore the unfinished browser trial.',
-          restoreError,
-        );
-
-        if (alive) {
-          setError(
-            'The previous browser task could not be restored from this device.',
-          );
-        }
-      } finally {
-        if (alive) {
-          setIsRestoring(false);
-        }
-      }
-    };
+      };
 
     void restore();
 
     return () => {
       alive = false;
     };
-  }, [isWalkthrough, signature]);
+  }, [
+    isWalkthrough,
+    signature,
+  ]);
 
-  /*
-    PERSIST DRAFT
-
-    The initial start time and consulted URLs are maintained
-    across interruptions without mixing assigned trials.
-  */
   useEffect(() => {
     if (
       isWalkthrough ||
@@ -347,10 +488,13 @@ export default function BrowserComparisonScreen({
       participantCode,
       startedAt,
       sources,
-      studySignature: signature,
+      studySignature:
+        signature,
     };
 
-    void storeDraft(draft).catch(saveError =>
+    void storeDraft(
+      draft,
+    ).catch(saveError =>
       console.warn(
         'Could not persist browser trial draft.',
         saveError,
@@ -367,12 +511,6 @@ export default function BrowserComparisonScreen({
     isWalkthrough,
   ]);
 
-  /*
-    PROTECT ACTIVE TASKS
-
-    Normal research tasks should not disappear after
-    accidentally pressing Back.
-  */
   useEffect(() => {
     return navigation.addListener(
       'beforeRemove',
@@ -388,30 +526,52 @@ export default function BrowserComparisonScreen({
 
         event.preventDefault();
 
-        const message = recordIdToRetry
-          ? 'This decision is saved locally but not confirmed by the server. You can return and retry later.'
-          : 'Your research task is unfinished. Leaving now may interrupt the trial.';
+        const message =
+          recordIdToRetry
+            ? 'This decision is saved locally but not confirmed by the server. You can return and retry later.'
+            : 'Your research task is unfinished. Leaving now may interrupt the trial.';
 
-        if (Platform.OS === 'web') {
-          if (window.confirm(message + ' Leave anyway?')) {
-            allowLeaving.current = true;
-            navigation.dispatch(event.data.action);
+        if (
+          Platform.OS ===
+          'web'
+        ) {
+          if (
+            window.confirm(
+              `${message} Leave anyway?`,
+            )
+          ) {
+            allowLeaving.current =
+              true;
+
+            navigation.dispatch(
+              event.data.action,
+            );
           }
         } else {
-          Alert.alert('Leave this task?', message, [
-            {
-              text: 'Stay',
-              style: 'cancel',
-            },
-            {
-              text: 'Leave',
-              style: 'destructive',
-              onPress: () => {
-                allowLeaving.current = true;
-                navigation.dispatch(event.data.action);
+          Alert.alert(
+            'Leave this task?',
+            message,
+            [
+              {
+                text: 'Stay',
+                style: 'cancel',
               },
-            },
-          ]);
+              {
+                text: 'Leave',
+                style:
+                  'destructive',
+                onPress: () => {
+                  allowLeaving.current =
+                    true;
+
+                  navigation.dispatch(
+                    event.data
+                      .action,
+                  );
+                },
+              },
+            ],
+          );
         }
       },
     );
@@ -423,14 +583,10 @@ export default function BrowserComparisonScreen({
     recordIdToRetry,
   ]);
 
-  /*
-    START RESEARCH TASK
-
-    Keep standalone claim entry.
-    For assigned trials, use the real supplied claim.
-  */
   const startTask = () => {
-    if (isWalkthrough) return;
+    if (isWalkthrough) {
+      return;
+    }
 
     if (
       isRestoring ||
@@ -440,29 +596,40 @@ export default function BrowserComparisonScreen({
       return;
     }
 
-    if (!claimText.trim()) {
+    if (
+      !claimText.trim()
+    ) {
       setError(
         'Enter the claim you are about to research.',
       );
+
       return;
     }
 
-    const code = participantCode.trim();
+    const code =
+      participantCode.trim();
 
     if (
       code &&
-      !STUDY_CODE_PATTERN.test(code)
+      !STUDY_CODE_PATTERN.test(
+        code,
+      )
     ) {
       setError(
         'Use the study participant code provided to you (for example, P01), or leave it blank to save locally only.',
       );
+
       return;
     }
 
-    if (studyContext && !code) {
+    if (
+      studyContext &&
+      !code
+    ) {
       setError(
         'This assigned trial requires a valid study participant code.',
       );
+
       return;
     }
 
@@ -473,145 +640,177 @@ export default function BrowserComparisonScreen({
         new Date().toISOString(),
     );
 
-    setLocalTrialKey(newLocalTrialKey());
+    setLocalTrialKey(
+      newLocalTrialKey(),
+    );
   };
 
-  /*
-    OPEN SOURCE
-
-    Open the actual URL.
-    Add it to the consulted-source list only after opening
-    successfully.
-  */
-  const openSource = async () => {
-    if (isWalkthrough) return;
-
-    const url = sourceUrl.trim();
-
-    try {
-      const parsed = new URL(url);
-
-      if (
-        parsed.protocol !== 'http:' &&
-        parsed.protocol !== 'https:'
-      ) {
-        throw new Error(
-          'Use an http or https source URL.',
-        );
+  const openSource =
+    async () => {
+      if (isWalkthrough) {
+        return;
       }
 
-      const normalizedUrl = parsed.toString();
+      const url =
+        sourceUrl.trim();
 
-      if (Platform.OS === 'web') {
-        const opened = window.open(
-          normalizedUrl,
-          '_blank',
-        );
+      try {
+        const parsed =
+          new URL(url);
 
-        if (!opened) {
+        if (
+          parsed.protocol !==
+            'http:' &&
+          parsed.protocol !==
+            'https:'
+        ) {
           throw new Error(
-            'Your browser blocked the new tab. Allow pop-ups and try again.',
+            'Use an http or https source URL.',
           );
         }
 
-        opened.opener = null;
-      } else {
-        await Linking.openURL(normalizedUrl);
-      }
+        const normalizedUrl =
+          parsed.toString();
 
-      setSources(current =>
-        current.some(
-          source => source.url === normalizedUrl,
-        )
-          ? current
-          : [
-              ...current,
-              {
-                title:
-                  sourceTitle.trim() ||
-                  parsed.hostname,
-                url: normalizedUrl,
-              },
-            ],
-      );
+        if (
+          Platform.OS ===
+          'web'
+        ) {
+          const opened =
+            window.open(
+              normalizedUrl,
+              '_blank',
+            );
 
-      setSourceTitle('');
-      setSourceUrl('');
-      setError(null);
-    } catch (openError) {
-      setError(
-        openError instanceof Error
-          ? openError.message
-          : 'FactTrace could not open that source URL.',
-      );
-    }
-  };
+          if (!opened) {
+            throw new Error(
+              'Your browser blocked the new tab. Allow pop-ups and try again.',
+            );
+          }
 
-  /*
-    ADD CONSULTED SOURCE
+          opened.opener =
+            null;
+        } else {
+          await Linking.openURL(
+            normalizedUrl,
+          );
+        }
 
-    Restore manual source entry for external browsing.
-    Do not pretend a manually reported URL was automatically
-    observed by FactTrace.
-  */
-  const addConsultedSource = () => {
-    if (isWalkthrough) return;
+        setSources(
+          current =>
+            current.some(
+              source =>
+                source.url ===
+                normalizedUrl,
+            )
+              ? current
+              : [
+                  ...current,
+                  {
+                    title:
+                      sourceTitle.trim() ||
+                      parsed.hostname,
+                    url:
+                      normalizedUrl,
+                  },
+                ],
+        );
 
-    const title = sourceTitle.trim();
-    const url = sourceUrl.trim();
-
-    if (!title || !url) {
-      setError(
-        'Enter a source name and URL after consulting the source.',
-      );
-      return;
-    }
-
-    try {
-      const parsed = new URL(url);
-
-      if (
-        parsed.protocol !== 'http:' &&
-        parsed.protocol !== 'https:'
+        setSourceTitle('');
+        setSourceUrl('');
+        setError(null);
+      } catch (
+        openError
       ) {
-        throw new Error(
-          'Source URLs must use http or https.',
+        setError(
+          openError instanceof
+          Error
+            ? openError.message
+            : 'FactTrace could not open that source URL.',
         );
       }
+    };
 
-      const normalizedUrl = parsed.toString();
+  const addConsultedSource =
+    () => {
+      if (isWalkthrough) {
+        return;
+      }
 
-      setSources(current =>
-        current.some(
-          source => source.url === normalizedUrl,
-        )
-          ? current
-          : [
-              ...current,
-              {
-                title,
-                url: normalizedUrl,
-              },
-            ],
-      );
+      const title =
+        sourceTitle.trim();
 
-      setSourceTitle('');
-      setSourceUrl('');
-      setError(null);
-    } catch (validationError) {
-      setError(
-        validationError instanceof Error
-          ? validationError.message
-          : 'Enter a valid source URL.',
-      );
+      const url =
+        sourceUrl.trim();
+
+      if (
+        !title ||
+        !url
+      ) {
+        setError(
+          'Enter a source name and URL after consulting the source.',
+        );
+
+        return;
+      }
+
+      try {
+        const parsed =
+          new URL(url);
+
+        if (
+          parsed.protocol !==
+            'http:' &&
+          parsed.protocol !==
+            'https:'
+        ) {
+          throw new Error(
+            'Source URLs must use http or https.',
+          );
+        }
+
+        const normalizedUrl =
+          parsed.toString();
+
+        setSources(
+          current =>
+            current.some(
+              source =>
+                source.url ===
+                normalizedUrl,
+            )
+              ? current
+              : [
+                  ...current,
+                  {
+                    title,
+                    url:
+                      normalizedUrl,
+                  },
+                ],
+        );
+
+        setSourceTitle('');
+        setSourceUrl('');
+        setError(null);
+      } catch (
+        validationError
+      ) {
+        setError(
+          validationError instanceof
+          Error
+            ? validationError.message
+            : 'Enter a valid source URL.',
+        );
+      }
+    };
+
+  const chooseVerdict = (
+    value: Verdict,
+  ) => {
+    if (isWalkthrough) {
+      return;
     }
-  };
-
-  /*
-    DECISION AND SHARING INTENTION
-  */
-  const chooseVerdict = (value: Verdict) => {
-    if (isWalkthrough) return;
 
     if (
       hasSubmitted ||
@@ -625,311 +824,418 @@ export default function BrowserComparisonScreen({
       new Date().toISOString();
 
     setDecision(value);
-    setSharingModalVisible(true);
+
+    setSharingModalVisible(
+      true,
+    );
   };
 
-  /*
-    RECORD FINAL DECISION
-
-    Preserves original claim-ID lookup for standalone tasks.
-
-    For assigned studies, use the supplied real claim ID,
-    not an invented value.
-  */
-  const recordIntention = async (
-    intention: SharingIntention,
-  ) => {
-    if (isWalkthrough) return;
-
-    if (
-      !startedAt ||
-      !localTrialKey ||
-      !decision ||
-      isSubmitting ||
-      hasSubmitted ||
-      submissionAttempted.current
-    ) {
-      return;
-    }
-
-    const endedAt =
-      verdictSelectedAt.current ??
-      new Date().toISOString();
-
-    submissionAttempted.current = true;
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      let resolvedClaimId: string | null =
-        studyContext?.claimId ?? null;
-
-      if (!studyContext) {
-        try {
-          const verification = await verifyClaim(
-            claimText.trim(),
-            { source: 'manual' },
-          );
-
-          resolvedClaimId = verification.success
-            ? verification.data?.claimId ?? null
-            : null;
-        } catch (lookupError) {
-          console.warn(
-            'Browser claim-ID lookup unavailable; saving the decision without an unverified ID.',
-            lookupError,
-          );
-        }
+  const recordIntention =
+    async (
+      intention: SharingIntention,
+    ) => {
+      if (isWalkthrough) {
+        return;
       }
-
-      const result = await saveEvaluationDecision(
-        {
-          condition: 'browser',
-          claimId: resolvedClaimId,
-          claimText: claimText.trim(),
-          inputSource: 'manual',
-          decision,
-          sharingIntention: intention,
-          sourcesOpened: sources.map(
-            source => source.url,
-          ),
-          startedAt,
-          endedAt,
-
-          ...(studyContext
-            ? {
-                trialIndex: studyContext.trialIndex,
-                isPractice: studyContext.isPractice,
-              }
-            : {}),
-        },
-        participantCode,
-        {
-          sourcesConsulted: sources,
-          localTrialKey,
-        },
-      );
-
-      setStatus(result.message);
-
-      setLocalTrialNumber(
-        result.localTrialNumber ?? null,
-      );
-
-      setSharingModalVisible(false);
 
       if (
-        result.serverStatus === 'submitted' ||
-        result.serverStatus === 'not_submitted'
+        !startedAt ||
+        !localTrialKey ||
+        !decision ||
+        isSubmitting ||
+        hasSubmitted ||
+        submissionAttempted.current
       ) {
-        setHasSubmitted(true);
-      } else {
-        setRecordIdToRetry(result.recordId);
-      }
-    } catch (saveError) {
-      const existing =
-        await getEvaluationRecordByLocalTrialKey(
-          localTrialKey,
-        ).catch(() => undefined);
-
-      if (existing) {
-        setRecordIdToRetry(existing.recordId);
-
-        setStatus(
-          'A previous decision was saved locally. ' +
-            'Please retry that same decision.',
-        );
-      } else {
-        submissionAttempted.current = false;
+        return;
       }
 
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Could not save this decision.',
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      const endedAt =
+        verdictSelectedAt.current ??
+        new Date().toISOString();
 
-  /*
-    RETRY SAVED DECISION
+      submissionAttempted.current =
+        true;
 
-    Never create a different decision during retry.
-  */
-  const retrySubmission = async () => {
-    if (isWalkthrough) return;
-
-    if (
-      !recordIdToRetry ||
-      isSubmitting
-    ) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const result =
-        await retryEvaluationSubmission(
-          recordIdToRetry,
-        );
-
-      setStatus(result.message);
-
-      setLocalTrialNumber(
-        result.localTrialNumber ?? null,
+      setIsSubmitting(
+        true,
       );
 
-      if (result.serverStatus === 'submitted') {
-        setHasSubmitted(true);
-        setRecordIdToRetry(null);
-      }
-    } catch (retryError) {
-      setError(
-        retryError instanceof Error
-          ? retryError.message
-          : 'Could not retry the saved decision.',
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      setError(null);
 
-  /*
-    EXPORT SAVED EVALUATIONS
-  */
-  const exportRecords = async () => {
-    if (isWalkthrough) return;
+      try {
+        let resolvedClaimId:
+          | string
+          | null =
+          studyContext?.claimId ??
+          null;
 
-    try {
-      const count = await exportEvaluationRecords();
+        if (!studyContext) {
+          try {
+            const verification =
+              await verifyClaim(
+                claimText.trim(),
+                {
+                  source:
+                    'manual',
+                },
+              );
 
-      if (count > 0) {
-        setStatus(
-          `Exported ${count} locally saved evaluation record(s).`,
-        );
-      }
-    } catch (exportError) {
-      Alert.alert(
-        'Evaluation export unavailable',
-        exportError instanceof Error
-          ? exportError.message
-          : 'Could not export local evaluation records.',
-      );
-    }
-  };
+            resolvedClaimId =
+              verification.success
+                ? verification.data
+                    ?.claimId ??
+                  null
+                : null;
+          } catch (
+            lookupError
+          ) {
+            console.warn(
+              'Browser claim-ID lookup unavailable; saving the decision without an unverified ID.',
+              lookupError,
+            );
+          }
+        }
 
-  /*
-    START ANOTHER TASK
+        const result =
+          await saveEvaluationDecision(
+            {
+              condition:
+                'browser',
 
-    Restore the original standalone action.
-    Assigned study trials must use their actual next assignment.
-  */
-  const startAnotherTask = async () => {
-    if (isWalkthrough || studyContext) return;
+              claimId:
+                resolvedClaimId,
 
-    try {
-      await storeDraft(null);
-    } catch (clearError) {
-      console.warn(
-        'Could not clear previous browser draft.',
-        clearError,
-      );
-    }
+              claimText:
+                claimText.trim(),
 
-    setClaimText('');
-    setParticipantCode('');
-    setStartedAt(null);
-    setLocalTrialKey(null);
-    setLocalTrialNumber(null);
-    setSourceTitle('');
-    setSourceUrl('');
-    setSources([]);
-    setDecision(null);
-    setHasSubmitted(false);
-    setRecordIdToRetry(null);
+              inputSource:
+                'manual',
 
-    submissionAttempted.current = false;
-    verdictSelectedAt.current = null;
+              decision,
 
-    setStatus(null);
-    setError(null);
-  };
+              sharingIntention:
+                intention,
 
-  /*
-    WALKTHROUGH CONTINUATION
+              sourcesOpened:
+                sources.map(
+                  source =>
+                    source.url,
+                ),
 
-    The walkthrough only demonstrates this feature.
-    No research session or evaluation record is created.
-  */
-  const returnFromWalkthrough = async () => {
-    try {
-      await saveWalkthroughState({
-        status: 'in_progress',
-        step: 'ready',
-      });
+              startedAt,
 
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: 'Home',
-            params: {
-              walkthroughContinue: true,
+              endedAt,
+
+              ...(studyContext
+                ? {
+                    trialIndex:
+                      studyContext.trialIndex,
+
+                    isPractice:
+                      studyContext.isPractice,
+                  }
+                : {}),
             },
-          },
-        ],
-      });
-    } catch (returnError) {
-      console.warn(
-        'Could not continue walkthrough from Browser Comparison.',
-        returnError,
+
+            participantCode,
+
+            {
+              sourcesConsulted:
+                sources,
+
+              localTrialKey,
+            },
+          );
+
+        setStatus(
+          result.message,
+        );
+
+        setLocalTrialNumber(
+          result.localTrialNumber ??
+            null,
+        );
+
+        setSharingModalVisible(
+          false,
+        );
+
+        if (
+          result.serverStatus ===
+            'submitted' ||
+          result.serverStatus ===
+            'not_submitted'
+        ) {
+          setHasSubmitted(
+            true,
+          );
+        } else {
+          setRecordIdToRetry(
+            result.recordId,
+          );
+        }
+      } catch (
+        saveError
+      ) {
+        const existing =
+          await getEvaluationRecordByLocalTrialKey(
+            localTrialKey,
+          ).catch(
+            () => undefined,
+          );
+
+        if (existing) {
+          setRecordIdToRetry(
+            existing.recordId,
+          );
+
+          setStatus(
+            'A previous decision was saved locally. Please retry that same decision.',
+          );
+        } else {
+          submissionAttempted.current =
+            false;
+        }
+
+        setError(
+          saveError instanceof
+          Error
+            ? saveError.message
+            : 'Could not save this decision.',
+        );
+      } finally {
+        setIsSubmitting(
+          false,
+        );
+      }
+    };
+
+  const retrySubmission =
+    async () => {
+      if (isWalkthrough) {
+        return;
+      }
+
+      if (
+        !recordIdToRetry ||
+        isSubmitting
+      ) {
+        return;
+      }
+
+      setIsSubmitting(
+        true,
       );
 
-      setError(
-        'Could not save walkthrough progress. Please try again.',
-      );
-    }
-  };
+      setError(null);
 
-  const skipWalkthrough = async () => {
-    try {
-      await saveWalkthroughState({
-        status: 'skipped',
-      });
+      try {
+        const result =
+          await retryEvaluationSubmission(
+            recordIdToRetry,
+          );
 
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home' }],
-      });
-    } catch (skipError) {
-      console.warn(
-        'Could not skip walkthrough.',
-        skipError,
-      );
+        setStatus(
+          result.message,
+        );
 
-      setError(
-        'Could not skip the walkthrough. Please try again.',
-      );
-    }
-  };
+        setLocalTrialNumber(
+          result.localTrialNumber ??
+            null,
+        );
+
+        if (
+          result.serverStatus ===
+          'submitted'
+        ) {
+          setHasSubmitted(
+            true,
+          );
+
+          setRecordIdToRetry(
+            null,
+          );
+        }
+      } catch (
+        retryError
+      ) {
+        setError(
+          retryError instanceof
+          Error
+            ? retryError.message
+            : 'Could not retry the saved decision.',
+        );
+      } finally {
+        setIsSubmitting(
+          false,
+        );
+      }
+    };
+
+  const exportRecords =
+    async () => {
+      if (isWalkthrough) {
+        return;
+      }
+
+      try {
+        const count =
+          await exportEvaluationRecords();
+
+        if (count > 0) {
+          setStatus(
+            `Exported ${count} locally saved evaluation record(s).`,
+          );
+        }
+      } catch (
+        exportError
+      ) {
+        Alert.alert(
+          'Evaluation export unavailable',
+          exportError instanceof
+          Error
+            ? exportError.message
+            : 'Could not export local evaluation records.',
+        );
+      }
+    };
+
+  const startAnotherTask =
+    async () => {
+      if (
+        isWalkthrough ||
+        studyContext
+      ) {
+        return;
+      }
+
+      try {
+        await storeDraft(
+          null,
+        );
+      } catch (
+        clearError
+      ) {
+        console.warn(
+          'Could not clear previous browser draft.',
+          clearError,
+        );
+      }
+
+      setClaimText('');
+      setParticipantCode('');
+      setStartedAt(null);
+      setLocalTrialKey(null);
+      setLocalTrialNumber(null);
+      setSourceTitle('');
+      setSourceUrl('');
+      setSources([]);
+      setDecision(null);
+      setHasSubmitted(false);
+      setRecordIdToRetry(null);
+
+      submissionAttempted.current =
+        false;
+
+      verdictSelectedAt.current =
+        null;
+
+      setStatus(null);
+      setError(null);
+    };
+
+  const returnFromWalkthrough =
+    async () => {
+      try {
+        await saveWalkthroughState({
+          status:
+            'in_progress',
+          step: 'ready',
+        });
+
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Home',
+              params: {
+                walkthroughContinue:
+                  true,
+              },
+            },
+          ],
+        });
+      } catch (
+        returnError
+      ) {
+        console.warn(
+          'Could not continue walkthrough from Browser Comparison.',
+          returnError,
+        );
+
+        setError(
+          'Could not save walkthrough progress. Please try again.',
+        );
+      }
+    };
+
+  const skipWalkthrough =
+    async () => {
+      try {
+        await saveWalkthroughState({
+          status: 'skipped',
+        });
+
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Home',
+            },
+          ],
+        });
+      } catch (
+        skipError
+      ) {
+        console.warn(
+          'Could not skip walkthrough.',
+          skipError,
+        );
+
+        setError(
+          'Could not skip the walkthrough. Please try again.',
+        );
+      }
+    };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView
+      style={
+        styles.safeArea
+      }
+    >
+      <StatusBar
+        style={
+          isDark
+            ? 'light'
+            : 'dark'
+        }
+      />
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={
+          styles.content
+        }
         keyboardShouldPersistTaps="handled"
       >
-        {/* HEADER */}
-        <View style={styles.header}>
+        <View
+          style={styles.header}
+        >
           <TouchableOpacity
             accessibilityRole="button"
-            style={styles.backButton}
+            style={
+              styles.backButton
+            }
             onPress={() =>
               isWalkthrough
                 ? void returnFromWalkthrough()
@@ -939,81 +1245,147 @@ export default function BrowserComparisonScreen({
             <Ionicons
               name="arrow-back"
               size={22}
-              color={COLORS.textPrimary}
+              color={
+                COLORS.textPrimary
+              }
             />
           </TouchableOpacity>
 
-          <View style={styles.headerCopy}>
-            <Text style={styles.title}>
+          <View
+            style={
+              styles.headerCopy
+            }
+          >
+            <Text
+              style={
+                styles.title
+              }
+            >
               Browser Comparison
             </Text>
 
-            <Text style={styles.subtitle}>
-              Record only the sources you actually consult.
+            <Text
+              style={
+                styles.subtitle
+              }
+            >
+              Record only the sources
+              you actually consult.
             </Text>
           </View>
         </View>
 
-        {/* WALKTHROUGH INTRODUCTION */}
         {isWalkthrough ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>
-              Browser Comparison lets you manually research a claim
-              and record the sources you consult for comparison
-              with FactTrace. This walkthrough visit will not
-              create or save a research record.
+          <View
+            style={
+              styles.notice
+            }
+          >
+            <Text
+              style={
+                styles.noticeText
+              }
+            >
+              Browser Comparison lets
+              you manually research a
+              claim and record the
+              sources you consult for
+              comparison with
+              FactTrace. This
+              walkthrough visit will
+              not create or save a
+              research record.
             </Text>
 
             <TouchableOpacity
               accessibilityRole="button"
-              style={styles.walkthroughHomeButton}
+              style={
+                styles.walkthroughHomeButton
+              }
               onPress={() =>
                 void returnFromWalkthrough()
               }
             >
-              <Text style={styles.primaryButtonText}>
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
                 Back to Home
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessibilityRole="button"
-              style={styles.walkthroughSkip}
-              onPress={() => void skipWalkthrough()}
+              style={
+                styles.walkthroughSkip
+              }
+              onPress={() =>
+                void skipWalkthrough()
+              }
             >
-              <Text style={styles.secondaryButtonText}>
+              <Text
+                style={
+                  styles.secondaryButtonText
+                }
+              >
                 Skip Walkthrough
               </Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {/* ORIGINAL BROWSER COMPARISON NOTICE */}
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>
-            This screen does not search the web for you.
-            Opened links and websites you report are saved
-            locally. Server submission requires a valid
+        <View
+          style={styles.notice}
+        >
+          <Text
+            style={
+              styles.noticeText
+            }
+          >
+            This screen does not
+            search the web for you.
+            Opened links and websites
+            you report are saved
+            locally. Server submission
+            requires a valid
             participant code.
           </Text>
         </View>
 
         {studyContext ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>
+          <View
+            style={styles.notice}
+          >
+            <Text
+              style={
+                styles.noticeText
+              }
+            >
               Assigned{' '}
               {studyContext.isPractice
                 ? 'practice '
                 : ''}
-              trial {studyContext.trialIndex}
-              {' · '}Claim {studyContext.claimId}
+              trial{' '}
+              {
+                studyContext.trialIndex
+              }
+              {' · '}Claim{' '}
+              {
+                studyContext.claimId
+              }
             </Text>
           </View>
         ) : null}
 
-        {/* START TASK */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
+        <View
+          style={styles.card}
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
             {startedAt
               ? 'Research task'
               : 'Start a task'}
@@ -1025,9 +1397,13 @@ export default function BrowserComparisonScreen({
               styles.multiline,
             ]}
             placeholder="Claim to research"
-            placeholderTextColor={COLORS.textSecondary}
+            placeholderTextColor={
+              COLORS.textSecondary
+            }
             value={claimText}
-            onChangeText={setClaimText}
+            onChangeText={
+              setClaimText
+            }
             editable={
               !isWalkthrough &&
               !startedAt &&
@@ -1041,11 +1417,19 @@ export default function BrowserComparisonScreen({
           {!startedAt ? (
             <>
               <TextInput
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Research-issued participant code (optional)"
-                placeholderTextColor={COLORS.textSecondary}
-                value={participantCode}
-                onChangeText={setParticipantCode}
+                placeholderTextColor={
+                  COLORS.textSecondary
+                }
+                value={
+                  participantCode
+                }
+                onChangeText={
+                  setParticipantCode
+                }
                 editable={
                   !isWalkthrough &&
                   !studyContext
@@ -1060,73 +1444,124 @@ export default function BrowserComparisonScreen({
                   styles.primaryButton,
                   styles.startTaskButton,
                 ]}
-                onPress={startTask}
+                onPress={
+                  startTask
+                }
                 disabled={
                   isWalkthrough ||
                   isRestoring ||
                   isSubmitting
                 }
               >
-                <Text style={styles.primaryButtonText}>
+                <Text
+                  style={
+                    styles.primaryButtonText
+                  }
+                >
                   Start Task
                 </Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.helper}>
+            <Text
+              style={
+                styles.helper
+              }
+            >
               Started{' '}
-              {new Date(startedAt).toLocaleTimeString()}
-              {' · '}elapsed time is recorded when you finish.
+              {new Date(
+                startedAt,
+              ).toLocaleTimeString()}
+              {' · '}elapsed time is
+              recorded when you finish.
             </Text>
           )}
         </View>
 
-        {/* SOURCES + DECISION */}
         {startedAt &&
         !hasSubmitted &&
         !recordIdToRetry ? (
           <>
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>
+            <View
+              style={styles.card}
+            >
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Sources consulted
               </Text>
 
-              <Text style={styles.helper}>
-                Opening a URL here records it automatically.
-                You can also add websites you consulted
-                outside the app.
+              <Text
+                style={
+                  styles.helper
+                }
+              >
+                Opening a URL here
+                records it
+                automatically. You can
+                also add websites you
+                consulted outside the
+                app.
               </Text>
 
               <TextInput
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Source title or organization"
-                placeholderTextColor={COLORS.textSecondary}
-                value={sourceTitle}
-                onChangeText={setSourceTitle}
+                placeholderTextColor={
+                  COLORS.textSecondary
+                }
+                value={
+                  sourceTitle
+                }
+                onChangeText={
+                  setSourceTitle
+                }
                 accessibilityLabel="Source title"
               />
 
               <TextInput
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="https://example.com/article"
-                placeholderTextColor={COLORS.textSecondary}
-                value={sourceUrl}
-                onChangeText={setSourceUrl}
+                placeholderTextColor={
+                  COLORS.textSecondary
+                }
+                value={
+                  sourceUrl
+                }
+                onChangeText={
+                  setSourceUrl
+                }
                 autoCapitalize="none"
                 keyboardType="url"
                 accessibilityLabel="Source URL"
               />
 
-              <View style={styles.sourceActions}>
+              <View
+                style={
+                  styles.sourceActions
+                }
+              >
                 <TouchableOpacity
                   accessibilityRole="button"
                   style={[
                     styles.secondaryButton,
                     styles.sourceActionButton,
                   ]}
-                  onPress={() => void openSource()}
+                  onPress={() =>
+                    void openSource()
+                  }
                 >
-                  <Text style={styles.secondaryButtonText}>
+                  <Text
+                    style={
+                      styles.secondaryButtonText
+                    }
+                  >
                     Open URL
                   </Text>
                 </TouchableOpacity>
@@ -1137,106 +1572,166 @@ export default function BrowserComparisonScreen({
                     styles.primaryButton,
                     styles.sourceActionButton,
                   ]}
-                  onPress={addConsultedSource}
+                  onPress={
+                    addConsultedSource
+                  }
                 >
-                  <Text style={styles.primaryButtonText}>
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
                     Add Consulted Source
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {sources.map((source, index) => (
-                <View
-                  key={`${source.url}-${index}`}
-                  style={styles.sourceRow}
-                >
-                  <View style={styles.sourceCopy}>
-                    <Text style={styles.sourceTitle}>
-                      {source.title}
-                    </Text>
-
-                    <Text style={styles.sourceUrl}>
-                      {source.url}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${source.title}`}
-                    disabled={
-                      isSubmitting ||
-                      Boolean(recordIdToRetry)
-                    }
-                    onPress={() =>
-                      setSources(current =>
-                        current.filter(
-                          (_, sourceIndex) =>
-                            sourceIndex !== index,
-                        ),
-                      )
+              {sources.map(
+                (
+                  source,
+                  index,
+                ) => (
+                  <View
+                    key={`${source.url}-${index}`}
+                    style={
+                      styles.sourceRow
                     }
                   >
-                    <Ionicons
-                      name="close-circle-outline"
-                      size={22}
-                      color={COLORS.red}
-                    />
-                  </TouchableOpacity>
-                </View>
-              ))}
+                    <View
+                      style={
+                        styles.sourceCopy
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.sourceTitle
+                        }
+                      >
+                        {
+                          source.title
+                        }
+                      </Text>
+                    </View>
 
-              <Text style={styles.helper}>
-                {sources.length} source(s) recorded.
-                If you did not consult any sources,
-                leave the list empty.
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${source.title}`}
+                      disabled={
+                        isSubmitting ||
+                        Boolean(
+                          recordIdToRetry,
+                        )
+                      }
+                      onPress={() =>
+                        setSources(
+                          current =>
+                            current.filter(
+                              (
+                                _,
+                                sourceIndex,
+                              ) =>
+                                sourceIndex !==
+                                index,
+                            ),
+                        )
+                      }
+                    >
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={22}
+                        color={
+                          COLORS.red
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ),
+              )}
+
+              <Text
+                style={
+                  styles.helper
+                }
+              >
+                {sources.length}{' '}
+                source(s) recorded. If
+                you did not consult any
+                sources, leave the list
+                empty.
               </Text>
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>
+            <View
+              style={styles.card}
+            >
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Your final decision
               </Text>
 
-              <Text style={styles.helper}>
-                Choose your own decision after researching
-                the claim.
+              <Text
+                style={
+                  styles.helper
+                }
+              >
+                Choose your own
+                decision after
+                researching the claim.
               </Text>
 
-              <View style={styles.verdicts}>
-                {VERDICTS.map(option => (
-                  <TouchableOpacity
-                    key={option.value}
-                    accessibilityRole="button"
-                    style={[
-                      styles.verdictButton,
-                      decision === option.value &&
-                        styles.verdictSelected,
-                    ]}
-                    onPress={() =>
-                      chooseVerdict(option.value)
-                    }
-                  >
-                    <Text
+              <View
+                style={
+                  styles.verdicts
+                }
+              >
+                {VERDICTS.map(
+                  option => (
+                    <TouchableOpacity
+                      key={
+                        option.value
+                      }
+                      accessibilityRole="button"
                       style={[
-                        styles.verdictText,
-                        decision === option.value &&
-                          styles.verdictTextSelected,
+                        styles.verdictButton,
+                        decision ===
+                          option.value &&
+                          styles.verdictSelected,
                       ]}
+                      onPress={() =>
+                        chooseVerdict(
+                          option.value,
+                        )
+                      }
                     >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.verdictText,
+                          decision ===
+                            option.value &&
+                            styles.verdictTextSelected,
+                        ]}
+                      >
+                        {
+                          option.label
+                        }
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
               </View>
             </View>
           </>
         ) : null}
 
-        {/* ERRORS AND STATUS */}
         {error ? (
           <Text
             accessibilityRole="alert"
-            style={styles.error}
+            style={
+              styles.error
+            }
           >
             {error}
           </Text>
@@ -1245,23 +1740,33 @@ export default function BrowserComparisonScreen({
         {status ? (
           <Text
             accessibilityRole="alert"
-            style={styles.status}
+            style={
+              styles.status
+            }
           >
             {status}
           </Text>
         ) : null}
 
-        {/* RETRY ORIGINAL SUBMISSION */}
-        {recordIdToRetry && !hasSubmitted ? (
+        {recordIdToRetry &&
+        !hasSubmitted ? (
           <TouchableOpacity
             accessibilityRole="button"
-            style={styles.primaryButton}
-            disabled={isSubmitting}
+            style={
+              styles.primaryButton
+            }
+            disabled={
+              isSubmitting
+            }
             onPress={() =>
               void retrySubmission()
             }
           >
-            <Text style={styles.primaryButtonText}>
+            <Text
+              style={
+                styles.primaryButtonText
+              }
+            >
               {isSubmitting
                 ? 'Retrying saved decision…'
                 : 'Retry Saved Submission'}
@@ -1269,35 +1774,61 @@ export default function BrowserComparisonScreen({
           </TouchableOpacity>
         ) : null}
 
-        {/* STANDALONE COMPLETION */}
-        {hasSubmitted && !studyContext ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>
+        {hasSubmitted &&
+        !studyContext ? (
+          <View
+            style={styles.card}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               Browser task complete
             </Text>
 
-            {localTrialNumber !== null ? (
-              <Text style={styles.helper}>
-                Check {localTrialNumber}
+            {localTrialNumber !==
+            null ? (
+              <Text
+                style={
+                  styles.helper
+                }
+              >
+                Check{' '}
+                {
+                  localTrialNumber
+                }
               </Text>
             ) : null}
 
-            <Text style={styles.helper}>
-              Your research decision has been saved.
-              You can start a new task or return to Home.
+            <Text
+              style={
+                styles.helper
+              }
+            >
+              Your research decision
+              has been saved. You can
+              start a new task or
+              return to Home.
             </Text>
 
             <TouchableOpacity
               accessibilityRole="button"
               style={[
                 styles.secondaryButton,
-                { marginTop: 12 },
+                {
+                  marginTop: 12,
+                },
               ]}
               onPress={() =>
                 void startAnotherTask()
               }
             >
-              <Text style={styles.secondaryButtonText}>
+              <Text
+                style={
+                  styles.secondaryButtonText
+                }
+              >
                 Start Another Task
               </Text>
             </TouchableOpacity>
@@ -1306,321 +1837,422 @@ export default function BrowserComparisonScreen({
               accessibilityRole="button"
               style={[
                 styles.secondaryButton,
-                { marginTop: 8 },
+                {
+                  marginTop: 8,
+                },
               ]}
               onPress={() =>
-                navigation.navigate('Home')
+                navigation.navigate(
+                  'Home',
+                )
               }
             >
-              <Text style={styles.secondaryButtonText}>
+              <Text
+                style={
+                  styles.secondaryButtonText
+                }
+              >
                 Return to Home
               </Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {/* ASSIGNED STUDY COMPLETION */}
-        {hasSubmitted && studyContext ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>
+        {hasSubmitted &&
+        studyContext ? (
+          <View
+            style={styles.card}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               Browser trial complete
             </Text>
 
-            <Text style={styles.helper}>
-              Trial {studyContext.trialIndex}
+            <Text
+              style={
+                styles.helper
+              }
+            >
+              Trial{' '}
+              {
+                studyContext.trialIndex
+              }
             </Text>
 
-            <Text style={styles.helper}>
-              Your browser comparison decision has been saved.
-              Return to Home for the next instructions
-              from your study coordinator.
+            <Text
+              style={
+                styles.helper
+              }
+            >
+              Your browser comparison
+              decision has been saved.
+              Continue to the next
+              study instruction.
             </Text>
 
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Return to Home"
+              accessibilityLabel="Continue study"
               style={[
                 styles.secondaryButton,
-                { marginTop: 12 },
+                {
+                  marginTop: 12,
+                },
               ]}
               onPress={() =>
-                navigation.navigate('Home')
+                navigation.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name:
+                        'StudyFlow',
+                      params: {
+                        participantId:
+                          studyContext.participantId,
+
+                        conditionOrder:
+                          studyContext.conditionOrder,
+
+                        completedTrialIndex:
+                          studyContext.trialIndex,
+                      },
+                    },
+                  ],
+                })
               }
             >
-              <Text style={styles.secondaryButtonText}>
-                Return to Home
+              <Text
+                style={
+                  styles.secondaryButtonText
+                }
+              >
+                Continue Study
               </Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {/* EXPORT LOCAL RECORDS */}
         <TouchableOpacity
           accessibilityRole="button"
-          style={styles.exportButton}
-          disabled={isWalkthrough}
-          onPress={() => void exportRecords()}
+          style={
+            styles.exportButton
+          }
+          disabled={
+            isWalkthrough
+          }
+          onPress={() =>
+            void exportRecords()
+          }
         >
           <Ionicons
             name="download-outline"
             size={19}
-            color={COLORS.blue}
+            color={
+              COLORS.blue
+            }
           />
 
-          <Text style={styles.exportText}>
-            Export Local Evaluation JSON
+          <Text
+            style={
+              styles.exportText
+            }
+          >
+            Export Local Evaluation
+            JSON
           </Text>
         </TouchableOpacity>
       </ScrollView>
 
       <SharingIntentionModal
-        visible={isSharingModalVisible}
-        isSubmitting={isSubmitting}
-        onSelect={intention =>
-          void recordIntention(intention)
+        visible={
+          isSharingModalVisible
+        }
+        isSubmitting={
+          isSubmitting
+        }
+        onSelect={
+          intention =>
+            void recordIntention(
+              intention,
+            )
         }
       />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor:
+        COLORS.background,
+    },
 
-  content: {
-    padding: 20,
-    paddingBottom: 36,
-    rowGap: 14,
-  },
+    content: {
+      padding: 20,
+      paddingBottom: 36,
+      rowGap: 14,
+    },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 12,
-  },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      columnGap: 12,
+    },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-  },
+    backButton: {
+      width: 40,
+      height: 40,
+      justifyContent:
+        'center',
+    },
 
-  headerCopy: {
-    flex: 1,
-  },
+    headerCopy: {
+      flex: 1,
+    },
 
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 24,
-    fontWeight: '800',
-  },
+    title: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 24,
+      fontWeight: '800',
+    },
 
-  subtitle: {
-    marginTop: 3,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-  },
+    subtitle: {
+      marginTop: 3,
+      color:
+        COLORS.textSecondary,
+      fontSize: 13,
+    },
 
-  notice: {
-    borderRadius: 13,
-    backgroundColor: COLORS.blueLight,
-    padding: 14,
-  },
+    notice: {
+      borderRadius: 13,
+      backgroundColor:
+        COLORS.blueLight,
+      padding: 14,
+    },
 
-  noticeText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
+    noticeText: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 13,
+      lineHeight: 19,
+    },
 
-  card: {
-    borderRadius: 18,
-    backgroundColor: COLORS.white,
-    padding: 16,
-  },
+    card: {
+      borderRadius: 18,
+      backgroundColor:
+        COLORS.surface,
+      padding: 16,
+    },
 
-  sectionTitle: {
-    marginBottom: 10,
-    color: COLORS.textPrimary,
-    fontSize: 17,
-    fontWeight: '800',
-  },
+    sectionTitle: {
+      marginBottom: 10,
+      color:
+        COLORS.textPrimary,
+      fontSize: 17,
+      fontWeight: '800',
+    },
 
-  helper: {
-    marginTop: 6,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
+    helper: {
+      marginTop: 6,
+      color:
+        COLORS.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+    },
 
-  input: {
-    minHeight: 48,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 13,
-    color: COLORS.textPrimary,
-  },
+    input: {
+      minHeight: 48,
+      marginTop: 10,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.surface,
+      paddingHorizontal: 13,
+      color:
+        COLORS.textPrimary,
+    },
 
-  multiline: {
-    minHeight: 88,
-    paddingTop: 12,
-  },
+    multiline: {
+      minHeight: 88,
+      paddingTop: 12,
+    },
 
-  // Restored original blue button styling.
-  primaryButton: {
-    minHeight: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: COLORS.blue,
-    paddingHorizontal: 14,
-  },
+    primaryButton: {
+      minHeight: 45,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.blue,
+      paddingHorizontal: 14,
+    },
 
-  startTaskButton: {
-    marginTop: 14,
-  },
+    startTaskButton: {
+      marginTop: 14,
+    },
 
-  walkthroughHomeButton: {
-    minHeight: 45,
-    marginTop: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: COLORS.blue,
-  },
+    walkthroughHomeButton: {
+      minHeight: 45,
+      marginTop: 12,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.blue,
+    },
 
-  walkthroughSkip: {
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
+    walkthroughSkip: {
+      minHeight: 40,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      marginTop: 4,
+    },
 
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    primaryButtonText: {
+      color:
+        COLORS.white,
+      fontSize: 13,
+      fontWeight: '700',
+    },
 
-  secondaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 14,
-  },
+    secondaryButton: {
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.surface,
+      paddingHorizontal: 14,
+    },
 
-  secondaryButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    secondaryButtonText: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
 
-  sourceActions: {
-    flexDirection: 'row',
-    columnGap: 8,
-    marginTop: 10,
-  },
+    sourceActions: {
+      flexDirection: 'row',
+      columnGap: 8,
+      marginTop: 10,
+    },
 
-  sourceActionButton: {
-    flex: 1,
-    paddingHorizontal: 8,
-  },
+    sourceActionButton: {
+      flex: 1,
+      paddingHorizontal: 8,
+    },
 
-  sourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 10,
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 12,
-  },
+    sourceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      columnGap: 10,
+      marginTop: 12,
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.border,
+      paddingTop: 12,
+    },
 
-  sourceCopy: {
-    flex: 1,
-  },
+    sourceCopy: {
+      flex: 1,
+    },
 
-  sourceTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+    sourceTitle: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
 
-  sourceUrl: {
-    marginTop: 3,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-  },
+    verdicts: {
+      flexDirection: 'row',
+      columnGap: 8,
+      marginTop: 14,
+    },
 
-  verdicts: {
-    flexDirection: 'row',
-    columnGap: 8,
-    marginTop: 14,
-  },
+    verdictButton: {
+      flex: 1,
+      minHeight: 45,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      borderRadius: 12,
+      paddingHorizontal: 3,
+    },
 
-  verdictButton: {
-    flex: 1,
-    minHeight: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 3,
-  },
+    verdictSelected: {
+      borderColor:
+        COLORS.blue,
+      backgroundColor:
+        COLORS.blue,
+    },
 
-  verdictSelected: {
-    borderColor: COLORS.blue,
-    backgroundColor: COLORS.blue,
-  },
+    verdictText: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 12,
+      fontWeight: '700',
+    },
 
-  verdictText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    verdictTextSelected: {
+      color:
+        COLORS.white,
+    },
 
-  verdictTextSelected: {
-    color: COLORS.white,
-  },
+    error: {
+      color: COLORS.red,
+      fontSize: 13,
+      lineHeight: 18,
+    },
 
-  error: {
-    color: COLORS.red,
-    fontSize: 13,
-    lineHeight: 18,
-  },
+    status: {
+      color:
+        COLORS.textPrimary,
+      fontSize: 13,
+      lineHeight: 19,
+    },
 
-  status: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
+    exportButton: {
+      minHeight: 46,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      columnGap: 8,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.surface,
+    },
 
-  exportButton: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-  },
-
-  exportText: {
-    color: COLORS.blue,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+    exportText: {
+      color:
+        COLORS.blue,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+  });

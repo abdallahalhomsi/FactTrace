@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
 import {
   ActivityIndicator,
@@ -14,7 +13,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
 import { signOut } from '../services/authService';
 import { useAuth } from '../hooks/useAuth';
@@ -23,7 +23,11 @@ import { saveWalkthroughState } from '../services/walkthroughService';
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
 export default function ProfileScreen({ navigation }: Props) {
+  const { colors: COLORS, isDark, toggleTheme } = useAppTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const user = useAuth();
+
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +41,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
     try {
       await signOut();
+
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
@@ -62,7 +67,9 @@ export default function ProfileScreen({ navigation }: Props) {
         routes: [
           {
             name: 'Home',
-            params: { walkthroughReplay: true },
+            params: {
+              walkthroughReplay: true,
+            },
           },
         ],
       });
@@ -73,11 +80,12 @@ export default function ProfileScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
           accessibilityRole="button"
@@ -95,7 +103,9 @@ export default function ProfileScreen({ navigation }: Props) {
           />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>
+          Profile
+        </Text>
 
         <Text style={styles.subtitle}>
           {user
@@ -114,7 +124,9 @@ export default function ProfileScreen({ navigation }: Props) {
 
           <Text style={styles.welcome}>
             {user?.displayName ||
-              (user ? 'Welcome back!' : 'Welcome, Guest!')}
+              (user
+                ? 'Welcome back!'
+                : 'Welcome, Guest!')}
           </Text>
 
           <Text style={styles.helper}>
@@ -126,15 +138,70 @@ export default function ProfileScreen({ navigation }: Props) {
         </View>
 
         {error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
+          <Text
+            accessibilityRole="alert"
+            style={styles.error}
+          >
             {error}
           </Text>
         ) : null}
 
         <TouchableOpacity
           activeOpacity={0.85}
-          style={[styles.button, styles.secondaryButton]}
-          onPress={() => void handleReplayWalkthrough()}
+          accessibilityRole="switch"
+          accessibilityState={{
+            checked: isDark,
+          }}
+          accessibilityLabel="Dark theme"
+          style={[
+            styles.button,
+            styles.secondaryButton,
+            styles.themeButton,
+          ]}
+          onPress={toggleTheme}
+        >
+          <View style={styles.themeButtonContent}>
+            <Ionicons
+              name={isDark ? 'moon' : 'moon-outline'}
+              size={20}
+              color={COLORS.blue}
+            />
+
+            <View style={styles.themeTextGroup}>
+              <Text style={styles.buttonText}>
+                Dark Theme
+              </Text>
+
+              <Text style={styles.themeState}>
+                {isDark ? 'On' : 'Off'}
+              </Text>
+            </View>
+
+            <Ionicons
+              name={
+                isDark
+                  ? 'toggle'
+                  : 'toggle-outline'
+              }
+              size={32}
+              color={
+                isDark
+                  ? COLORS.blue
+                  : COLORS.textMuted
+              }
+            />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[
+            styles.button,
+            styles.secondaryButton,
+          ]}
+          onPress={() =>
+            void handleReplayWalkthrough()
+          }
         >
           <Text style={styles.buttonText}>
             Replay Walkthrough
@@ -145,21 +212,33 @@ export default function ProfileScreen({ navigation }: Props) {
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={isSigningOut}
-            style={[styles.button, styles.primaryButton]}
+            style={[
+              styles.button,
+              styles.primaryButton,
+            ]}
             onPress={handleSignOut}
           >
             {isSigningOut ? (
-              <ActivityIndicator color={COLORS.white} />
+              <ActivityIndicator
+                color={COLORS.white}
+              />
             ) : (
-              <Text style={styles.primaryText}>Log Out</Text>
+              <Text style={styles.primaryText}>
+                Log Out
+              </Text>
             )}
           </TouchableOpacity>
         ) : (
           <>
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.button, styles.primaryButton]}
-              onPress={() => navigation.navigate('SignUp')}
+              style={[
+                styles.button,
+                styles.primaryButton,
+              ]}
+              onPress={() =>
+                navigation.navigate('SignUp')
+              }
             >
               <Text style={styles.primaryText}>
                 Create Account
@@ -168,16 +247,28 @@ export default function ProfileScreen({ navigation }: Props) {
 
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.button, styles.secondaryButton]}
-              onPress={() => navigation.navigate('Login')}
+              style={[
+                styles.button,
+                styles.secondaryButton,
+              ]}
+              onPress={() =>
+                navigation.navigate('Login')
+              }
             >
-              <Text style={styles.buttonText}>Log In</Text>
+              <Text style={styles.buttonText}>
+                Log In
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.button, styles.outlineButton]}
-              onPress={() => navigation.navigate('Home')}
+              style={[
+                styles.button,
+                styles.outlineButton,
+              ]}
+              onPress={() =>
+                navigation.navigate('Home')
+              }
             >
               <Text style={styles.buttonText}>
                 Continue as Guest
@@ -190,98 +281,140 @@ export default function ProfileScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 15,
-    paddingBottom: 28,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  subtitle: {
-    marginTop: 4,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  profileCard: {
-    minHeight: 235,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 46,
-    marginBottom: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.white,
-    padding: 22,
-  },
-  avatar: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.blueLight,
-  },
-  welcome: {
-    marginTop: 18,
-    color: COLORS.textPrimary,
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  helper: {
-    marginTop: 9,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  button: {
-    minHeight: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-    borderRadius: 13,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.blue,
-  },
-  primaryText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.blueLight,
-  },
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.white,
-  },
-  buttonText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  error: {
-    marginBottom: 12,
-    color: COLORS.red,
-    fontSize: 13,
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+
+    container: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+
+    content: {
+      paddingHorizontal: 24,
+      paddingTop: 15,
+      paddingBottom: 28,
+    },
+
+    backButton: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      marginBottom: 10,
+    },
+
+    title: {
+      color: COLORS.textPrimary,
+      fontSize: 26,
+      fontWeight: '800',
+    },
+
+    subtitle: {
+      marginTop: 4,
+      color: COLORS.textSecondary,
+      fontSize: 14,
+    },
+
+    profileCard: {
+      minHeight: 235,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 46,
+      marginBottom: 40,
+      borderRadius: 20,
+      backgroundColor: COLORS.surface,
+      padding: 22,
+    },
+
+    avatar: {
+      width: 94,
+      height: 94,
+      borderRadius: 47,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.blueLight,
+    },
+
+    welcome: {
+      marginTop: 18,
+      color: COLORS.textPrimary,
+      fontSize: 22,
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+
+    helper: {
+      marginTop: 9,
+      color: COLORS.textSecondary,
+      fontSize: 13,
+      textAlign: 'center',
+      lineHeight: 19,
+    },
+
+    button: {
+      minHeight: 50,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 10,
+      borderRadius: 13,
+    },
+
+    themeButton: {
+      paddingHorizontal: 16,
+    },
+
+    themeButtonContent: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+
+    themeTextGroup: {
+      flex: 1,
+    },
+
+    themeState: {
+      marginTop: 2,
+      color: COLORS.textMuted,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    primaryButton: {
+      backgroundColor: COLORS.blue,
+    },
+
+    primaryText: {
+      color: COLORS.white,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    secondaryButton: {
+      backgroundColor: COLORS.blueLight,
+    },
+
+    outlineButton: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+    },
+
+    buttonText: {
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    error: {
+      marginBottom: 12,
+      color: COLORS.red,
+      fontSize: 13,
+    },
+  });

@@ -1,10 +1,4 @@
-
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -32,7 +26,8 @@ import {
   RootStackParamList,
   StudyTrialContext,
 } from '../navigation/types';
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { verifyClaim } from '../services/verificationService';
 import { extractTextFromImage } from '../services/ocrService';
 import { createHistoryEntryId } from '../services/historyService';
@@ -99,15 +94,15 @@ export default function ClaimReviewScreen({
   navigation,
   route,
 }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
+
   const imageUri = route.params?.imageUri;
   const studyContext = route.params?.studyContext;
 
-  // Tutorial practice is completely separate from official study trials.
   const isWalkthrough =
     Boolean(route.params?.walkthrough) && !studyContext;
 
-  // For manual entry in an assigned trial, show the actual assigned claim.
-  // Camera OCR still runs and fills the editable text field normally.
   const initialClaim = isWalkthrough
     ? ''
     : route.params?.claimText ||
@@ -120,8 +115,10 @@ export default function ClaimReviewScreen({
     useState<WalkthroughStep | null>(
       isWalkthrough ? 'practice_claim' : null,
     );
+
   const [practicePromptFeedback, setPracticePromptFeedback] =
     useState<string | null>(null);
+
   const [measurementVersion, setMeasurementVersion] = useState(0);
 
   const [isChecking, setIsChecking] = useState(false);
@@ -151,6 +148,7 @@ export default function ClaimReviewScreen({
   const inputTargetRef = useRef<ViewInstance>(null);
   const checkButtonRef = useRef<ViewInstance>(null);
   const scrollOffset = useRef(0);
+
   const { height: windowHeight } = useWindowDimensions();
 
   const revealCheckButton = useCallback(() => {
@@ -173,14 +171,6 @@ export default function ClaimReviewScreen({
     });
   }, [windowHeight]);
 
-  /*
-    WALKTHROUGH PROGRESS
-
-    Restore the practice claim only once.
-
-    The user remains in control of the text field. A correct claim
-    advances the spotlight to the Check Evidence button.
-  */
   useEffect(() => {
     if (!isWalkthrough) return;
 
@@ -196,9 +186,11 @@ export default function ClaimReviewScreen({
             : '';
 
         const claimAlreadyTyped = claimTextRef.current.length > 0;
+
         const restoredClaim = claimAlreadyTyped
           ? claimTextRef.current
           : savedClaim;
+
         const validSavedClaim = isPracticeClaim(restoredClaim);
 
         claimTextRef.current = restoredClaim;
@@ -207,6 +199,7 @@ export default function ClaimReviewScreen({
         setWalkthroughStep('practice_claim');
 
         walkthroughReady.current = true;
+
         if (claimAlreadyTyped) {
           void saveWalkthroughState({
             status: 'in_progress',
@@ -276,6 +269,7 @@ export default function ClaimReviewScreen({
       'keyboardDidShow',
       () => setMeasurementVersion(version => version + 1),
     );
+
     const hideSubscription = Keyboard.addListener(
       'keyboardDidHide',
       () => {
@@ -293,15 +287,6 @@ export default function ClaimReviewScreen({
     };
   }, [isWalkthrough, revealCheckButton, walkthroughStep]);
 
-  /*
-    CLAIM TEXT
-
-    In walkthrough mode:
-    - The user types the claim themselves.
-    - Text is saved locally as walkthrough progress.
-    - No real verification is performed.
-    - A valid sample claim advances focus to Check Evidence.
-  */
   const handlePracticeClaimChange = (value: string) => {
     claimTextRef.current = value;
     setClaimText(value);
@@ -328,19 +313,12 @@ export default function ClaimReviewScreen({
         'Walkthrough progress could not be saved. Please try again.',
       );
     });
-
   };
 
   const continuePractice = async () => {
     await handleCheckEvidence();
   };
 
-  /*
-    SKIP WALKTHROUGH
-
-    Only walkthrough status is changed.
-    No real evaluation, history, or study data is touched.
-  */
   const skipWalkthrough = async () => {
     try {
       Keyboard.dismiss();
@@ -377,11 +355,6 @@ export default function ClaimReviewScreen({
   const isFromCamera = Boolean(imageUri);
   const hasOcrText = Boolean(originalOcrText?.trim());
 
-  /*
-    OCR RESPONSE
-
-    Preserve the original OCR handling for normal camera checks.
-  */
   const applyOcrResponse = (response: OcrResponse) => {
     setOcrMetadata(response.data ?? null);
 
@@ -417,13 +390,6 @@ export default function ClaimReviewScreen({
     );
   };
 
-  /*
-    AUTOMATIC OCR
-
-    When CameraScreen passes an imageUri,
-    run OCR automatically and populate
-    the editable text field.
-  */
   useEffect(() => {
     if (!imageUri || isWalkthrough) return;
 
@@ -461,9 +427,6 @@ export default function ClaimReviewScreen({
     };
   }, [imageUri, isWalkthrough]);
 
-  /*
-    RETRY OCR
-  */
   const handleRetryOcr = async () => {
     if (
       !imageUri ||
@@ -490,19 +453,11 @@ export default function ClaimReviewScreen({
     }
   };
 
-  /*
-    CHECK EVIDENCE
-
-    WALKTHROUGH:
-    Open controlled practice results only.
-
-    NORMAL MODE:
-    Preserve the existing backend verification and evaluation context.
-  */
   const handleCheckEvidence = async () => {
     const submittedClaim = isWalkthrough
       ? claimTextRef.current
       : claimText;
+
     const cleanedClaim = submittedClaim.trim();
 
     if (
@@ -548,7 +503,6 @@ export default function ClaimReviewScreen({
       return;
     }
 
-    // Normal verification
     setVerificationError(null);
 
     try {
@@ -556,6 +510,7 @@ export default function ClaimReviewScreen({
 
       const response = await verifyClaim(cleanedClaim, {
         source: hasOcrText ? 'ocr' : 'manual',
+
         ...(hasOcrText
           ? {
               originalOcrText,
@@ -637,7 +592,7 @@ export default function ClaimReviewScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -659,7 +614,6 @@ export default function ClaimReviewScreen({
             setMeasurementVersion(version => version + 1);
           }}
         >
-          {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.8}
@@ -686,7 +640,6 @@ export default function ClaimReviewScreen({
             <View style={styles.headerSpacer} />
           </View>
 
-          {/* PROGRESS */}
           <View style={styles.progressRow}>
             <View style={styles.progressItem}>
               <View style={styles.progressComplete}>
@@ -731,7 +684,6 @@ export default function ClaimReviewScreen({
             </View>
           </View>
 
-          {/* CAPTURED IMAGE */}
           {isFromCamera && (
             <View style={styles.imageCard}>
               <Image
@@ -781,7 +733,6 @@ export default function ClaimReviewScreen({
             </View>
           )}
 
-          {/* OCR STATUS */}
           <View style={styles.statusCard}>
             <View style={styles.statusIcon}>
               {isExtracting ? (
@@ -835,14 +786,13 @@ export default function ClaimReviewScreen({
             </View>
           </View>
 
-          {/* OCR ERROR */}
           {ocrError && (
             <View style={styles.ocrErrorCard}>
               <View style={styles.ocrErrorIcon}>
                 <Ionicons
                   name="alert-circle-outline"
                   size={21}
-                  color="#C15B34"
+                  color={COLORS.orange}
                 />
               </View>
 
@@ -870,7 +820,6 @@ export default function ClaimReviewScreen({
             </View>
           )}
 
-          {/* EDITOR */}
           <View style={styles.editorSection}>
             <View style={styles.editorHeader}>
               <View style={{ flex: 1 }}>
@@ -936,7 +885,7 @@ export default function ClaimReviewScreen({
                         ? 'Extracted text will appear here...'
                         : 'Type or paste your claim here...'
                     }
-                    placeholderTextColor="#A2ADBA"
+                    placeholderTextColor={COLORS.textMuted}
                     multiline
                     textAlignVertical="top"
                     maxLength={800}
@@ -964,13 +913,12 @@ export default function ClaimReviewScreen({
             </View>
           </View>
 
-          {/* NOTE */}
           <View style={styles.noteCard}>
             <View style={styles.noteIcon}>
               <Ionicons
                 name="information-circle-outline"
                 size={21}
-                color="#B96800"
+                color={COLORS.orange}
               />
             </View>
 
@@ -985,7 +933,6 @@ export default function ClaimReviewScreen({
             </View>
           </View>
 
-          {/* CHECK EVIDENCE */}
           <View
             ref={checkButtonRef}
             collapsable={false}
@@ -1056,7 +1003,6 @@ export default function ClaimReviewScreen({
             </TouchableOpacity>
           </View>
 
-          {/* VERIFICATION ERROR */}
           {verificationError ? (
             <View
               accessibilityRole="alert"
@@ -1091,6 +1037,7 @@ export default function ClaimReviewScreen({
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
       {isWalkthrough &&
       (walkthroughStep === 'practice_claim' ||
         walkthroughStep === 'practice_check') ? (
@@ -1121,583 +1068,607 @@ export default function ClaimReviewScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-
-  keyboardView: {
-    flex: 1,
-  },
-
-  scrollView: {
-    flex: 1,
-  },
-
-  scrollContent: {
-    paddingHorizontal: 22,
-    paddingBottom: 35,
-  },
-
-  /* HEADER */
-
-  header: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  backButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 15,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#1B3655',
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-
-  headerTextArea: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 21,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-
-  headerSubtitle: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 11.5,
-  },
-
-  headerSpacer: {
-    width: 45,
-  },
-
-  /* PROGRESS */
-
-  progressRow: {
-    marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-
-  progressItem: {
-    alignItems: 'center',
-  },
-
-  progressComplete: {
-    width: 29,
-    height: 29,
-    borderRadius: 15,
-    backgroundColor: '#3C78F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  progressCurrent: {
-    width: 29,
-    height: 29,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: COLORS.blue,
-    backgroundColor: '#EAF1FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  progressInactive: {
-    width: 29,
-    height: 29,
-    borderRadius: 15,
-    backgroundColor: '#E8EDF3',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  progressCompleteText: {
-    marginTop: 4,
-    color: COLORS.blue,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  progressCurrentText: {
-    marginTop: 4,
-    color: COLORS.textPrimary,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  progressInactiveText: {
-    marginTop: 4,
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-
-  progressCurrentNumber: {
-    color: COLORS.blue,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
-  progressInactiveNumber: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  progressLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#DFE5EC',
-    marginHorizontal: 7,
-    marginBottom: 15,
-  },
-
-  progressLineActive: {
-    flex: 1,
-    height: 2,
-    backgroundColor: COLORS.blue,
-    marginHorizontal: 7,
-    marginBottom: 15,
-  },
-
-  /* CAPTURED IMAGE */
-
-  imageCard: {
-    marginTop: 22,
-    height: 185,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#DCE3EB',
-    shadowColor: '#18334E',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
-  },
-
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-
-  imageOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 12,
-    flexDirection: 'row',
-  },
-
-  capturedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(8, 25, 43, 0.72)',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-  },
-
-  capturedBadgeText: {
-    marginLeft: 5,
-    color: COLORS.white,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-
-  retakeButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 11,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-  },
-
-  retakeText: {
-    marginLeft: 5,
-    color: COLORS.textPrimary,
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-
-  /* STATUS */
-
-  statusCard: {
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF4FB',
-    borderRadius: 16,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-  },
-
-  statusIcon: {
-    width: 41,
-    height: 41,
-    borderRadius: 12,
-    backgroundColor: '#E0EBFA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  statusTextArea: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  statusTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
-
-  statusDescription: {
-    marginTop: 2,
-    color: COLORS.textSecondary,
-    fontSize: 10.5,
-    lineHeight: 15,
-  },
-
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 9,
-    backgroundColor: COLORS.white,
-  },
-
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#35B873',
-    marginRight: 5,
-  },
-
-  statusDotError: {
-    backgroundColor: '#D96C48',
-  },
-
-  statusDotLoading: {
-    backgroundColor: '#5D8DEB',
-  },
-
-  statusBadgeText: {
-    color: COLORS.textSecondary,
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-
-  /* OCR ERROR */
-
-  ocrErrorCard: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 15,
-    backgroundColor: '#FFF1EC',
-    borderWidth: 1,
-    borderColor: '#F2D0C3',
-    padding: 11,
-  },
-
-  ocrErrorIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#FFE0D4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  ocrErrorTextArea: {
-    flex: 1,
-    marginLeft: 9,
-  },
-
-  ocrErrorTitle: {
-    color: '#8A422A',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  ocrErrorText: {
-    marginTop: 2,
-    color: '#A05D46',
-    fontSize: 10.5,
-    lineHeight: 14,
-  },
-
-  retryButton: {
-    marginLeft: 8,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 9,
-  },
-
-  retryButtonText: {
-    color: '#C15B34',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  /* EDITOR */
-
-  editorSection: {
-    marginTop: 20,
-  },
-
-  editorHeader: {
-    marginBottom: 9,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-
-  sectionLabel: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
-  editorHint: {
-    marginTop: 3,
-    color: COLORS.textMuted,
-    fontSize: 10.5,
-  },
-
-  clearButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-
-  clearText: {
-    color: COLORS.blue,
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-
-  textInputCard: {
-    minHeight: 175,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: '#DCE4ED',
-    borderRadius: 18,
-    padding: 14,
-    shadowColor: '#18334E',
-    shadowOpacity: 0.035,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
-  },
-
-  textInput: {
-    minHeight: 118,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    lineHeight: 23,
-    fontWeight: '500',
-  },
-
-  extractingArea: {
-    minHeight: 145,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-
-  extractingTitle: {
-    marginTop: 12,
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  extractingText: {
-    marginTop: 4,
-    color: COLORS.textSecondary,
-    fontSize: 11.5,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-
-  inputFooter: {
-    marginTop: 7,
-    paddingTop: 9,
-    borderTopWidth: 1,
-    borderTopColor: '#EDF1F5',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  editableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  editableText: {
-    marginLeft: 5,
-    color: COLORS.textMuted,
-    fontSize: 10,
-  },
-
-  characterCount: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-  },
-
-  /* NOTE */
-
-  noteCard: {
-    marginTop: 15,
-    flexDirection: 'row',
-    borderRadius: 15,
-    backgroundColor: '#FFF7E9',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#F5E4C3',
-  },
-
-  noteIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#FFEDCC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  noteContent: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  noteTitle: {
-    color: '#7A4A0A',
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-
-  noteText: {
-    marginTop: 3,
-    color: '#956522',
-    fontSize: 10.5,
-    lineHeight: 14,
-  },
-
-  /* CHECK BUTTON */
-
-  verifyWrapper: {
-    marginTop: 20,
-    shadowColor: COLORS.blue,
-    shadowOpacity: 0.22,
-    shadowRadius: 11,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-
-  verifyWrapperDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-
-  verifyButton: {
-    minHeight: 68,
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  verifyIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  verifyTextArea: {
-    flex: 1,
-    marginLeft: 11,
-  },
-
-  verifyTitle: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  verifySubtitle: {
-    marginTop: 3,
-    color: '#DCE8FF',
-    fontSize: 11,
-  },
-
-  /* VERIFICATION ERROR */
-
-  verificationErrorCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    columnGap: 10,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#F3C6C3',
-    borderRadius: 14,
-    backgroundColor: '#FFF5F4',
-    padding: 14,
-  },
-
-  verificationErrorContent: {
-    flex: 1,
-  },
-
-  verificationErrorTitle: {
-    color: COLORS.red,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  verificationErrorText: {
-    marginTop: 4,
-    color: '#713B38',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  verificationRetryText: {
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    color: COLORS.blue,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+
+    keyboardView: {
+      flex: 1,
+    },
+
+    scrollView: {
+      flex: 1,
+    },
+
+    scrollContent: {
+      paddingHorizontal: 22,
+      paddingBottom: 35,
+    },
+
+    header: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    backButton: {
+      width: 45,
+      height: 45,
+      borderRadius: 15,
+      backgroundColor: COLORS.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#1B3655',
+      shadowOpacity: 0.07,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 2,
+    },
+
+    headerTextArea: {
+      flex: 1,
+      alignItems: 'center',
+    },
+
+    headerTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 21,
+      fontWeight: '800',
+      letterSpacing: -0.3,
+    },
+
+    headerSubtitle: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 11.5,
+    },
+
+    headerSpacer: {
+      width: 45,
+    },
+
+    progressRow: {
+      marginTop: 22,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 6,
+    },
+
+    progressItem: {
+      alignItems: 'center',
+    },
+
+    progressComplete: {
+      width: 29,
+      height: 29,
+      borderRadius: 15,
+      backgroundColor: '#3C78F2',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    progressCurrent: {
+      width: 29,
+      height: 29,
+      borderRadius: 15,
+      borderWidth: 2,
+      borderColor: COLORS.blue,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EAF1FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    progressInactive: {
+      width: 29,
+      height: 29,
+      borderRadius: 15,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#E8EDF3',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    progressCompleteText: {
+      marginTop: 4,
+      color: COLORS.blue,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    progressCurrentText: {
+      marginTop: 4,
+      color: COLORS.textPrimary,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    progressInactiveText: {
+      marginTop: 4,
+      color: COLORS.textMuted,
+      fontSize: 10,
+      fontWeight: '600',
+    },
+
+    progressCurrentNumber: {
+      color: COLORS.blue,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
+    progressInactiveNumber: {
+      color: COLORS.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    progressLine: {
+      flex: 1,
+      height: 2,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#DFE5EC',
+      marginHorizontal: 7,
+      marginBottom: 15,
+    },
+
+    progressLineActive: {
+      flex: 1,
+      height: 2,
+      backgroundColor: COLORS.blue,
+      marginHorizontal: 7,
+      marginBottom: 15,
+    },
+
+    imageCard: {
+      marginTop: 22,
+      height: 185,
+      borderRadius: 22,
+      overflow: 'hidden',
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#DCE3EB',
+      shadowColor: '#18334E',
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 5 },
+      elevation: 4,
+    },
+
+    image: {
+      width: '100%',
+      height: '100%',
+    },
+
+    imageOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      padding: 12,
+      flexDirection: 'row',
+    },
+
+    capturedBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(8, 25, 43, 0.72)',
+      borderRadius: 10,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+    },
+
+    capturedBadgeText: {
+      marginLeft: 5,
+      color: COLORS.white,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+    },
+
+    retakeButton: {
+      position: 'absolute',
+      right: 12,
+      bottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: COLORS.surface,
+      borderRadius: 11,
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+    },
+
+    retakeText: {
+      marginLeft: 5,
+      color: COLORS.textPrimary,
+      fontSize: 11.5,
+      fontWeight: '700',
+    },
+
+    statusCard: {
+      marginTop: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#EEF4FB',
+      borderRadius: 16,
+      paddingHorizontal: 13,
+      paddingVertical: 12,
+    },
+
+    statusIcon: {
+      width: 41,
+      height: 41,
+      borderRadius: 12,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#E0EBFA',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    statusTextArea: {
+      flex: 1,
+      marginLeft: 10,
+    },
+
+    statusTitle: {
+      color: COLORS.textPrimary,
+      fontSize: 13.5,
+      fontWeight: '700',
+    },
+
+    statusDescription: {
+      marginTop: 2,
+      color: COLORS.textSecondary,
+      fontSize: 10.5,
+      lineHeight: 15,
+    },
+
+    statusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginLeft: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 9,
+      backgroundColor: COLORS.surface,
+    },
+
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: '#35B873',
+      marginRight: 5,
+    },
+
+    statusDotError: {
+      backgroundColor: '#D96C48',
+    },
+
+    statusDotLoading: {
+      backgroundColor: '#5D8DEB',
+    },
+
+    statusBadgeText: {
+      color: COLORS.textSecondary,
+      fontSize: 9.5,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+
+    ocrErrorCard: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 15,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF1EC',
+      borderWidth: 1,
+      borderColor: isDark
+        ? COLORS.border
+        : '#F2D0C3',
+      padding: 11,
+    },
+
+    ocrErrorIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#FFE0D4',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    ocrErrorTextArea: {
+      flex: 1,
+      marginLeft: 9,
+    },
+
+    ocrErrorTitle: {
+      color: isDark
+        ? COLORS.orange
+        : '#8A422A',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    ocrErrorText: {
+      marginTop: 2,
+      color: isDark
+        ? COLORS.textSecondary
+        : '#A05D46',
+      fontSize: 10.5,
+      lineHeight: 14,
+    },
+
+    retryButton: {
+      marginLeft: 8,
+      backgroundColor: COLORS.surface,
+      paddingHorizontal: 11,
+      paddingVertical: 7,
+      borderRadius: 9,
+    },
+
+    retryButtonText: {
+      color: COLORS.orange,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    editorSection: {
+      marginTop: 20,
+    },
+
+    editorHeader: {
+      marginBottom: 9,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+    },
+
+    sectionLabel: {
+      color: COLORS.textPrimary,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+    },
+
+    editorHint: {
+      marginTop: 3,
+      color: COLORS.textMuted,
+      fontSize: 10.5,
+    },
+
+    clearButton: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+
+    clearText: {
+      color: COLORS.blue,
+      fontSize: 11.5,
+      fontWeight: '700',
+    },
+
+    textInputCard: {
+      minHeight: 175,
+      backgroundColor: COLORS.surface,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 18,
+      padding: 14,
+      shadowColor: '#18334E',
+      shadowOpacity: 0.035,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 1,
+    },
+
+    textInput: {
+      minHeight: 118,
+      color: COLORS.textPrimary,
+      fontSize: 16,
+      lineHeight: 23,
+      fontWeight: '500',
+    },
+
+    extractingArea: {
+      minHeight: 145,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+    },
+
+    extractingTitle: {
+      marginTop: 12,
+      color: COLORS.textPrimary,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+
+    extractingText: {
+      marginTop: 4,
+      color: COLORS.textSecondary,
+      fontSize: 11.5,
+      lineHeight: 16,
+      textAlign: 'center',
+    },
+
+    inputFooter: {
+      marginTop: 7,
+      paddingTop: 9,
+      borderTopWidth: 1,
+      borderTopColor: COLORS.border,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+
+    editableRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    editableText: {
+      marginLeft: 5,
+      color: COLORS.textMuted,
+      fontSize: 10,
+    },
+
+    characterCount: {
+      color: COLORS.textMuted,
+      fontSize: 10,
+    },
+
+    noteCard: {
+      marginTop: 15,
+      flexDirection: 'row',
+      borderRadius: 15,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF7E9',
+      padding: 12,
+      borderWidth: 1,
+      borderColor: isDark
+        ? COLORS.border
+        : '#F5E4C3',
+    },
+
+    noteIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: isDark
+        ? COLORS.surface
+        : '#FFEDCC',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    noteContent: {
+      flex: 1,
+      marginLeft: 10,
+    },
+
+    noteTitle: {
+      color: isDark
+        ? COLORS.orange
+        : '#7A4A0A',
+      fontSize: 12.5,
+      fontWeight: '700',
+    },
+
+    noteText: {
+      marginTop: 3,
+      color: isDark
+        ? COLORS.textSecondary
+        : '#956522',
+      fontSize: 10.5,
+      lineHeight: 14,
+    },
+
+    verifyWrapper: {
+      marginTop: 20,
+      shadowColor: COLORS.blue,
+      shadowOpacity: 0.22,
+      shadowRadius: 11,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 5,
+    },
+
+    verifyWrapperDisabled: {
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+
+    verifyButton: {
+      minHeight: 68,
+      borderRadius: 18,
+      paddingHorizontal: 15,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    verifyIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: 'rgba(255,255,255,0.16)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    verifyTextArea: {
+      flex: 1,
+      marginLeft: 11,
+    },
+
+    verifyTitle: {
+      color: COLORS.white,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+
+    verifySubtitle: {
+      marginTop: 3,
+      color: '#DCE8FF',
+      fontSize: 11,
+    },
+
+    verificationErrorCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      columnGap: 10,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: isDark
+        ? COLORS.border
+        : '#F3C6C3',
+      borderRadius: 14,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF5F4',
+      padding: 14,
+    },
+
+    verificationErrorContent: {
+      flex: 1,
+    },
+
+    verificationErrorTitle: {
+      color: COLORS.red,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    verificationErrorText: {
+      marginTop: 4,
+      color: isDark
+        ? COLORS.textSecondary
+        : '#713B38',
+      fontSize: 13,
+      lineHeight: 19,
+    },
+
+    verificationRetryText: {
+      alignSelf: 'flex-start',
+      marginTop: 10,
+      color: COLORS.blue,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+  });

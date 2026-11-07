@@ -1,10 +1,11 @@
-
 import { VerificationResult } from '../types/verification';
 import { VerificationEvaluationContext } from '../types/api';
 
 export type StudyTrialContext = {
   participantId: string;
-  conditionOrder: 'app_first' | 'browser_first';
+  conditionOrder:
+    | 'app_first'
+    | 'browser_first';
   condition: 'app' | 'browser';
   claimId: string;
   claimText: string;
@@ -16,15 +17,30 @@ export type StudyTrialContext = {
 };
 
 export type RootStackParamList = {
-  Home: {
-    studyContext?: StudyTrialContext;
-    walkthroughReplay?: boolean;
-    walkthroughContinue?: boolean;
-  } | undefined;
+  StudyFlow:
+    | {
+        participantId?: string;
+        conditionOrder?:
+          | 'app_first'
+          | 'browser_first';
+        completedTrialIndex?: number;
+        walkthrough?: boolean;
+      }
+    | undefined;
 
-  Camera: {
-    studyContext?: StudyTrialContext;
-  } | undefined;
+  Home:
+    | {
+        studyContext?: StudyTrialContext;
+        walkthroughReplay?: boolean;
+        walkthroughContinue?: boolean;
+      }
+    | undefined;
+
+  Camera:
+    | {
+        studyContext?: StudyTrialContext;
+      }
+    | undefined;
 
   ClaimReview: {
     claimText?: string;
@@ -49,14 +65,18 @@ export type RootStackParamList = {
     studyContext?: StudyTrialContext;
   };
 
-  VerificationHistory: {
-    walkthrough?: boolean;
-  } | undefined;
+  VerificationHistory:
+    | {
+        walkthrough?: boolean;
+      }
+    | undefined;
 
-  BrowserComparison: {
-    studyContext?: StudyTrialContext;
-    walkthrough?: boolean;
-  } | undefined;
+  BrowserComparison:
+    | {
+        studyContext?: StudyTrialContext;
+        walkthrough?: boolean;
+      }
+    | undefined;
 
   Profile: undefined;
   Login: undefined;

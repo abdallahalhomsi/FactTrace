@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -23,7 +23,8 @@ import {
   saveWalkthroughState,
   type WalkthroughStep,
 } from '../services/walkthroughService';
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { MatchStatus } from '../types/verification';
 import { useAuth } from '../hooks/useAuth';
 import { saveVerificationHistory } from '../services/historyService';
@@ -101,6 +102,8 @@ export default function VerificationResultsScreen({
   navigation,
   route,
 }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const isWalkthrough =
     Boolean(route.params.walkthrough) &&
     !route.params.studyContext;
@@ -665,7 +668,7 @@ export default function VerificationResultsScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <ScrollView
         ref={tourScrollRef}
@@ -753,14 +756,6 @@ export default function VerificationResultsScreen({
             </Text>
           </View>
         </View>
-
-        {result.datasetNotice ? (
-          <View style={styles.datasetNotice}>
-            <Text style={styles.datasetNoticeText}>
-              DEMONSTRATION DATA · {result.datasetNotice}
-            </Text>
-          </View>
-        ) : null}
 
         {/* YOUR CLAIM */}
         <View style={styles.claimCard}>
@@ -1269,12 +1264,29 @@ export default function VerificationResultsScreen({
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.homeButton}
-                onPress={() =>
-                  navigation.navigate('Home')
-                }
+                onPress={() => {
+                  if (studyContext) {
+                    navigation.reset({
+                      index: 0,
+                      routes: [
+                        {
+                          name: 'StudyFlow',
+                          params: {
+                            participantId: studyContext.participantId,
+                            conditionOrder: studyContext.conditionOrder,
+                            completedTrialIndex: studyContext.trialIndex,
+                          },
+                        },
+                      ],
+                    });
+                    return;
+                  }
+
+                  navigation.navigate('Home');
+                }}
               >
                 <Text style={styles.homeButtonText}>
-                  Home
+                  {studyContext ? 'Continue Study' : 'Home'}
                 </Text>
               </TouchableOpacity>
             </>
@@ -1346,10 +1358,10 @@ export default function VerificationResultsScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F8FC',
+    backgroundColor: COLORS.background,
   },
   scrollView: { flex: 1 },
   content: {
@@ -1365,7 +1377,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 15,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#1B3655',
@@ -1413,7 +1425,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 2,
     borderColor: COLORS.blue,
-    backgroundColor: '#EAF1FF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EAF1FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1446,23 +1458,10 @@ const styles = StyleSheet.create({
   claimCard: {
     marginTop: 22,
     borderRadius: 18,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
     padding: 15,
-  },
-  datasetNotice: {
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: '#FFF4E8',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  datasetNoticeText: {
-    color: '#A64B00',
-    fontSize: 10,
-    lineHeight: 15,
-    fontWeight: '800',
   },
   claimTop: {
     flexDirection: 'row',
@@ -1472,7 +1471,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#EDF4FF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EDF4FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1616,7 +1615,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 9,
-    backgroundColor: '#EAF1FF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EAF1FF',
   },
   sourceCountText: {
     color: COLORS.blue,
@@ -1628,9 +1627,9 @@ const styles = StyleSheet.create({
   evidenceCard: {
     marginBottom: 11,
     borderRadius: 17,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
     padding: 14,
     shadowColor: '#18334E',
     shadowOpacity: 0.035,
@@ -1646,7 +1645,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#EDF4FF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EDF4FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1654,7 +1653,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#F2EEFF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#F2EEFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1690,7 +1689,7 @@ const styles = StyleSheet.create({
   provenanceChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F6FD',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#F1F6FD',
     borderRadius: 9,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1710,9 +1709,9 @@ const styles = StyleSheet.create({
   /* EMPTY */
   emptyCard: {
     borderRadius: 18,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
     paddingHorizontal: 20,
     paddingVertical: 28,
     alignItems: 'center',
@@ -1721,7 +1720,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 16,
-    backgroundColor: '#EDF4FF',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EDF4FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1760,9 +1759,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 88,
     borderRadius: 15,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1770,7 +1769,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#F1F4F7',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#F1F4F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1781,22 +1780,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   trustSelected: {
-    backgroundColor: '#EAF8F2',
-    borderColor: '#8AD5B1',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#EAF8F2',
+    borderColor: isDark ? COLORS.border : '#8AD5B1',
   },
   trustIconSelected: {
     backgroundColor: '#249664',
   },
   dontTrustSelected: {
-    backgroundColor: '#FDEEEE',
-    borderColor: '#E9AAAA',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#FDEEEE',
+    borderColor: isDark ? COLORS.border : '#E9AAAA',
   },
   dontTrustIconSelected: {
     backgroundColor: '#C84C4C',
   },
   unsureSelected: {
-    backgroundColor: '#FFF7E9',
-    borderColor: '#F0CA8C',
+    backgroundColor: isDark ? COLORS.surfaceElevated : '#FFF7E9',
+    borderColor: isDark ? COLORS.border : '#F0CA8C',
   },
   unsureIconSelected: {
     backgroundColor: '#CB7A17',
@@ -1847,9 +1846,9 @@ const styles = StyleSheet.create({
     marginTop: 11,
     minHeight: 52,
     borderRadius: 15,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1871,8 +1870,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#E1E8F0',
-    backgroundColor: COLORS.white,
+    borderColor: isDark ? COLORS.border : '#E1E8F0',
+    backgroundColor: COLORS.surface,
   },
   homeButtonText: {
     color: COLORS.textPrimary,

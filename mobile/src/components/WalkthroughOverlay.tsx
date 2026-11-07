@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   LayoutChangeEvent,
   ScrollView,
@@ -10,7 +10,8 @@ import {
   type ViewInstance,
 } from 'react-native';
 
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import type { WalkthroughStep } from '../services/walkthroughService';
 
 type Props = {
@@ -46,6 +47,8 @@ export default function WalkthroughOverlay({
   onFinish,
   onSkip,
 }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const { width, height } = useWindowDimensions();
   const overlayRef = useRef<ViewInstance>(null);
   const [overlaySize, setOverlaySize] = useState({ width, height });
@@ -65,6 +68,7 @@ export default function WalkthroughOverlay({
       targetRef.current?.measureInWindow((x, y, targetWidth, targetHeight) => {
         const left = Math.max(0, x - overlayX - 6);
         const top = Math.max(0, y - overlayY - 6);
+
         const nextRect = {
           x: left,
           y: top,
@@ -92,22 +96,29 @@ export default function WalkthroughOverlay({
 
   useEffect(() => {
     const frame = requestAnimationFrame(measureTarget);
+
     return () => cancelAnimationFrame(frame);
   }, [isSpotlight, measurementVersion, width, height, overlaySize]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width: nextWidth, height: nextHeight } = event.nativeEvent.layout;
+
     setOverlaySize(previous =>
       previous.width === nextWidth && previous.height === nextHeight
         ? previous
-        : { width: nextWidth, height: nextHeight },
+        : {
+            width: nextWidth,
+            height: nextHeight,
+          },
     );
   };
 
   const tooltipGap = 14;
+
   const aboveSpace = targetRect
     ? Math.max(0, targetRect.y - tooltipGap)
     : 0;
+
   const belowSpace = targetRect
     ? Math.max(
         0,
@@ -117,17 +128,21 @@ export default function WalkthroughOverlay({
           tooltipGap,
       )
     : 0;
+
   const placeAbove = Boolean(
     targetRect &&
       (aboveSpace >= tooltipHeight ||
         (belowSpace < tooltipHeight && aboveSpace >= belowSpace)),
   );
+
   const tooltipSpace = placeAbove ? aboveSpace : belowSpace;
+
   const tooltipTop = targetRect
     ? placeAbove
       ? Math.max(0, targetRect.y - tooltipGap - tooltipHeight)
       : targetRect.y + targetRect.height + tooltipGap
     : height / 2;
+
   const tooltipLeft = targetRect
     ? Math.max(
         16,
@@ -141,6 +156,7 @@ export default function WalkthroughOverlay({
   const bottom = targetRect
     ? targetRect.y + targetRect.height
     : 0;
+
   const right = targetRect
     ? targetRect.x + targetRect.width
     : 0;
@@ -155,67 +171,87 @@ export default function WalkthroughOverlay({
       {isSpotlight ? (
         targetRect ? (
           <>
-          <View
-            pointerEvents="auto"
-            style={[
-              styles.scrim,
-              { left: 0, top: 0, right: 0, height: targetRect.y },
-            ]}
-          />
-          <View
-            pointerEvents="auto"
-            style={[
-              styles.scrim,
-              { left: 0, top: bottom, right: 0, bottom: 0 },
-            ]}
-          />
-          <View
-            pointerEvents="auto"
-            style={[
-              styles.scrim,
-              {
-                left: 0,
-                top: targetRect.y,
-                width: targetRect.x,
-                height: targetRect.height,
-              },
-            ]}
-          />
-          <View
-            pointerEvents="auto"
-            style={[
-              styles.scrim,
-              {
-                left: right,
-                top: targetRect.y,
-                right: 0,
-                height: targetRect.height,
-              },
-            ]}
-          />
-          <View
-            pointerEvents="none"
-            style={[
-              styles.highlightBorder,
-              {
-                left: targetRect.x,
-                top: targetRect.y,
-                width: targetRect.width,
-                height: targetRect.height,
-              },
-            ]}
-          />
+            <View
+              pointerEvents="auto"
+              style={[
+                styles.scrim,
+                {
+                  left: 0,
+                  top: 0,
+                  right: 0,
+                  height: targetRect.y,
+                },
+              ]}
+            />
+
+            <View
+              pointerEvents="auto"
+              style={[
+                styles.scrim,
+                {
+                  left: 0,
+                  top: bottom,
+                  right: 0,
+                  bottom: 0,
+                },
+              ]}
+            />
+
+            <View
+              pointerEvents="auto"
+              style={[
+                styles.scrim,
+                {
+                  left: 0,
+                  top: targetRect.y,
+                  width: targetRect.x,
+                  height: targetRect.height,
+                },
+              ]}
+            />
+
+            <View
+              pointerEvents="auto"
+              style={[
+                styles.scrim,
+                {
+                  left: right,
+                  top: targetRect.y,
+                  right: 0,
+                  height: targetRect.height,
+                },
+              ]}
+            />
+
+            <View
+              pointerEvents="none"
+              style={[
+                styles.highlightBorder,
+                {
+                  left: targetRect.x,
+                  top: targetRect.y,
+                  width: targetRect.width,
+                  height: targetRect.height,
+                },
+              ]}
+            />
           </>
         ) : null
       ) : (
-        <View pointerEvents="auto" style={styles.fullScrim} />
+        <View
+          pointerEvents="auto"
+          style={styles.fullScrim}
+        />
       )}
 
       <View
         onLayout={event => {
           const nextHeight = event.nativeEvent.layout.height;
+
           setTooltipHeight(previous =>
-            previous === nextHeight ? previous : nextHeight,
+            previous === nextHeight
+              ? previous
+              : nextHeight,
           );
         }}
         style={[
@@ -230,7 +266,9 @@ export default function WalkthroughOverlay({
               }
             : [
                 styles.centeredPosition,
-                { width: tooltipWidth },
+                {
+                  width: tooltipWidth,
+                },
               ],
         ]}
       >
@@ -240,16 +278,33 @@ export default function WalkthroughOverlay({
           bounces={false}
           style={
             isSpotlight && targetRect
-              ? { maxHeight: Math.max(0, tooltipSpace - 136) }
-              : { maxHeight: Math.min(250, height * 0.45) }
+              ? {
+                  maxHeight: Math.max(
+                    0,
+                    tooltipSpace - 136,
+                  ),
+                }
+              : {
+                  maxHeight: Math.min(
+                    250,
+                    height * 0.45,
+                  ),
+                }
           }
         >
           {isSpotlight ? (
-            <Text style={styles.eyebrow}>GUIDED WALKTHROUGH</Text>
+            <Text style={styles.eyebrow}>
+              GUIDED WALKTHROUGH
+            </Text>
           ) : null}
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
 
+          <Text style={styles.title}>
+            {title}
+          </Text>
+
+          <Text style={styles.message}>
+            {message}
+          </Text>
         </ScrollView>
 
         {mode === 'welcome' ? (
@@ -259,7 +314,9 @@ export default function WalkthroughOverlay({
             onPress={onStart}
           >
             <Text style={styles.primaryButtonText}>
-              {resume ? 'Resume Walkthrough' : 'Start Walkthrough'}
+              {resume
+                ? 'Resume Walkthrough'
+                : 'Start Walkthrough'}
             </Text>
           </TouchableOpacity>
         ) : mode === 'complete' && onFinish ? (
@@ -268,7 +325,9 @@ export default function WalkthroughOverlay({
             style={styles.primaryButton}
             onPress={onFinish}
           >
-            <Text style={styles.primaryButtonText}>Start Verifying</Text>
+            <Text style={styles.primaryButtonText}>
+              Start Verifying
+            </Text>
           </TouchableOpacity>
         ) : isSpotlight && onContinue ? (
           <TouchableOpacity
@@ -276,7 +335,9 @@ export default function WalkthroughOverlay({
             style={styles.primaryButton}
             onPress={onContinue}
           >
-            <Text style={styles.primaryButtonText}>Continue</Text>
+            <Text style={styles.primaryButtonText}>
+              Continue
+            </Text>
           </TouchableOpacity>
         ) : null}
 
@@ -285,92 +346,121 @@ export default function WalkthroughOverlay({
           style={styles.skipButton}
           onPress={onSkip}
         >
-          <Text style={styles.skipButtonText}>Skip Walkthrough</Text>
+          <Text style={styles.skipButtonText}>
+            Skip Walkthrough
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-    elevation: 1000,
-  },
-  fullScrim: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(5, 16, 29, 0.88)',
-  },
-  scrim: {
-    position: 'absolute',
-    backgroundColor: 'rgba(5, 16, 29, 0.88)',
-  },
-  highlightBorder: {
-    position: 'absolute',
-    borderWidth: 3,
-    borderColor: '#FFD166',
-    borderRadius: 20,
-  },
-  card: {
-    position: 'absolute',
-    overflow: 'hidden',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E1E8F0',
-    backgroundColor: COLORS.white,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
-  },
-  centeredPosition: {
-    top: '50%',
-    alignSelf: 'center',
-    transform: [{ translateY: -130 }],
-  },
-  eyebrow: {
-    color: '#AA7000',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 7,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  message: {
-    marginTop: 8,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  primaryButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.blue,
-  },
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  skipButton: {
-    minHeight: 38,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  skipButtonText: {
-    color: COLORS.blue,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFill,
+      zIndex: 1000,
+      elevation: 1000,
+    },
+
+    fullScrim: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(5, 16, 29, 0.88)',
+    },
+
+    scrim: {
+      position: 'absolute',
+      backgroundColor: 'rgba(5, 16, 29, 0.88)',
+    },
+
+    highlightBorder: {
+      position: 'absolute',
+      borderWidth: 3,
+      borderColor: isDark
+        ? COLORS.border
+        : '#FFD166',
+      borderRadius: 20,
+    },
+
+    card: {
+      position: 'absolute',
+      overflow: 'hidden',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: isDark
+        ? COLORS.border
+        : '#E1E8F0',
+      backgroundColor: COLORS.surface,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.25,
+      shadowRadius: 15,
+      shadowOffset: {
+        width: 0,
+        height: 6,
+      },
+      elevation: 12,
+    },
+
+    centeredPosition: {
+      top: '50%',
+      alignSelf: 'center',
+      transform: [
+        {
+          translateY: -130,
+        },
+      ],
+    },
+
+    eyebrow: {
+      color: '#AA7000',
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      marginBottom: 7,
+    },
+
+    title: {
+      color: COLORS.textPrimary,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+
+    message: {
+      marginTop: 8,
+      color: COLORS.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+
+    primaryButton: {
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 14,
+      borderRadius: 12,
+      backgroundColor: COLORS.blue,
+    },
+
+    primaryButtonText: {
+      color: COLORS.white,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    skipButton: {
+      minHeight: 38,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+
+    skipButtonText: {
+      color: COLORS.blue,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+  });

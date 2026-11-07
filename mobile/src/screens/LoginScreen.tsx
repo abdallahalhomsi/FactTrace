@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
 import {
   ActivityIndicator,
@@ -15,7 +15,8 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
 import {
   MIN_PASSWORD_LENGTH,
@@ -27,6 +28,13 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen({ navigation }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+
+  const styles = useMemo(
+    () => createStyles(COLORS, isDark),
+    [COLORS, isDark],
+  );
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,14 +46,17 @@ export default function LoginScreen({ navigation }: Props) {
     }
 
     const normalizedEmail = email.trim();
+
     if (!normalizedEmail) {
       setError('Enter the email used for your profile.');
       return;
     }
+
     if (!EMAIL_PATTERN.test(normalizedEmail)) {
       setError('Enter a valid email address.');
       return;
     }
+
     if (password.length < MIN_PASSWORD_LENGTH) {
       setError(
         `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
@@ -55,8 +66,10 @@ export default function LoginScreen({ navigation }: Props) {
 
     setError(null);
     setIsSubmitting(true);
+
     try {
       await signIn(normalizedEmail, password);
+
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
@@ -74,7 +87,8 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -94,11 +108,16 @@ export default function LoginScreen({ navigation }: Props) {
           >
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
+
           <Text style={styles.title}>Log In</Text>
-          <Text style={styles.subtitle}>Welcome back to FactTrace.</Text>
+
+          <Text style={styles.subtitle}>
+            Welcome back to FactTrace.
+          </Text>
 
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
+
             <TextInput
               autoCapitalize="none"
               autoComplete="email"
@@ -113,12 +132,13 @@ export default function LoginScreen({ navigation }: Props) {
             />
 
             <Text style={styles.label}>Password</Text>
+
             <TextInput
               autoCapitalize="none"
               autoComplete="current-password"
               secureTextEntry
               style={styles.input}
-              placeholder="At least 8 characters"
+              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
               placeholderTextColor={COLORS.textSecondary}
               value={password}
               onChangeText={setPassword}
@@ -142,8 +162,12 @@ export default function LoginScreen({ navigation }: Props) {
             <TouchableOpacity
               activeOpacity={0.85}
               disabled={isSubmitting}
-              style={[styles.button, styles.primaryButton]}
-              onPress={handleLogin}
+              style={[
+                styles.button,
+                styles.primaryButton,
+                isSubmitting && styles.disabledButton,
+              ]}
+              onPress={() => void handleLogin()}
             >
               {isSubmitting ? (
                 <ActivityIndicator color={COLORS.white} />
@@ -151,19 +175,31 @@ export default function LoginScreen({ navigation }: Props) {
                 <Text style={styles.primaryText}>Log In</Text>
               )}
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.button, styles.secondaryButton]}
+              style={[
+                styles.button,
+                styles.secondaryButton,
+              ]}
               onPress={() => navigation.navigate('SignUp')}
             >
-              <Text style={styles.buttonText}>Create Account</Text>
+              <Text style={styles.buttonText}>
+                Create Account
+              </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.button, styles.outlineButton]}
+              style={[
+                styles.button,
+                styles.outlineButton,
+              ]}
               onPress={() => navigation.navigate('Home')}
             >
-              <Text style={styles.buttonText}>Continue as Guest</Text>
+              <Text style={styles.buttonText}>
+                Continue as Guest
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -172,104 +208,132 @@ export default function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
-  },
-  backButton: {
-    width: 40,
-    height: 36,
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  backText: {
-    color: COLORS.textPrimary,
-    fontSize: 32,
-    lineHeight: 34,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  subtitle: {
-    marginTop: 4,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  form: {
-    marginTop: 88,
-  },
-  label: {
-    marginBottom: 8,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  accountNote: {
-    marginTop: -8,
-    marginBottom: 24,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  input: {
-    minHeight: 52,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 14,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-  },
-  actions: {
-    marginTop: 'auto',
-    rowGap: 10,
-  },
-  button: {
-    minHeight: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 13,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.blue,
-  },
-  primaryText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.blueLight,
-  },
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.white,
-  },
-  buttonText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  error: {
-    marginTop: 2,
-    marginBottom: 12,
-    color: COLORS.red,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+
+    flex: {
+      flex: 1,
+    },
+
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 16,
+      paddingBottom: 32,
+    },
+
+    backButton: {
+      width: 40,
+      height: 36,
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+
+    backText: {
+      color: COLORS.textPrimary,
+      fontSize: 32,
+      lineHeight: 34,
+    },
+
+    title: {
+      color: COLORS.textPrimary,
+      fontSize: 26,
+      fontWeight: '800',
+    },
+
+    subtitle: {
+      marginTop: 4,
+      color: COLORS.textSecondary,
+      fontSize: 14,
+    },
+
+    form: {
+      marginTop: 88,
+    },
+
+    label: {
+      marginBottom: 8,
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    accountNote: {
+      marginTop: -8,
+      marginBottom: 24,
+      color: COLORS.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+
+    input: {
+      minHeight: 52,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 12,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : COLORS.surface,
+      paddingHorizontal: 14,
+      color: COLORS.textPrimary,
+      fontSize: 14,
+    },
+
+    actions: {
+      marginTop: 'auto',
+      rowGap: 10,
+    },
+
+    button: {
+      minHeight: 50,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 13,
+    },
+
+    primaryButton: {
+      backgroundColor: COLORS.blue,
+    },
+
+    primaryText: {
+      color: COLORS.white,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+
+    secondaryButton: {
+      backgroundColor: COLORS.blueLight,
+    },
+
+    outlineButton: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+    },
+
+    buttonText: {
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    disabledButton: {
+      opacity: 0.6,
+    },
+
+    error: {
+      marginTop: 2,
+      marginBottom: 12,
+      color: COLORS.red,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+  });

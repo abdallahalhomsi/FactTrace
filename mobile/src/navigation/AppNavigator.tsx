@@ -10,10 +10,12 @@ import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import BrowserComparisonScreen from '../screens/BrowserComparisonScreen';
+import StudyFlowScreen from '../screens/StudyFlowScreen';
 
 import { RootStackParamList } from './types';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack =
+  createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   return (
@@ -23,28 +25,66 @@ export default function AppNavigator() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Camera" component={CameraScreen} />
-      <Stack.Screen name="ClaimReview" component={ClaimReviewScreen} />
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+      />
+
+      <Stack.Screen
+        name="StudyFlow"
+        component={StudyFlowScreen}
+      />
+
+      <Stack.Screen
+        name="Camera"
+        component={CameraScreen}
+      />
+
+      <Stack.Screen
+        name="ClaimReview"
+        component={ClaimReviewScreen}
+      />
+
       <Stack.Screen
         name="VerificationResults"
-        component={VerificationResultsScreen}
+        component={
+          VerificationResultsScreen
+        }
       />
+
       <Stack.Screen
         name="EvidenceDetails"
         component={EvidenceDetailsScreen}
       />
+
       <Stack.Screen
         name="VerificationHistory"
-        component={VerificationHistoryScreen}
+        component={
+          VerificationHistoryScreen
+        }
       />
+
       <Stack.Screen
         name="BrowserComparison"
-        component={BrowserComparisonScreen}
+        component={
+          BrowserComparisonScreen
+        }
       />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
+
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+      />
+
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+      />
+
+      <Stack.Screen
+        name="SignUp"
+        component={SignUpScreen}
+      />
     </Stack.Navigator>
   );
 }

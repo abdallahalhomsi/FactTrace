@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -12,62 +12,117 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
-import {
-  MIN_PASSWORD_LENGTH,
-  signUp,
-} from '../services/authService';
+import { signUp } from '../services/authService';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  'SignUp'
+>;
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export default function SignUpScreen({
+  navigation,
+}: Props) {
+  const {
+    colors: COLORS,
+    isDark,
+  } = useAppTheme();
 
-export default function SignUpScreen({ navigation }: Props) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const styles = useMemo(
+    () => createStyles(COLORS, isDark),
+    [COLORS, isDark],
+  );
+
+  const [displayName, setDisplayName] =
+    useState('');
+
+  const [email, setEmail] =
+    useState('');
+
+  const [password, setPassword] =
+    useState('');
+
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   const handleSignUp = async () => {
     if (isSubmitting) {
       return;
     }
 
-    const normalizedName = name.trim();
-    const normalizedEmail = email.trim();
-    if (!normalizedName || !normalizedEmail) {
-      setError('Enter your name and email to create your account.');
+    const cleanName = displayName.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanName) {
+      setError('Enter your name.');
       return;
     }
-    if (!EMAIL_PATTERN.test(normalizedEmail)) {
-      setError('Enter a valid email address.');
+
+    if (!cleanEmail) {
+      setError('Enter your email.');
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
+
+    if (!password) {
+      setError('Enter a password.');
+      return;
+    }
+
+    if (password.length < 6) {
       setError(
-        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+        'Password must be at least 6 characters.',
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError(
+        'Passwords do not match.',
       );
       return;
     }
 
     setError(null);
     setIsSubmitting(true);
+
     try {
-      await signUp(normalizedName, normalizedEmail, password);
+      await signUp(
+        cleanEmail,
+        password,
+        cleanName,
+      );
+
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Home' }],
+        routes: [
+          {
+            name: 'Home',
+          },
+        ],
       });
-    } catch (signupError) {
+    } catch (signUpError) {
+      console.warn(
+        'Sign up failed.',
+        signUpError,
+      );
+
       setError(
-        signupError instanceof Error
-          ? signupError.message
-          : 'Account creation is unavailable. Please try again later.',
+        signUpError instanceof Error
+          ? signUpError.message
+          : 'Could not create your account. Please try again.',
       );
     } finally {
       setIsSubmitting(false);
@@ -75,206 +130,454 @@ export default function SignUpScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView
+      style={styles.safeArea}
+    >
+      <StatusBar
+        style={
+          isDark
+            ? 'light'
+            : 'dark'
+        }
+      />
+
       <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardView}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : undefined
+        }
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={
+            styles.content
+          }
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity
             accessibilityRole="button"
+            accessibilityLabel="Go back"
             style={styles.backButton}
             onPress={() =>
               navigation.canGoBack()
                 ? navigation.goBack()
-                : navigation.navigate('Profile')
+                : navigation.navigate('Home')
             }
           >
-            <Text style={styles.backText}>‹</Text>
+            <Ionicons
+              name="arrow-back"
+              size={22}
+              color={COLORS.textPrimary}
+            />
           </TouchableOpacity>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>
-            Save and access your verification history on this device.
-          </Text>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              autoComplete="name"
-              style={styles.input}
-              placeholder="Your name"
-              placeholderTextColor={COLORS.textSecondary}
-              value={name}
-              onChangeText={setName}
-              editable={!isSubmitting}
-              accessibilityLabel="Name"
-            />
+          <View style={styles.headerArea}>
+            <View style={styles.logo}>
+              <Ionicons
+                name="person-add-outline"
+                size={34}
+                color={COLORS.blue}
+              />
+            </View>
 
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              style={styles.input}
-              placeholder="name@example.com"
-              placeholderTextColor={COLORS.textSecondary}
-              value={email}
-              onChangeText={setEmail}
-              editable={!isSubmitting}
-              accessibilityLabel="Email"
-            />
+            <Text style={styles.title}>
+              Create your account
+            </Text>
 
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              autoCapitalize="none"
-              autoComplete="new-password"
-              secureTextEntry
-              style={styles.input}
-              placeholder="At least 8 characters"
-              placeholderTextColor={COLORS.textSecondary}
-              value={password}
-              onChangeText={setPassword}
-              editable={!isSubmitting}
-              accessibilityLabel="Password"
-            />
-
-            <Text style={styles.accountNote}>
-              Use at least {MIN_PASSWORD_LENGTH} characters. This local demo
-              stores a password hash on this device; it is not server
-              authentication and won’t sync to other devices. Don’t reuse a
-              password you use elsewhere.
+            <Text style={styles.subtitle}>
+              Save your verification history and return to previous checks.
             </Text>
           </View>
 
-          {error ? (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {error}
+          <View style={styles.formCard}>
+            <Text style={styles.label}>
+              Name
             </Text>
-          ) : null}
 
-          <View style={styles.actions}>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="person-outline"
+                size={19}
+                color={COLORS.textMuted}
+              />
+
+              <TextInput
+                style={styles.input}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Your name"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="words"
+                textContentType="name"
+                accessibilityLabel="Name"
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.label,
+                {
+                  marginTop: 16,
+                },
+              ]}
+            >
+              Email
+            </Text>
+
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="mail-outline"
+                size={19}
+                color={COLORS.textMuted}
+              />
+
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                accessibilityLabel="Email"
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.label,
+                {
+                  marginTop: 16,
+                },
+              ]}
+            >
+              Password
+            </Text>
+
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={19}
+                color={COLORS.textMuted}
+              />
+
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="At least 6 characters"
+                placeholderTextColor={COLORS.textMuted}
+                secureTextEntry
+                textContentType="newPassword"
+                accessibilityLabel="Password"
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.label,
+                {
+                  marginTop: 16,
+                },
+              ]}
+            >
+              Confirm Password
+            </Text>
+
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={19}
+                color={COLORS.textMuted}
+              />
+
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Enter the password again"
+                placeholderTextColor={COLORS.textMuted}
+                secureTextEntry
+                textContentType="newPassword"
+                accessibilityLabel="Confirm password"
+              />
+            </View>
+
+            {error ? (
+              <View style={styles.errorCard}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={19}
+                  color={COLORS.red}
+                />
+
+                <Text
+                  accessibilityRole="alert"
+                  style={styles.errorText}
+                >
+                  {error}
+                </Text>
+              </View>
+            ) : null}
+
             <TouchableOpacity
+              accessibilityRole="button"
               activeOpacity={0.85}
               disabled={isSubmitting}
-              style={[styles.button, styles.primaryButton]}
-              onPress={handleSignUp}
+              style={[
+                styles.primaryButton,
+                isSubmitting &&
+                  styles.disabledButton,
+              ]}
+              onPress={() =>
+                void handleSignUp()
+              }
             >
               {isSubmitting ? (
-                <ActivityIndicator color={COLORS.white} />
+                <ActivityIndicator
+                  color={COLORS.white}
+                />
               ) : (
-                <Text style={styles.primaryText}>Create Account</Text>
+                <Text
+                  style={styles.primaryButtonText}
+                >
+                  Create Account
+                </Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[styles.button, styles.secondaryButton]}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.buttonText}>Already registered? Log In</Text>
-            </TouchableOpacity>
+
+            <View style={styles.loginRow}>
+              <Text style={styles.loginPrompt}>
+                Already have an account?
+              </Text>
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() =>
+                  navigation.navigate('Login')
+                }
+              >
+                <Text style={styles.loginLink}>
+                  Log in
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.guestButton}
+            onPress={() =>
+              navigation.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: 'Home',
+                  },
+                ],
+              })
+            }
+          >
+            <Text style={styles.guestText}>
+              Continue as Guest
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.note}>
+            Creating an account is optional. Guest users can still scan and verify claims.
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F8FC',
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
-  },
-  backButton: {
-    width: 40,
-    height: 36,
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  backText: {
-    color: COLORS.textPrimary,
-    fontSize: 32,
-    lineHeight: 34,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  subtitle: {
-    marginTop: 4,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  form: {
-    marginTop: 42,
-  },
-  label: {
-    marginBottom: 8,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  input: {
-    minHeight: 52,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 14,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-  },
-  accountNote: {
-    marginBottom: 20,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  actions: {
-    marginTop: 'auto',
-    rowGap: 10,
-  },
-  button: {
-    minHeight: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 13,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.blue,
-  },
-  primaryText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.blueLight,
-  },
-  buttonText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  error: {
-    marginTop: 2,
-    marginBottom: 12,
-    color: COLORS.red,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-});
+const createStyles = (
+  COLORS: ThemeColors,
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+
+    keyboardView: {
+      flex: 1,
+    },
+
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 12,
+      paddingBottom: 34,
+    },
+
+    backButton: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 15,
+      backgroundColor: COLORS.surface,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
+
+    headerArea: {
+      alignItems: 'center',
+      marginTop: 28,
+      marginBottom: 28,
+    },
+
+    logo: {
+      width: 72,
+      height: 72,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 24,
+      backgroundColor: COLORS.blueLight,
+    },
+
+    title: {
+      marginTop: 18,
+      color: COLORS.textPrimary,
+      fontSize: 27,
+      fontWeight: '900',
+      letterSpacing: -0.5,
+      textAlign: 'center',
+    },
+
+    subtitle: {
+      marginTop: 8,
+      maxWidth: 320,
+      color: COLORS.textSecondary,
+      fontSize: 14,
+      lineHeight: 21,
+      textAlign: 'center',
+    },
+
+    formCard: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+      padding: 18,
+    },
+
+    label: {
+      marginBottom: 7,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    inputWrapper: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 13,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : COLORS.background,
+      paddingHorizontal: 13,
+    },
+
+    input: {
+      flex: 1,
+      marginLeft: 9,
+      color: COLORS.textPrimary,
+      fontSize: 14,
+    },
+
+    errorCard: {
+      marginTop: 15,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      columnGap: 8,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 13,
+      backgroundColor: isDark
+        ? COLORS.surfaceElevated
+        : '#FFF1F1',
+      padding: 12,
+    },
+
+    errorText: {
+      flex: 1,
+      color: COLORS.red,
+      fontSize: 12.5,
+      lineHeight: 18,
+    },
+
+    primaryButton: {
+      minHeight: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 20,
+      borderRadius: 14,
+      backgroundColor: COLORS.blue,
+    },
+
+    primaryButtonText: {
+      color: COLORS.white,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    disabledButton: {
+      opacity: 0.6,
+    },
+
+    loginRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 18,
+      columnGap: 5,
+    },
+
+    loginPrompt: {
+      color: COLORS.textSecondary,
+      fontSize: 13,
+    },
+
+    loginLink: {
+      color: COLORS.blue,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    guestButton: {
+      minHeight: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 13,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.surface,
+    },
+
+    guestText: {
+      color: COLORS.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    note: {
+      marginTop: 20,
+      color: COLORS.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+      textAlign: 'center',
+      paddingHorizontal: 10,
+    },
+  });

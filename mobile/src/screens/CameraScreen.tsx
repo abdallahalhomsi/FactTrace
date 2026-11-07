@@ -1,375 +1,114 @@
-import React, {
-  useRef,
-  useState,
-} from 'react';
-
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-
-import {
-  BarcodeScanningResult,
-  CameraView,
-  useCameraPermissions,
-} from 'expo-camera';
-
-import * as ImageManipulator from 'expo-image-manipulator';
-
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { RootStackParamList, StudyTrialContext } from '../navigation/types';
-import { COLORS } from '../constants/app';
+import { ThemeColors } from '../constants/app';
+import { RootStackParamList } from '../navigation/types';
+import { useAppTheme } from '../theme/AppTheme';
 
-import { verifyClaim } from '../services/verificationService';
+type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
 
-type Props = NativeStackScreenProps<
-  RootStackParamList,
-  'Camera'
->;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type CameraMode = 'photo' | 'qr';
+export default function CameraScreen({ navigation, route }: Props) {
+  const { colors: COLORS, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
 
-export default function CameraScreen({
-  navigation,
-  route,
-}: Props) {
-  // Keep the same study timer through photo retakes and QR verification.
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView | null>(null);
+
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+
   const studyContext = route.params?.studyContext;
-  const cameraStartedAt = useRef(new Date().toISOString());
-  const activeStudyContext: StudyTrialContext | undefined = studyContext
-    ? {
-        ...studyContext,
-        startedAt: studyContext.startedAt ?? cameraStartedAt.current,
-      }
-    : undefined;
-  const cameraRef =
-    useRef<CameraView | null>(null);
 
-  const [permission, requestPermission] =
-    useCameraPermissions();
-
-  const [flashEnabled, setFlashEnabled] =
-    useState(false);
-
-  const [cameraReady, setCameraReady] =
-    useState(false);
-
-  const [capturing, setCapturing] =
-    useState(false);
-
-  const [cameraMode, setCameraMode] =
-    useState<CameraMode>('photo');
-
-  const [qrProcessing, setQrProcessing] =
-    useState(false);
-
-  /*
-    Crops the captured photo to approximately
-    the same central region shown by the blue
-    scan frame.
-
-    This prevents OCR from reading unrelated
-    text around the claim.
-
-    It then resizes the crop to a maximum width
-    of about 1600 px for faster OCR.
-  */
-  const preparePhotoForOcr = async (
-  uri: string,
-  width: number,
-  height: number,
-): Promise<string> => {
-  // Tighter crop around the center of the scan frame.
-  // This reduces accidental OCR of browser/app UI.
-
-  const cropWidth = Math.round(width * 0.92);
-  const cropHeight = Math.round(height * 0.18);
-
-  const originX = Math.max(
-    0,
-    Math.round((width - cropWidth) / 2),
-  );
-
-  const originY = Math.max(
-    0,
-    Math.round((height - cropHeight) / 2),
-  );
-
-  const resizeWidth = Math.min(
-    1600,
-    cropWidth,
-  );
-
-  const result =
-    await ImageManipulator.manipulateAsync(
-      uri,
-      [
-        {
-          crop: {
-            originX,
-            originY,
-            width: cropWidth,
-            height: cropHeight,
-          },
-        },
-        {
-          resize: {
-            width: resizeWidth,
-          },
-        },
-      ],
-      {
-        compress: 0.7,
-        format:
-          ImageManipulator.SaveFormat.JPEG,
-      },
-    );
-
-  return result.uri;
-};
-
-  const takePicture = async () => {
-    if (
-      !cameraRef.current ||
-      !cameraReady ||
-      capturing
-    ) {
+  useEffect(() => {
+    if (!permission) {
       return;
     }
 
-    try {
-      setCapturing(true);
+    if (!permission.granted && permission.canAskAgain) {
+      void requestPermission();
+    }
+  }, [permission, requestPermission]);
 
-      const photo =
-        await cameraRef.current.takePictureAsync(
-          {
-            quality: 0.9,
-          },
-        );
-
-      if (
-        !photo?.uri ||
-        !photo.width ||
-        !photo.height
-      ) {
-        Alert.alert(
-          'Camera Error',
-          'FactTrace could not process this photo.',
-        );
-
-        return;
-      }
-
-      /*
-        IMPORTANT:
-        Do not send the full camera photo.
-
-        Crop it to the scan box first so OCR
-        sees only the intended claim.
-      */
-      const croppedImageUri =
-        await preparePhotoForOcr(
-          photo.uri,
-          photo.width,
-          photo.height,
-        );
-
-      navigation.navigate(
-        'ClaimReview',
-        {
-          imageUri: croppedImageUri,
-          ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
-        },
-      );
-    } catch (error) {
-      console.log(
-        'Camera capture error:',
-        error,
-      );
-
-      Alert.alert(
-        'Camera Error',
-        'FactTrace could not capture this photo.',
-      );
-    } finally {
-      setCapturing(false);
+  const handleClose = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Home');
     }
   };
 
-  const handleQrScan = async (
-    result: BarcodeScanningResult,
-  ) => {
-    if (
-      cameraMode !== 'qr' ||
-      qrProcessing
-    ) {
-      return;
-    }
-
-    const claimId =
-      result.data?.trim();
-
-    if (!claimId) {
-      return;
-    }
-
-    setQrProcessing(true);
-
-    // In a study, do not let a QR code silently switch the assigned claim.
-    if (activeStudyContext && claimId !== activeStudyContext.claimId) {
-      Alert.alert(
-        'Different claim scanned',
-        'This QR code does not match the assigned claim for the current trial.',
-        [{ text: 'Scan again', onPress: () => setQrProcessing(false) }],
-      );
+  const handleCapture = async () => {
+    if (!cameraRef.current || !isCameraReady || isCapturing) {
       return;
     }
 
     try {
-      const response =
-        await verifyClaim('', {
-          source: 'qr',
-          claimId,
-        });
+      setIsCapturing(true);
 
-      if (
-        !response.success ||
-        !response.data
-      ) {
-        Alert.alert(
-          'QR Verification Failed',
-          typeof response.error ===
-            'string'
-            ? response.error
-            : response.error
-                ?.message ??
-                'FactTrace could not verify this QR code.',
-        );
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.85,
+        skipProcessing: false,
+      });
 
-        setQrProcessing(false);
-
-        return;
+      if (!photo?.uri) {
+        throw new Error('No image was captured.');
       }
 
-      if (
-        activeStudyContext &&
-        response.data.claimId &&
-        response.data.claimId !== activeStudyContext.claimId
-      ) {
-        Alert.alert(
-          'Different claim returned',
-          'The verification result does not match the assigned claim.',
-        );
-        setQrProcessing(false);
-        return;
-      }
-
-      navigation.navigate(
-        'VerificationResults',
-        {
-          result: response.data,
-          ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
-
-          evaluation: {
-            inputSource: 'qr',
-
-            startedAt:
-              activeStudyContext?.startedAt ?? new Date().toISOString(),
-          },
-        },
-      );
+      navigation.navigate('ClaimReview', {
+        imageUri: photo.uri,
+        studyContext,
+      });
     } catch (error) {
-      console.log(
-        'QR verification error:',
-        error,
-      );
+      console.error('Camera capture failed:', error);
 
       Alert.alert(
-        'QR Verification Failed',
-        error instanceof Error
-          ? error.message
-          : 'FactTrace could not verify this QR code.',
+        'Could not capture image',
+        'Please try taking the photo again.',
       );
-
-      setQrProcessing(false);
+    } finally {
+      setIsCapturing(false);
     }
   };
 
   if (!permission) {
     return (
-      <View
-        style={
-          styles.permissionLoading
-        }
-      >
+      <SafeAreaView style={styles.permissionScreen}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+
         <ActivityIndicator
           size="large"
           color={COLORS.blue}
         />
 
-        <Text
-          style={
-            styles.permissionLoadingText
-          }
-        >
-          Preparing camera...
+        <Text style={styles.permissionText}>
+          Checking camera permission...
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView
-        style={
-          styles.permissionScreen
-        }
-      >
-        <StatusBar style="dark" />
+      <SafeAreaView style={styles.permissionScreen}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
 
-        <View
-          style={
-            styles.permissionHeader
-          }
-        >
-          <TouchableOpacity
-            style={
-              styles.lightBackButton
-            }
-            activeOpacity={0.8}
-            onPress={() =>
-              navigation.goBack()
-            }
-          >
-            <Ionicons
-              name="arrow-back"
-              size={23}
-              color={
-                COLORS.textPrimary
-              }
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View
-          style={
-            styles.permissionContent
-          }
-        >
-          <View
-            style={
-              styles.permissionIcon
-            }
-          >
+        <View style={styles.permissionCard}>
+          <View style={styles.permissionIcon}>
             <Ionicons
               name="camera-outline"
               size={38}
@@ -377,70 +116,41 @@ export default function CameraScreen({
             />
           </View>
 
-          <Text
-            style={
-              styles.permissionTitle
-            }
-          >
-            Camera access needed
+          <Text style={styles.permissionTitle}>
+            Camera access is required
           </Text>
 
-          <Text
-            style={
-              styles.permissionDescription
-            }
-          >
-            FactTrace uses your
-            camera to capture claims
-            and scan QR codes.
+          <Text style={styles.permissionText}>
+            FactTrace uses your camera to capture printed or on-screen claims
+            for OCR and verification.
           </Text>
+
+          {permission.canAskAgain ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={styles.permissionButton}
+              onPress={() => void requestPermission()}
+            >
+              <Text style={styles.permissionButtonText}>
+                Allow Camera Access
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.permissionHelp}>
+              Camera permission is disabled in your device settings. Enable it
+              for FactTrace and reopen the camera.
+            </Text>
+          )}
 
           <TouchableOpacity
-            style={
-              styles.permissionButton
-            }
-            activeOpacity={0.85}
-            onPress={
-              requestPermission
-            }
+            accessibilityRole="button"
+            style={styles.backToHomeButton}
+            onPress={handleClose}
           >
-            <Ionicons
-              name="camera-outline"
-              size={21}
-              color={COLORS.white}
-            />
-
-            <Text
-              style={
-                styles.permissionButtonText
-              }
-            >
-              Allow Camera Access
+            <Text style={styles.backToHomeText}>
+              Go Back
             </Text>
           </TouchableOpacity>
-
-          <View
-            style={
-              styles.permissionPrivacy
-            }
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={16}
-              color={
-                COLORS.textMuted
-              }
-            />
-
-            <Text
-              style={
-                styles.permissionPrivacyText
-              }
-            >
-              Photos are used only
-              to extract claim text.
-            </Text>
-          </View>
         </View>
       </SafeAreaView>
     );
@@ -452,476 +162,92 @@ export default function CameraScreen({
 
       <CameraView
         ref={cameraRef}
-        style={
-          StyleSheet.absoluteFill
-        }
+        style={StyleSheet.absoluteFill}
         facing="back"
-        flash={
-          flashEnabled
-            ? 'on'
-            : 'off'
-        }
-        mode="picture"
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-        onBarcodeScanned={
-          cameraMode === 'qr'
-            ? handleQrScan
-            : undefined
-        }
-        onCameraReady={() =>
-          setCameraReady(true)
-        }
+        onCameraReady={() => setIsCameraReady(true)}
       />
 
-      <View
-        style={styles.topShade}
-      />
-
-      <View
-        style={styles.bottomShade}
-      />
-
-      <SafeAreaView
-        style={styles.overlay}
-      >
+      <SafeAreaView style={styles.overlay}>
         <View style={styles.topBar}>
           <TouchableOpacity
-            activeOpacity={0.8}
-            style={
-              styles.controlButton
-            }
-            onPress={() =>
-              navigation.goBack()
-            }
+            accessibilityRole="button"
+            accessibilityLabel="Close camera"
+            style={styles.closeButton}
+            onPress={handleClose}
           >
             <Ionicons
-              name="arrow-back"
-              size={24}
-              color={COLORS.white}
+              name="close"
+              size={28}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
 
-          <View
-            style={styles.titleArea}
-          >
-            <Text
-              style={styles.title}
-            >
-              {cameraMode ===
-              'photo'
-                ? 'Scan a Claim'
-                : 'Scan QR Code'}
+          <View style={styles.topTitleContainer}>
+            <Text style={styles.topTitle}>
+              Scan a Claim
             </Text>
 
-            <View
-              style={styles.liveRow}
-            >
-              <View
-                style={
-                  styles.liveDot
-                }
-              />
+            {studyContext ? (
+              <Text style={styles.studyLabel}>
+                Study Trial {studyContext.trialIndex}
+              </Text>
+            ) : null}
+          </View>
 
-              <Text
-                style={
-                  styles.liveText
-                }
-              >
-                LIVE CAMERA
+          <View style={styles.topSpacer} />
+        </View>
+
+        <View style={styles.centerArea}>
+          <View style={styles.guideBox}>
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+
+            <View style={styles.guideTextContainer}>
+              <Text style={styles.guideTitle}>
+                Position the claim inside the frame
+              </Text>
+
+              <Text style={styles.guideText}>
+                Keep the text clear, well lit, and as straight as possible.
               </Text>
             </View>
           </View>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[
-              styles.controlButton,
-
-              flashEnabled &&
-                styles.controlButtonActive,
-            ]}
-            onPress={() =>
-              setFlashEnabled(
-                current =>
-                  !current,
-              )
-            }
-          >
-            <Ionicons
-              name={
-                flashEnabled
-                  ? 'flash'
-                  : 'flash-off-outline'
-              }
-              size={23}
-              color={COLORS.white}
-            />
-          </TouchableOpacity>
         </View>
 
-        <View
-          style={styles.modeSwitch}
-        >
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[
-              styles.modeButton,
-
-              cameraMode ===
-                'photo' &&
-                styles.modeButtonActive,
-            ]}
-            onPress={() => {
-              setQrProcessing(false);
-
-              setCameraMode(
-                'photo',
-              );
-            }}
-          >
-            <Ionicons
-              name="camera-outline"
-              size={18}
-              color={
-                cameraMode ===
-                'photo'
-                  ? COLORS.white
-                  : '#C7D4E5'
-              }
-            />
-
-            <Text
-              style={[
-                styles.modeButtonText,
-
-                cameraMode ===
-                  'photo' &&
-                  styles.modeButtonTextActive,
-              ]}
-            >
-              Photo
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[
-              styles.modeButton,
-
-              cameraMode === 'qr' &&
-                styles.modeButtonActive,
-            ]}
-            onPress={() => {
-              setQrProcessing(false);
-
-              setCameraMode('qr');
-            }}
-          >
-            <Ionicons
-              name="qr-code-outline"
-              size={18}
-              color={
-                cameraMode === 'qr'
-                  ? COLORS.white
-                  : '#C7D4E5'
-              }
-            />
-
-            <Text
-              style={[
-                styles.modeButtonText,
-
-                cameraMode === 'qr' &&
-                  styles.modeButtonTextActive,
-              ]}
-            >
-              QR
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View
-          style={styles.guideArea}
-        >
-          <View
-            style={styles.guidePill}
-          >
-            <Ionicons
-              name={
-                cameraMode ===
-                'photo'
-                  ? 'scan-outline'
-                  : 'qr-code-outline'
-              }
-              size={18}
-              color={COLORS.white}
-            />
-
-            <Text
-              style={styles.guideText}
-            >
-              {cameraMode ===
-              'photo'
-                ? 'Place only the claim inside the frame'
-                : 'Align the QR code inside the frame'}
-            </Text>
-          </View>
-
-          <View
-            style={styles.scanFrame}
-          >
-            <View
-              style={[
-                styles.corner,
-                styles.topLeft,
-              ]}
-            />
-
-            <View
-              style={[
-                styles.corner,
-                styles.topRight,
-              ]}
-            />
-
-            <View
-              style={[
-                styles.corner,
-                styles.bottomLeft,
-              ]}
-            />
-
-            <View
-              style={[
-                styles.corner,
-                styles.bottomRight,
-              ]}
-            />
-
-            <View
-              style={styles.scanLine}
-            />
-
-            {cameraMode === 'qr' &&
-              qrProcessing && (
-                <View
-                  style={
-                    styles.qrLoadingOverlay
-                  }
-                >
-                  <ActivityIndicator
-                    size="large"
-                    color={
-                      COLORS.white
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.qrLoadingText
-                    }
-                  >
-                    Checking QR
-                    claim...
-                  </Text>
-                </View>
-              )}
-          </View>
-
-          <Text
-            style={styles.helperText}
-          >
-            {cameraMode ===
-            'photo'
-              ? 'Only text inside the blue frame will be analyzed'
-              : 'Point the camera at a FactTrace claim QR code'}
+        <View style={styles.bottomArea}>
+          <Text style={styles.captureHint}>
+            Capture one factual claim at a time.
           </Text>
-        </View>
 
-        <View
-          style={styles.bottomArea}
-        >
-          <View
-            style={styles.infoCard}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Capture claim"
+            disabled={!isCameraReady || isCapturing}
+            style={[
+              styles.captureOuter,
+              (!isCameraReady || isCapturing) &&
+                styles.captureOuterDisabled,
+            ]}
+            onPress={() => void handleCapture()}
           >
-            <View
-              style={styles.infoIcon}
-            >
-              <Ionicons
-                name={
-                  cameraMode ===
-                  'photo'
-                    ? 'text-outline'
-                    : 'qr-code-outline'
-                }
-                size={20}
-                color="#CFE2FF"
-              />
-            </View>
-
-            <View
-              style={
-                styles.infoTextArea
-              }
-            >
-              <Text
-                style={
-                  styles.infoTitle
-                }
-              >
-                {cameraMode ===
-                'photo'
-                  ? 'Capture only the claim'
-                  : 'QR scan mode'}
-              </Text>
-
-              <Text
-                style={
-                  styles.infoDescription
-                }
-              >
-                {cameraMode ===
-                'photo'
-                  ? 'Keep unrelated text outside the blue frame. FactTrace crops to this area before OCR.'
-                  : 'No photo is needed. FactTrace detects the QR code automatically.'}
-              </Text>
-            </View>
-          </View>
-
-          {cameraMode ===
-          'photo' ? (
-            <>
-              <View
-                style={
-                  styles.captureRow
-                }
-              >
-                <View
-                  style={
-                    styles.sideSpace
-                  }
+            <View style={styles.captureInner}>
+              {isCapturing ? (
+                <ActivityIndicator
+                  color="#FFFFFF"
+                  size="small"
                 />
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={
-                    styles.captureOuter
-                  }
-                  onPress={
-                    takePicture
-                  }
-                  disabled={
-                    capturing ||
-                    !cameraReady
-                  }
-                >
-                  <View
-                    style={[
-                      styles.captureInner,
-
-                      capturing &&
-                        styles.captureInnerBusy,
-                    ]}
-                  >
-                    {capturing ? (
-                      <ActivityIndicator
-                        color={
-                          COLORS.white
-                        }
-                        size="small"
-                      />
-                    ) : (
-                      <Ionicons
-                        name="camera"
-                        size={30}
-                        color={
-                          COLORS.white
-                        }
-                      />
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={
-                    styles.manualButton
-                  }
-                  onPress={() =>
-                    navigation.navigate(
-                      'ClaimReview',
-                      {
-                        claimText: '',
-                        ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
-                      },
-                    )
-                  }
-                >
-                  <View
-                    style={
-                      styles.manualIconCircle
-                    }
-                  >
-                    <Ionicons
-                      name="document-text-outline"
-                      size={21}
-                      color={
-                        COLORS.white
-                      }
-                    />
-                  </View>
-
-                  <Text
-                    style={
-                      styles.manualText
-                    }
-                  >
-                    Enter Manually
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text
-                style={
-                  styles.captureHint
-                }
-              >
-                Tap to capture
-              </Text>
-            </>
-          ) : (
-            <View
-              style={
-                styles.qrBottomArea
-              }
-            >
-              <Ionicons
-                name="qr-code-outline"
-                size={28}
-                color={
-                  COLORS.white
-                }
-              />
-
-              <Text
-                style={
-                  styles.qrBottomText
-                }
-              >
-                QR codes are
-                detected automatically
-              </Text>
+              ) : null}
             </View>
-          )}
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>
   );
 }
 
-const styles =
+const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
     screen: {
       flex: 1,
@@ -930,169 +256,70 @@ const styles =
 
     overlay: {
       flex: 1,
-    },
-
-    topShade: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 190,
-      backgroundColor:
-        'rgba(4, 15, 28, 0.44)',
-    },
-
-    bottomShade: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 300,
-      backgroundColor:
-        'rgba(4, 15, 28, 0.62)',
+      justifyContent: 'space-between',
+      backgroundColor: 'rgba(0, 0, 0, 0.18)',
     },
 
     topBar: {
-      marginTop: 8,
-      paddingHorizontal: 20,
       flexDirection: 'row',
       alignItems: 'center',
+      paddingHorizontal: 18,
+      paddingTop: 8,
     },
 
-    controlButton: {
+    closeButton: {
       width: 46,
       height: 46,
-      borderRadius: 15,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor:
-        'rgba(15, 31, 49, 0.55)',
-      borderWidth: 1,
-      borderColor:
-        'rgba(255,255,255,0.15)',
+      borderRadius: 23,
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
     },
 
-    controlButtonActive: {
-      backgroundColor:
-        'rgba(47, 107, 242, 0.75)',
-      borderColor:
-        'rgba(170, 202, 255, 0.7)',
-    },
-
-    titleArea: {
+    topTitleContainer: {
       flex: 1,
       alignItems: 'center',
+      paddingHorizontal: 10,
     },
 
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: COLORS.white,
+    topTitle: {
+      color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: '800',
     },
 
-    liveRow: {
-      marginTop: 4,
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-
-    liveDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      marginRight: 5,
-      backgroundColor: '#53D28C',
-    },
-
-    liveText: {
-      fontSize: 10,
-      fontWeight: '700',
-      letterSpacing: 1,
-      color: '#DCE8F4',
-    },
-
-    modeSwitch: {
-      alignSelf: 'center',
-      marginTop: 18,
-      padding: 4,
-      flexDirection: 'row',
-      borderRadius: 16,
-      backgroundColor:
-        'rgba(10, 29, 48, 0.82)',
-      borderWidth: 1,
-      borderColor:
-        'rgba(255,255,255,0.14)',
-    },
-
-    modeButton: {
-      minWidth: 105,
-      height: 42,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    modeButtonActive: {
-      backgroundColor:
-        COLORS.blue,
-    },
-
-    modeButtonText: {
-      marginLeft: 7,
-      color: '#C7D4E5',
-      fontSize: 13,
-      fontWeight: '700',
-    },
-
-    modeButtonTextActive: {
-      color: COLORS.white,
-    },
-
-    guideArea: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 26,
-      paddingBottom: 25,
-    },
-
-    guidePill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor:
-        'rgba(10, 29, 48, 0.72)',
-      borderWidth: 1,
-      borderColor:
-        'rgba(255,255,255,0.15)',
-      paddingHorizontal: 14,
-      paddingVertical: 9,
-      borderRadius: 20,
-      marginBottom: 19,
-    },
-
-    guideText: {
-      marginLeft: 7,
-      color: COLORS.white,
-      fontSize: 13,
+    studyLabel: {
+      marginTop: 2,
+      color: '#D5E0EA',
+      fontSize: 11,
       fontWeight: '600',
     },
 
-    scanFrame: {
-      width: '100%',
-      height: 235,
-      position: 'relative',
-      borderRadius: 20,
-      backgroundColor:
-        'rgba(255,255,255,0.025)',
+    topSpacer: {
+      width: 46,
+    },
+
+    centerArea: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 22,
+    },
+
+    guideBox: {
+      width: Math.min(SCREEN_WIDTH - 44, 420),
+      minHeight: 260,
+      justifyContent: 'flex-end',
+      borderRadius: 18,
+      backgroundColor: 'rgba(0, 0, 0, 0.08)',
       overflow: 'hidden',
     },
 
     corner: {
       position: 'absolute',
-      width: 45,
-      height: 45,
+      width: 42,
+      height: 42,
+      borderColor: '#FFFFFF',
     },
 
     topLeft: {
@@ -1100,8 +327,7 @@ const styles =
       left: 0,
       borderTopWidth: 4,
       borderLeftWidth: 4,
-      borderColor: '#69A2FF',
-      borderTopLeftRadius: 18,
+      borderTopLeftRadius: 16,
     },
 
     topRight: {
@@ -1109,8 +335,7 @@ const styles =
       right: 0,
       borderTopWidth: 4,
       borderRightWidth: 4,
-      borderColor: '#69A2FF',
-      borderTopRightRadius: 18,
+      borderTopRightRadius: 16,
     },
 
     bottomLeft: {
@@ -1118,8 +343,7 @@ const styles =
       left: 0,
       borderBottomWidth: 4,
       borderLeftWidth: 4,
-      borderColor: '#69A2FF',
-      borderBottomLeftRadius: 18,
+      borderBottomLeftRadius: 16,
     },
 
     bottomRight: {
@@ -1127,284 +351,150 @@ const styles =
       right: 0,
       borderBottomWidth: 4,
       borderRightWidth: 4,
-      borderColor: '#69A2FF',
-      borderBottomRightRadius: 18,
+      borderBottomRightRadius: 16,
     },
 
-    scanLine: {
-      position: 'absolute',
-      left: 20,
-      right: 20,
-      top: '50%',
-      height: 1,
-      backgroundColor:
-        'rgba(104, 162, 255, 0.55)',
+    guideTextContainer: {
+      margin: 18,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: 'rgba(0, 0, 0, 0.56)',
     },
 
-    qrLoadingOverlay: {
-      ...StyleSheet.absoluteFill,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 20,
-      backgroundColor:
-        'rgba(4, 15, 28, 0.72)',
-    },
-
-    qrLoadingText: {
-      marginTop: 12,
-      color: COLORS.white,
+    guideTitle: {
+      color: '#FFFFFF',
       fontSize: 14,
-      fontWeight: '700',
+      fontWeight: '800',
+      textAlign: 'center',
     },
 
-    helperText: {
-      marginTop: 16,
+    guideText: {
+      marginTop: 4,
+      color: '#E2E8F0',
+      fontSize: 12,
+      lineHeight: 17,
       textAlign: 'center',
-      color:
-        'rgba(255,255,255,0.82)',
-      fontSize: 13,
-      lineHeight: 18,
     },
 
     bottomArea: {
-      paddingHorizontal: 20,
-      paddingBottom: 10,
-    },
-
-    infoCard: {
-      flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 13,
-      paddingVertical: 11,
-      borderRadius: 15,
-      borderWidth: 1,
-      borderColor:
-        'rgba(255,255,255,0.11)',
-      backgroundColor:
-        'rgba(15, 34, 53, 0.75)',
-    },
-
-    infoIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: 11,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor:
-        'rgba(73, 128, 200, 0.25)',
-    },
-
-    infoTextArea: {
-      flex: 1,
-      marginLeft: 10,
-    },
-
-    infoTitle: {
-      color: COLORS.white,
-      fontSize: 13,
-      fontWeight: '700',
-    },
-
-    infoDescription: {
-      marginTop: 2,
-      color: '#BCCADD',
-      fontSize: 11,
-      lineHeight: 15,
-    },
-
-    captureRow: {
-      marginTop: 18,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'space-between',
-    },
-
-    sideSpace: {
-      width: 80,
-    },
-
-    captureOuter: {
-      width: 78,
-      height: 78,
-      borderRadius: 39,
-      borderWidth: 4,
-      borderColor:
-        'rgba(255,255,255,0.9)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor:
-        'rgba(255,255,255,0.14)',
-    },
-
-    captureInner: {
-      width: 62,
-      height: 62,
-      borderRadius: 31,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor:
-        COLORS.blue,
-    },
-
-    captureInnerBusy: {
-      opacity: 0.65,
-    },
-
-    manualButton: {
-      width: 88,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    manualIconCircle: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor:
-        'rgba(255,255,255,0.14)',
-      borderWidth: 1,
-      borderColor:
-        'rgba(255,255,255,0.14)',
-    },
-
-    manualText: {
-      marginTop: 5,
-      fontSize: 11,
-      fontWeight: '600',
-      color: '#DCE8F4',
-      textAlign: 'center',
+      paddingHorizontal: 24,
+      paddingBottom: 26,
     },
 
     captureHint: {
-      marginTop: 7,
-      marginBottom: 4,
+      marginBottom: 16,
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '600',
       textAlign: 'center',
-      color:
-        'rgba(255,255,255,0.65)',
-      fontSize: 11,
+      textShadowColor: 'rgba(0, 0, 0, 0.75)',
+      textShadowRadius: 4,
     },
 
-    qrBottomArea: {
-      marginTop: 22,
-      marginBottom: 12,
+    captureOuter: {
+      width: 80,
+      height: 80,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: 40,
+      borderWidth: 5,
+      borderColor: '#FFFFFF',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
     },
 
-    qrBottomText: {
-      marginTop: 8,
-      color: '#DCE8F4',
-      fontSize: 12,
-      fontWeight: '600',
+    captureOuterDisabled: {
+      opacity: 0.5,
+    },
+
+    captureInner: {
+      width: 60,
+      height: 60,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 30,
+      backgroundColor: '#FFFFFF',
     },
 
     permissionScreen: {
       flex: 1,
-      backgroundColor: '#F5F8FC',
-    },
-
-    permissionHeader: {
-      paddingHorizontal: 22,
-      marginTop: 12,
-    },
-
-    lightBackButton: {
-      width: 45,
-      height: 45,
-      borderRadius: 15,
-      backgroundColor:
-        COLORS.white,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#1B3655',
-      shadowOpacity: 0.07,
-      shadowRadius: 10,
-      shadowOffset: {
-        width: 0,
-        height: 4,
-      },
+      paddingHorizontal: 24,
+      backgroundColor: COLORS.background,
     },
 
-    permissionContent: {
-      flex: 1,
-      justifyContent: 'center',
+    permissionCard: {
+      width: '100%',
+      maxWidth: 430,
       alignItems: 'center',
-      paddingHorizontal: 34,
-      paddingBottom: 80,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 20,
+      backgroundColor: COLORS.surface,
+      padding: 26,
     },
 
     permissionIcon: {
-      width: 82,
-      height: 82,
-      borderRadius: 25,
-      backgroundColor: '#E9F1FF',
+      width: 72,
+      height: 72,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: 36,
+      backgroundColor: COLORS.blueLight,
+      marginBottom: 18,
     },
 
     permissionTitle: {
-      marginTop: 23,
       color: COLORS.textPrimary,
-      fontSize: 26,
+      fontSize: 21,
       fontWeight: '800',
-      letterSpacing: -0.4,
+      textAlign: 'center',
     },
 
-    permissionDescription: {
+    permissionText: {
       marginTop: 10,
-      maxWidth: 310,
-      textAlign: 'center',
-      color:
-        COLORS.textSecondary,
-      fontSize: 15,
+      color: COLORS.textSecondary,
+      fontSize: 14,
       lineHeight: 21,
+      textAlign: 'center',
+    },
+
+    permissionHelp: {
+      marginTop: 18,
+      color: COLORS.textMuted,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
     },
 
     permissionButton: {
-      marginTop: 27,
-      height: 54,
-      borderRadius: 15,
-      paddingHorizontal: 22,
-      backgroundColor:
-        COLORS.blue,
-      flexDirection: 'row',
+      width: '100%',
+      minHeight: 50,
       alignItems: 'center',
       justifyContent: 'center',
+      marginTop: 22,
+      borderRadius: 13,
+      backgroundColor: COLORS.blue,
     },
 
     permissionButtonText: {
-      marginLeft: 8,
       color: COLORS.white,
       fontSize: 15,
-      fontWeight: '700',
+      fontWeight: '800',
     },
 
-    permissionPrivacy: {
-      marginTop: 18,
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-
-    permissionPrivacyText: {
-      marginLeft: 6,
-      color: COLORS.textMuted,
-      fontSize: 11.5,
-    },
-
-    permissionLoading: {
-      flex: 1,
+    backToHomeButton: {
+      minHeight: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: '#F5F8FC',
+      marginTop: 10,
+      paddingHorizontal: 14,
     },
 
-    permissionLoadingText: {
-      marginTop: 12,
-      color:
-        COLORS.textSecondary,
+    backToHomeText: {
+      color: COLORS.blue,
       fontSize: 14,
+      fontWeight: '700',
     },
   });
