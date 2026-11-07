@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 import {
@@ -17,6 +18,7 @@ import { COLORS } from '../constants/app';
 import { RootStackParamList } from '../navigation/types';
 import { signOut } from '../services/authService';
 import { useAuth } from '../hooks/useAuth';
+import { saveWalkthroughState } from '../services/walkthroughService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -29,8 +31,10 @@ export default function ProfileScreen({ navigation }: Props) {
     if (isSigningOut) {
       return;
     }
+
     setError(null);
     setIsSigningOut(true);
+
     try {
       await signOut();
       navigation.reset({
@@ -44,9 +48,33 @@ export default function ProfileScreen({ navigation }: Props) {
     }
   };
 
+  const handleReplayWalkthrough = async () => {
+    setError(null);
+
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'scan',
+      });
+
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Home',
+            params: { walkthroughReplay: true },
+          },
+        ],
+      });
+    } catch {
+      setError('Could not restart the walkthrough. Please try again.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -60,9 +88,15 @@ export default function ProfileScreen({ navigation }: Props) {
               : navigation.navigate('Home')
           }
         >
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons
+            name="arrow-back"
+            size={22}
+            color={COLORS.textPrimary}
+          />
         </TouchableOpacity>
+
         <Text style={styles.title}>Profile</Text>
+
         <Text style={styles.subtitle}>
           {user
             ? 'Your FactTrace account'
@@ -77,9 +111,12 @@ export default function ProfileScreen({ navigation }: Props) {
               color={COLORS.blue}
             />
           </View>
+
           <Text style={styles.welcome}>
-            {user?.displayName || (user ? 'Welcome back!' : 'Welcome, Guest!')}
+            {user?.displayName ||
+              (user ? 'Welcome back!' : 'Welcome, Guest!')}
           </Text>
+
           <Text style={styles.helper}>
             {user?.email ||
               (user
@@ -93,6 +130,16 @@ export default function ProfileScreen({ navigation }: Props) {
             {error}
           </Text>
         ) : null}
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[styles.button, styles.secondaryButton]}
+          onPress={() => void handleReplayWalkthrough()}
+        >
+          <Text style={styles.buttonText}>
+            Replay Walkthrough
+          </Text>
+        </TouchableOpacity>
 
         {user ? (
           <TouchableOpacity
@@ -114,8 +161,11 @@ export default function ProfileScreen({ navigation }: Props) {
               style={[styles.button, styles.primaryButton]}
               onPress={() => navigation.navigate('SignUp')}
             >
-              <Text style={styles.primaryText}>Create Account</Text>
+              <Text style={styles.primaryText}>
+                Create Account
+              </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.85}
               style={[styles.button, styles.secondaryButton]}
@@ -123,12 +173,15 @@ export default function ProfileScreen({ navigation }: Props) {
             >
               <Text style={styles.buttonText}>Log In</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.85}
               style={[styles.button, styles.outlineButton]}
               onPress={() => navigation.navigate('Home')}
             >
-              <Text style={styles.buttonText}>Continue as Guest</Text>
+              <Text style={styles.buttonText}>
+                Continue as Guest
+              </Text>
             </TouchableOpacity>
           </>
         )}

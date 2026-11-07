@@ -26,7 +26,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { RootStackParamList } from '../navigation/types';
+import { RootStackParamList, StudyTrialContext } from '../navigation/types';
 import { COLORS } from '../constants/app';
 
 import { verifyClaim } from '../services/verificationService';
@@ -40,7 +40,17 @@ type CameraMode = 'photo' | 'qr';
 
 export default function CameraScreen({
   navigation,
+  route,
 }: Props) {
+  // Keep the same study timer through photo retakes and QR verification.
+  const studyContext = route.params?.studyContext;
+  const cameraStartedAt = useRef(new Date().toISOString());
+  const activeStudyContext: StudyTrialContext | undefined = studyContext
+    ? {
+        ...studyContext,
+        startedAt: studyContext.startedAt ?? cameraStartedAt.current,
+      }
+    : undefined;
   const cameraRef =
     useRef<CameraView | null>(null);
 
@@ -177,6 +187,7 @@ export default function CameraScreen({
         'ClaimReview',
         {
           imageUri: croppedImageUri,
+          ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
         },
       );
     } catch (error) {
@@ -213,6 +224,16 @@ export default function CameraScreen({
 
     setQrProcessing(true);
 
+    // In a study, do not let a QR code silently switch the assigned claim.
+    if (activeStudyContext && claimId !== activeStudyContext.claimId) {
+      Alert.alert(
+        'Different claim scanned',
+        'This QR code does not match the assigned claim for the current trial.',
+        [{ text: 'Scan again', onPress: () => setQrProcessing(false) }],
+      );
+      return;
+    }
+
     try {
       const response =
         await verifyClaim('', {
@@ -239,16 +260,30 @@ export default function CameraScreen({
         return;
       }
 
+      if (
+        activeStudyContext &&
+        response.data.claimId &&
+        response.data.claimId !== activeStudyContext.claimId
+      ) {
+        Alert.alert(
+          'Different claim returned',
+          'The verification result does not match the assigned claim.',
+        );
+        setQrProcessing(false);
+        return;
+      }
+
       navigation.navigate(
         'VerificationResults',
         {
           result: response.data,
+          ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
 
           evaluation: {
             inputSource: 'qr',
 
             startedAt:
-              new Date().toISOString(),
+              activeStudyContext?.startedAt ?? new Date().toISOString(),
           },
         },
       );
@@ -819,6 +854,7 @@ export default function CameraScreen({
                       'ClaimReview',
                       {
                         claimText: '',
+                        ...(activeStudyContext ? { studyContext: activeStudyContext } : {}),
                       },
                     )
                   }

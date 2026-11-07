@@ -23,6 +23,7 @@ import {
   VerificationHistoryEntry,
 } from '../services/historyService';
 import { MatchStatus } from '../types/verification';
+import { saveWalkthroughState } from '../services/walkthroughService';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -72,7 +73,9 @@ function formatTimestamp(timestamp: string): string {
 
 export default function VerificationHistoryScreen({
   navigation,
+  route,
 }: Props) {
+  const isWalkthrough = Boolean(route.params?.walkthrough);
   const isFocused = useIsFocused();
   const authenticatedUser = useAuth();
   const [entries, setEntries] = useState<VerificationHistoryEntry[]>([]);
@@ -118,13 +121,49 @@ export default function VerificationHistoryScreen({
     };
   }, [authenticatedUser, isFocused, retryCount]);
 
+  const returnToWalkthroughHome = useCallback(async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'browser',
+      });
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Home',
+            params: { walkthroughContinue: true },
+          },
+        ],
+      });
+    } catch (error) {
+      console.warn('Could not continue walkthrough from History.', error);
+    }
+  }, [navigation]);
+
+  const skipWalkthrough = async () => {
+    try {
+      await saveWalkthroughState({ status: 'skipped' });
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    } catch (error) {
+      console.warn('Could not skip walkthrough from History.', error);
+    }
+  };
+
   const handleBack = useCallback(() => {
+    if (isWalkthrough) {
+      void returnToWalkthroughHome();
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
       navigation.navigate('Home');
     }
-  }, [navigation]);
+  }, [isWalkthrough, navigation, returnToWalkthroughHome]);
 
   const handleRetry = () => {
     setRetryCount(count => count + 1);
@@ -145,8 +184,13 @@ export default function VerificationHistoryScreen({
         key={entry.id}
         activeOpacity={0.82}
         accessibilityRole="button"
+        disabled={isWalkthrough}
         style={styles.entryCard}
-        onPress={() => openEntry(entry)}
+        onPress={() => {
+          if (!isWalkthrough) {
+            openEntry(entry);
+          }
+        }}
       >
         <View style={styles.entryHeader}>
           <View style={styles.entryDateArea}>
@@ -226,6 +270,35 @@ export default function VerificationHistoryScreen({
           <View style={styles.headerSpacer} />
         </View>
 
+        {isWalkthrough ? (
+          <View style={styles.walkthroughNotice}>
+            <Text style={styles.walkthroughNoticeTitle}>
+              Your completed checks
+            </Text>
+            <Text style={styles.walkthroughNoticeText}>
+              Real completed checks can be reviewed here. The fictional
+              walkthrough check is not saved to History.
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              activeOpacity={0.85}
+              style={styles.primaryButton}
+              onPress={() => void returnToWalkthroughHome()}
+            >
+              <Text style={styles.primaryButtonText}>Back to Home</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={() => void skipWalkthrough()}
+              style={styles.walkthroughSkip}
+            >
+              <Text style={styles.walkthroughSkipText}>
+                Skip Walkthrough
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {!authenticatedUser ? (
           <View style={styles.centerState}>
             <View style={styles.stateIcon}>
@@ -242,7 +315,7 @@ export default function VerificationHistoryScreen({
               Create an account to save and access your verification history.
               You can still verify claims as a guest.
             </Text>
-            <TouchableOpacity
+            {!isWalkthrough ? <TouchableOpacity
               activeOpacity={0.85}
               style={styles.primaryButton}
               onPress={() => navigation.navigate('Login')}
@@ -250,7 +323,7 @@ export default function VerificationHistoryScreen({
               <Text style={styles.primaryButtonText}>
                 Log In or Create Account
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
           </View>
         ) : isLoading ? (
           <View style={styles.centerState}>
@@ -291,13 +364,13 @@ export default function VerificationHistoryScreen({
             <Text style={styles.stateDescription}>
               Successful verifications will appear here when you’re signed in.
             </Text>
-            <TouchableOpacity
+            {!isWalkthrough ? <TouchableOpacity
               activeOpacity={0.85}
               style={styles.primaryButton}
               onPress={() => navigation.navigate('Camera')}
             >
               <Text style={styles.primaryButtonText}>Verify a claim</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
           </View>
         ) : (
           <ScrollView
@@ -352,6 +425,37 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 44,
+  },
+  walkthroughNotice: {
+    marginBottom: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDCC77',
+    backgroundColor: '#FFF9EB',
+    padding: 15,
+  },
+  walkthroughNoticeTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  walkthroughNoticeText: {
+    marginTop: 6,
+    marginBottom: 12,
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  walkthroughSkip: {
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  walkthroughSkipText: {
+    color: COLORS.blue,
+    fontSize: 13,
+    fontWeight: '700',
   },
   listContent: {
     paddingBottom: 32,
