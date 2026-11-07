@@ -1,12 +1,17 @@
-import React from 'react';
+
+import React, { useRef, useState } from 'react';
 
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  type ViewInstance,
+  type ScrollViewInstance,
+  useWindowDimensions,
 } from 'react-native';
 
 import { StatusBar } from 'expo-status-bar';
@@ -14,24 +19,481 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../constants/app';
 import { useAuth } from '../hooks/useAuth';
+import WalkthroughOverlay from '../components/WalkthroughOverlay';
+import { PRACTICE_RESULT } from '../services/walkthroughData';
+
+import {
+  getWalkthroughState,
+  saveWalkthroughState,
+  type WalkthroughStep,
+} from '../services/walkthroughService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-export default function HomeScreen({ navigation }: Props) {
+export default function HomeScreen({ navigation, route }: Props) {
   const user = useAuth();
+  const { height: windowHeight } = useWindowDimensions();
+
+  // The study assignment is provided by the study flow.
+  // Home does not create participant IDs or claim assignments.
+  const studyContext = route.params?.studyContext;
+
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
+  const scanButtonRef = useRef<ViewInstance>(null);
+  const manualEntryButtonRef = useRef<ViewInstance>(null);
+  const historyButtonRef = useRef<ViewInstance>(null);
+  const browserButtonRef = useRef<ViewInstance>(null);
+  const scrollOffset = useRef(0);
+
+  const [walkthroughStep, setWalkthroughStep] =
+    useState<WalkthroughStep | null>(null);
+
+  const [walkthroughMode, setWalkthroughMode] = useState<
+    'welcome' | 'spotlight' | 'complete' | null
+  >(null);
+
+  const [canResumeWalkthrough, setCanResumeWalkthrough] = useState(false);
+  const [measurementVersion, setMeasurementVersion] = useState(0);
+
+  const replayHandled = useRef(false);
+  const continueHandled = useRef(false);
+
+  const revealScanButton = React.useCallback(() => {
+    scrollViewRef.current?.scrollTo({
+      y: 0,
+      animated: true,
+    });
+
+    requestAnimationFrame(() => {
+      setMeasurementVersion(version => version + 1);
+    });
+  }, []);
+
+  const revealTourHomeTarget = React.useCallback((
+    target: { current: ViewInstance | null },
+  ) => {
+    requestAnimationFrame(() => {
+      target.current?.measureInWindow((_x, y, _width, targetHeight) => {
+        const visibleBottom = windowHeight - 130;
+        const overflow = y + targetHeight - visibleBottom;
+        if (overflow > 0) {
+          scrollViewRef.current?.scrollTo({
+            y: scrollOffset.current + overflow,
+            animated: true,
+          });
+        }
+        requestAnimationFrame(() => {
+          setMeasurementVersion(version => version + 1);
+        });
+      });
+    });
+  }, [windowHeight]);
+
+  // Load walkthrough progress whenever Home becomes active.
+  // The walkthrough appears automatically only on first use.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (studyContext) {
+        setWalkthroughMode(null);
+        return;
+      }
+
+      let active = true;
+
+      const loadProgress = async () => {
+        if (
+          route.params?.walkthroughContinue &&
+          !continueHandled.current
+        ) {
+          continueHandled.current = true;
+          const savedState = await getWalkthroughState();
+          const step =
+            savedState?.status === 'in_progress'
+              ? savedState.step
+              : undefined;
+
+          if (
+            active &&
+            (step === 'history' ||
+              step === 'browser' ||
+              step === 'ready')
+          ) {
+            setWalkthroughStep(step);
+            setCanResumeWalkthrough(false);
+            setWalkthroughMode(step === 'ready' ? 'complete' : 'spotlight');
+            if (step === 'history') {
+              revealTourHomeTarget(historyButtonRef);
+            } else if (step === 'browser') {
+              revealTourHomeTarget(browserButtonRef);
+            }
+          }
+
+          navigation.setParams({ walkthroughContinue: false });
+          return;
+        }
+
+        if (continueHandled.current) {
+          continueHandled.current = false;
+          return;
+        }
+
+        // Replay is started explicitly from Profile.
+        if (route.params?.walkthroughReplay && !replayHandled.current) {
+          replayHandled.current = true;
+
+          await saveWalkthroughState({
+            status: 'in_progress',
+            step: 'scan',
+          });
+
+          if (active) {
+            setWalkthroughStep('scan');
+            setCanResumeWalkthrough(false);
+            setWalkthroughMode('spotlight');
+            revealScanButton();
+          }
+
+          navigation.setParams({
+            walkthroughReplay: false,
+          });
+
+          return;
+        }
+
+        if (replayHandled.current) {
+          replayHandled.current = false;
+          return;
+        }
+
+        const savedState = await getWalkthroughState();
+
+        if (!active) {
+          return;
+        }
+
+        if (
+          savedState?.status === 'in_progress' &&
+          savedState.step
+        ) {
+          // An interrupted walkthrough can be resumed manually.
+          setWalkthroughStep(savedState.step);
+          setCanResumeWalkthrough(true);
+          setWalkthroughMode(null);
+        } else if (!savedState) {
+          // First launch only.
+          setWalkthroughStep(null);
+          setCanResumeWalkthrough(false);
+          setWalkthroughMode('welcome');
+        } else {
+          // Skipped or completed walkthroughs remain dismissed.
+          setWalkthroughStep(null);
+          setCanResumeWalkthrough(false);
+          setWalkthroughMode(null);
+        }
+      };
+
+      void loadProgress().catch(error => {
+        console.warn(
+          'Could not restore walkthrough progress.',
+          error,
+        );
+
+        Alert.alert(
+          'Walkthrough unavailable',
+          'Saved walkthrough progress could not be loaded. You can continue using FactTrace normally.',
+        );
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [
+      studyContext,
+      navigation,
+      revealScanButton,
+      revealTourHomeTarget,
+      route.params?.walkthroughReplay,
+      route.params?.walkthroughContinue,
+    ]),
+  );
+
+  const revealManualEntry = () => {
+    requestAnimationFrame(() => {
+      manualEntryButtonRef.current?.measureInWindow(
+        (_x, y, _width, height) => {
+          const visibleBottom = windowHeight - 130;
+
+          const nextOffset = Math.max(
+            0,
+            scrollOffset.current +
+              y +
+              height -
+              visibleBottom,
+          );
+
+          scrollViewRef.current?.scrollTo({
+            y: nextOffset,
+            animated: true,
+          });
+        },
+      );
+    });
+  };
+
+  const startWalkthrough = async () => {
+    const step = canResumeWalkthrough
+      ? walkthroughStep ?? 'scan'
+      : 'scan';
+
+    // Resume an unfinished claim-entry lesson.
+    if (
+      step === 'practice_claim' ||
+      step === 'practice_check'
+    ) {
+      setCanResumeWalkthrough(false);
+
+      navigation.navigate('ClaimReview', {
+        walkthrough: true,
+      });
+
+      return;
+    }
+
+    // Resume an unfinished results, evidence, or decision lesson.
+    if (
+      step === 'practice_pending' ||
+      step === 'result_match' ||
+      step === 'result_source' ||
+      step === 'evidence_details' ||
+      step === 'evidence_return' ||
+      step === 'result_decision' ||
+      step === 'result_sharing'
+    ) {
+      setCanResumeWalkthrough(false);
+
+      navigation.navigate('VerificationResults', {
+        result: PRACTICE_RESULT,
+        walkthrough: true,
+      });
+
+      return;
+    }
+
+    if (
+      step === 'history' ||
+      step === 'browser' ||
+      step === 'ready'
+    ) {
+      setWalkthroughStep(step);
+      setCanResumeWalkthrough(false);
+      setWalkthroughMode(step === 'ready' ? 'complete' : 'spotlight');
+      if (step === 'history') {
+        revealTourHomeTarget(historyButtonRef);
+      } else if (step === 'browser') {
+        revealTourHomeTarget(browserButtonRef);
+      }
+      return;
+    }
+
+    if (step === 'complete') {
+      try {
+        await saveWalkthroughState({
+          status: 'in_progress',
+          step: 'history',
+        });
+        setWalkthroughStep('history');
+        setCanResumeWalkthrough(false);
+        setWalkthroughMode('spotlight');
+        revealTourHomeTarget(historyButtonRef);
+      } catch (error) {
+        Alert.alert(
+          'Could not resume walkthrough',
+          error instanceof Error ? error.message : 'Please try again.',
+        );
+      }
+      return;
+    }
+
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step,
+      });
+
+      setWalkthroughStep(step);
+      setCanResumeWalkthrough(false);
+      setWalkthroughMode('spotlight');
+
+      if (step === 'scan') {
+        revealScanButton();
+      } else if (step === 'manual') {
+        revealManualEntry();
+      }
+    } catch (error) {
+      Alert.alert(
+        'Could not start walkthrough',
+        error instanceof Error
+          ? error.message
+          : 'Walkthrough progress could not be saved.',
+      );
+    }
+  };
+
+  const showManualEntryStep = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'manual',
+      });
+
+      setWalkthroughStep('manual');
+
+      setMeasurementVersion(version => version + 1);
+
+      revealManualEntry();
+    } catch (error) {
+      Alert.alert(
+        'Could not save walkthrough progress',
+        error instanceof Error
+          ? error.message
+          : 'Walkthrough progress could not be saved.',
+      );
+    }
+  };
+
+  const preparePracticeTransition = async () => {
+    try {
+      // The walkthrough uses a separate practice claim.
+      // No real verification or evaluation is started here.
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'practice_claim',
+        practiceClaim: '',
+      });
+
+      setWalkthroughStep('practice_claim');
+      setWalkthroughMode(null);
+
+      navigation.navigate('ClaimReview', {
+        walkthrough: true,
+      });
+    } catch (error) {
+      Alert.alert(
+        'Could not save walkthrough progress',
+        error instanceof Error
+          ? error.message
+          : 'Walkthrough progress could not be saved.',
+      );
+    }
+  };
+
+  const skipWalkthrough = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'skipped',
+      });
+
+      setWalkthroughMode(null);
+      setWalkthroughStep(null);
+      setCanResumeWalkthrough(false);
+    } catch (error) {
+      Alert.alert(
+        'Could not skip walkthrough',
+        error instanceof Error
+          ? error.message
+          : 'Walkthrough status could not be saved.',
+      );
+    }
+  };
+
+  const openWalkthroughHistory = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'history',
+      });
+      setWalkthroughMode(null);
+      navigation.navigate('VerificationHistory', { walkthrough: true });
+    } catch (error) {
+      Alert.alert(
+        'Could not save walkthrough progress',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
+  };
+
+  const openWalkthroughBrowser = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'browser',
+      });
+      setWalkthroughMode(null);
+      navigation.navigate('BrowserComparison', { walkthrough: true });
+    } catch (error) {
+      Alert.alert(
+        'Could not save walkthrough progress',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
+  };
+
+  const finishWalkthrough = async () => {
+    try {
+      await saveWalkthroughState({ status: 'completed' });
+      setWalkthroughMode(null);
+      setWalkthroughStep(null);
+      setCanResumeWalkthrough(false);
+    } catch (error) {
+      Alert.alert(
+        'Could not finish walkthrough',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
+  };
+
+  const onScroll = (offset: number) => {
+    scrollOffset.current = offset;
+
+    setMeasurementVersion(version => version + 1);
+  };
+
+  const continueAssignedTrial = () => {
+    if (!studyContext) {
+      return;
+    }
+
+    if (studyContext.condition === 'browser') {
+      navigation.navigate('BrowserComparison', {
+        studyContext,
+      });
+    } else {
+      // Camera must forward this context to ClaimReview and
+      // VerificationResults before the app study flow is complete.
+      navigation.navigate('Camera', {
+        studyContext,
+      });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={event =>
+          onScroll(event.nativeEvent.contentOffset.y)
+        }
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -138,58 +600,19 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         </LinearGradient>
 
-        {/* SCAN BUTTON */}
-        <TouchableOpacity
-          activeOpacity={0.88}
-          style={styles.scanButtonWrapper}
-          onPress={() => navigation.navigate('Camera')}
-        >
-          <LinearGradient
-            colors={['#3478F6', '#2563EB']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.scanButton}
-          >
-            <View style={styles.scanIconContainer}>
-              <Ionicons
-                name="scan-outline"
-                size={24}
-                color={COLORS.white}
-              />
-            </View>
-
-            <View style={styles.scanTextContainer}>
-              <Text style={styles.scanButtonTitle}>
-                Scan a Claim
-              </Text>
-
-              <Text style={styles.scanButtonSubtitle}>
-                Use your camera to capture text
-              </Text>
-            </View>
-
-            <Ionicons
-              name="arrow-forward"
-              size={22}
-              color={COLORS.white}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* SECONDARY ACTIONS */}
-        <View style={styles.secondaryActions}>
+        {/* RESUME WALKTHROUGH */}
+        {canResumeWalkthrough && !studyContext ? (
           <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.actionCard}
-            onPress={() =>
-              navigation.navigate('ClaimReview', {
-                claimText: '',
-              })
-            }
+            accessibilityRole="button"
+            style={[
+              styles.actionCard,
+              { marginTop: 14 },
+            ]}
+            onPress={() => void startWalkthrough()}
           >
             <View style={styles.actionIconBlue}>
               <Ionicons
-                name="create-outline"
+                name="play-outline"
                 size={23}
                 color={COLORS.blue}
               />
@@ -197,11 +620,11 @@ export default function HomeScreen({ navigation }: Props) {
 
             <View style={styles.actionTextContainer}>
               <Text style={styles.actionTitle}>
-                Enter Claim Manually
+                Resume Walkthrough
               </Text>
 
               <Text style={styles.actionSubtitle}>
-                Type or paste a claim instead
+                Continue your saved tutorial when you are ready
               </Text>
             </View>
 
@@ -211,14 +634,186 @@ export default function HomeScreen({ navigation }: Props) {
               color={COLORS.textMuted}
             />
           </TouchableOpacity>
+        ) : null}
 
+        {/* ASSIGNED STUDY TRIAL */}
+        {studyContext ? (
           <TouchableOpacity
             activeOpacity={0.8}
-            style={styles.actionCard}
-            onPress={() =>
-              navigation.navigate('VerificationHistory')
-            }
+            style={[
+              styles.actionCard,
+              { marginTop: 14 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Continue assigned ${
+              studyContext.condition === 'browser'
+                ? 'browser'
+                : 'FactTrace'
+            } trial ${studyContext.trialIndex}`}
+            onPress={continueAssignedTrial}
           >
+            <View style={styles.actionIconBlue}>
+              <Ionicons
+                name="clipboard-outline"
+                size={23}
+                color={COLORS.blue}
+              />
+            </View>
+
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>
+                Continue Assigned{' '}
+                {studyContext.condition === 'browser'
+                  ? 'Browser'
+                  : 'FactTrace'}{' '}
+                Trial
+              </Text>
+
+              <Text style={styles.actionSubtitle}>
+                {studyContext.participantId}
+                {' · '}
+                {studyContext.isPractice
+                  ? 'Practice'
+                  : 'Study'}
+                {' trial '}
+                {studyContext.trialIndex}
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={21}
+              color={COLORS.textMuted}
+            />
+          </TouchableOpacity>
+        ) : null}
+
+        {/* SCAN BUTTON */}
+        <View
+          ref={scanButtonRef}
+          collapsable={false}
+        >
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={styles.scanButtonWrapper}
+            onPress={() => {
+              if (
+                walkthroughMode === 'spotlight' &&
+                walkthroughStep === 'scan'
+              ) {
+                void showManualEntryStep();
+                return;
+              }
+
+              if (walkthroughMode) {
+                return;
+              }
+
+              navigation.navigate('Camera');
+            }}
+          >
+            <LinearGradient
+              colors={['#3478F6', '#2563EB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.scanButton}
+            >
+              <View style={styles.scanIconContainer}>
+                <Ionicons
+                  name="scan-outline"
+                  size={24}
+                  color={COLORS.white}
+                />
+              </View>
+
+              <View style={styles.scanTextContainer}>
+                <Text style={styles.scanButtonTitle}>
+                  Scan a Claim
+                </Text>
+
+                <Text style={styles.scanButtonSubtitle}>
+                  Use your camera to capture text
+                </Text>
+              </View>
+
+              <Ionicons
+                name="arrow-forward"
+                size={22}
+                color={COLORS.white}
+              />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* SECONDARY ACTIONS */}
+        <View style={styles.secondaryActions}>
+          <View
+            ref={manualEntryButtonRef}
+            collapsable={false}
+          >
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.actionCard}
+              onPress={() => {
+                if (
+                  walkthroughMode === 'spotlight' &&
+                  walkthroughStep === 'manual'
+                ) {
+                  void preparePracticeTransition();
+                  return;
+                }
+
+                if (walkthroughMode) {
+                  return;
+                }
+
+                navigation.navigate('ClaimReview', {
+                  claimText: '',
+                });
+              }}
+            >
+              <View style={styles.actionIconBlue}>
+                <Ionicons
+                  name="create-outline"
+                  size={23}
+                  color={COLORS.blue}
+                />
+              </View>
+
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionTitle}>
+                  Enter Claim Manually
+                </Text>
+
+                <Text style={styles.actionSubtitle}>
+                  Type or paste a claim instead
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={21}
+                color={COLORS.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View ref={historyButtonRef} collapsable={false}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.actionCard}
+              onPress={() => {
+                if (
+                  walkthroughMode === 'spotlight' &&
+                  walkthroughStep === 'history'
+                ) {
+                  void openWalkthroughHistory();
+                  return;
+                }
+                if (walkthroughMode) return;
+                navigation.navigate('VerificationHistory');
+              }}
+            >
             <View style={styles.actionIconPurple}>
               <Ionicons
                 name="time-outline"
@@ -242,13 +837,25 @@ export default function HomeScreen({ navigation }: Props) {
               size={21}
               color={COLORS.textMuted}
             />
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('BrowserComparison')}
-          >
+          <View ref={browserButtonRef} collapsable={false}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.actionCard}
+              onPress={() => {
+                if (
+                  walkthroughMode === 'spotlight' &&
+                  walkthroughStep === 'browser'
+                ) {
+                  void openWalkthroughBrowser();
+                  return;
+                }
+                if (walkthroughMode) return;
+                navigation.navigate('BrowserComparison');
+              }}
+            >
             <View style={styles.actionIconBlue}>
               <Ionicons
                 name="search-outline"
@@ -258,7 +865,10 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
 
             <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Browser Comparison</Text>
+              <Text style={styles.actionTitle}>
+                Browser Comparison
+              </Text>
+
               <Text style={styles.actionSubtitle}>
                 Record a manual research task
               </Text>
@@ -269,7 +879,8 @@ export default function HomeScreen({ navigation }: Props) {
               size={21}
               color={COLORS.textMuted}
             />
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* GUEST CARD */}
@@ -284,7 +895,9 @@ export default function HomeScreen({ navigation }: Props) {
 
           <View style={styles.accountTextContainer}>
             <Text style={styles.accountTitle}>
-              {user ? 'Your Account' : 'Using FactTrace as a guest'}
+              {user
+                ? 'Your Account'
+                : 'Using FactTrace as a guest'}
             </Text>
 
             <Text style={styles.accountDescription}>
@@ -370,6 +983,65 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         </View>
       </ScrollView>
+
+      {/* INTERACTIVE WALKTHROUGH */}
+      {walkthroughMode && !studyContext ? (
+        <WalkthroughOverlay
+          mode={walkthroughMode}
+          step={walkthroughStep ?? undefined}
+          targetRef={
+            walkthroughMode === 'spotlight'
+              ? walkthroughStep === 'scan'
+                ? scanButtonRef
+                : walkthroughStep === 'manual'
+                  ? manualEntryButtonRef
+                  : walkthroughStep === 'history'
+                    ? historyButtonRef
+                    : browserButtonRef
+              : undefined
+          }
+          measurementVersion={measurementVersion}
+          title={
+            walkthroughMode === 'welcome'
+              ? 'Welcome to FactTrace'
+              : walkthroughMode === 'complete'
+                ? 'Walkthrough Complete!'
+                : walkthroughStep === 'scan'
+                  ? 'Scan a Claim'
+                  : walkthroughStep === 'manual'
+                    ? 'Enter Claim Manually'
+                    : walkthroughStep === 'history'
+                      ? 'Verification History'
+                      : 'Browser Comparison'
+          }
+          message={
+            walkthroughMode === 'welcome'
+              ? 'Take a short guided tour of checking a claim and reviewing evidence.'
+              : walkthroughMode === 'complete'
+                ? "You're ready to use FactTrace!"
+                : walkthroughStep === 'scan'
+                  ? 'You can scan a claim using your camera. FactTrace will extract the text so you can review it before checking.'
+                  : walkthroughStep === 'manual'
+                    ? "You can also type or paste a claim yourself. Let's try entering one together!"
+                    : walkthroughStep === 'history'
+                      ? 'Real completed checks can be reviewed here. The fictional walkthrough check will not appear in History.'
+                      : 'Use Browser Comparison to manually research a claim and record your research activity for comparison with FactTrace.'
+          }
+          resume={canResumeWalkthrough}
+          onStart={() => void startWalkthrough()}
+          onContinue={
+            walkthroughStep === 'scan'
+              ? () => void showManualEntryStep()
+              : undefined
+          }
+          onFinish={
+            walkthroughMode === 'complete'
+              ? () => void finishWalkthrough()
+              : undefined
+          }
+          onSkip={() => void skipWalkthrough()}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

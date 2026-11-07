@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useEffect, useRef, useState } from 'react';
 
 import {
   Alert,
@@ -10,22 +11,33 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../constants/app';
 import { EvidenceSource } from '../types/evidence';
 
+import {
+  getWalkthroughState,
+  saveWalkthroughState,
+} from '../services/walkthroughService';
+
+import {
+  recordEvidenceSourceOpened,
+} from '../services/evidenceTrackingService';
+
 type Props = NativeStackScreenProps<
   RootStackParamList,
   'EvidenceDetails'
 >;
+
+type TourStep = 'evidence_details' | 'evidence_return';
 
 export default function EvidenceDetailsScreen({
   navigation,
@@ -33,47 +45,209 @@ export default function EvidenceDetailsScreen({
 }: Props) {
   const result = route.params?.result;
   const sourceId = route.params?.sourceId;
+  const evidenceTrackingKey = route.params?.evidenceTrackingKey;
+
+  const isWalkthrough =
+    Boolean(route.params?.walkthrough) &&
+    !route.params?.studyContext;
+
+  const [tourStep, setTourStep] =
+    useState<TourStep>('evidence_details');
+
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const allSources = result?.evidence ?? [];
 
   const selectedSource = sourceId
-    ? allSources.find(
-        source => source.id === sourceId,
-      )
+    ? allSources.find(source => source.id === sourceId)
     : undefined;
 
-  const displayedSources: EvidenceSource[] =
-    selectedSource
-      ? [selectedSource]
-      : allSources;
+  const displayedSources: EvidenceSource[] = selectedSource
+    ? [selectedSource]
+    : allSources;
 
-  const openSource = async (
-    url?: string,
-  ) => {
-    if (!url) {
-      return;
+  /*
+    RESTORE WALKTHROUGH PROGRESS
+
+    No automatic scrolling or floating overlays.
+  */
+  useEffect(() => {
+    if (!isWalkthrough) return;
+
+    let active = true;
+
+    void getWalkthroughState()
+      .then(state => {
+        if (!active) return;
+
+        if (
+          state?.status === 'in_progress' &&
+          state.step === 'evidence_return'
+        ) {
+          setTourStep('evidence_return');
+        }
+      })
+      .catch(error => {
+        console.warn(
+          'Could not restore evidence walkthrough.',
+          error,
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isWalkthrough]);
+
+  /*
+    CONTINUE TUTORIAL
+
+    After inspecting the source, the user explicitly
+    continues to the return-to-results step.
+  */
+  const continueTour = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'in_progress',
+        step: 'evidence_return',
+      });
+
+      setTourStep('evidence_return');
+
+      // Scroll only after the user taps Continue.
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollToEnd({
+          animated: true,
+        });
+      });
+    } catch (error) {
+      console.warn(
+        'Could not save evidence walkthrough step.',
+        error,
+      );
+
+      Alert.alert(
+        'Walkthrough error',
+        'Could not save your progress. Please try again.',
+      );
     }
+  };
+
+  /*
+    RETURN TO RESULTS
+
+    The decision step unlocks only after the user
+    completes the source-inspection lesson.
+  */
+  const returnFromTour = async () => {
+    if (isWalkthrough) {
+      try {
+        await saveWalkthroughState({
+          status: 'in_progress',
+          step:
+            tourStep === 'evidence_return'
+              ? 'result_decision'
+              : 'result_source',
+        });
+      } catch (error) {
+        console.warn(
+          'Could not save walkthrough return step.',
+          error,
+        );
+        return;
+      }
+    }
+
+    navigation.goBack();
+  };
+
+  /*
+    SKIP WALKTHROUGH
+
+    Only tutorial status is updated.
+    No verification, evidence tracking, or study data is saved.
+  */
+  const skipTour = async () => {
+    try {
+      await saveWalkthroughState({
+        status: 'skipped',
+      });
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    } catch (error) {
+      console.warn(
+        'Could not skip walkthrough.',
+        error,
+      );
+
+      Alert.alert(
+        'Walkthrough error',
+        'Could not skip the walkthrough. Please try again.',
+      );
+    }
+  };
+
+  /*
+    OPEN REAL SOURCE
+
+    Practice evidence is fictional and has no external link.
+
+    For normal checks, retain the original-link behavior
+    and evidence-source tracking.
+  */
+  const openSource = async (source: EvidenceSource) => {
+    if (isWalkthrough) return;
+
+    const url = source.originalUrl;
+
+    if (!url) return;
 
     try {
       const parsedUrl = new URL(url);
+
       if (
         parsedUrl.protocol !== 'http:' &&
         parsedUrl.protocol !== 'https:'
       ) {
-        throw new Error('Source links must use http or https.');
+        throw new Error(
+          'Source links must use http or https.',
+        );
       }
 
       if (Platform.OS === 'web') {
-        window.location.assign(parsedUrl.toString());
-        return;
+        // Keep the current FactTrace screen open.
+        const openedWindow = window.open(
+          parsedUrl.toString(),
+          '_blank',
+        );
+
+        if (!openedWindow) {
+          throw new Error(
+            'Your browser blocked the source tab.',
+          );
+        }
+
+        openedWindow.opener = null;
+      } else {
+        await Linking.openURL(parsedUrl.toString());
       }
 
-      await Linking.openURL(parsedUrl.toString());
+      // Only real source openings are tracked.
+      if (evidenceTrackingKey) {
+        recordEvidenceSourceOpened(
+          evidenceTrackingKey,
+          source.sourceId ?? source.id,
+        );
+      }
     } catch (error) {
-      console.log(
+      console.warn(
         'Could not open source:',
         error,
       );
+
       Alert.alert(
         'Unable to open source',
         'FactTrace could not open this source. You can try copying its URL.',
@@ -81,6 +255,9 @@ export default function EvidenceDetailsScreen({
     }
   };
 
+  /*
+    MISSING RESULT
+  */
   if (!result) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -100,20 +277,16 @@ export default function EvidenceDetailsScreen({
           </Text>
 
           <Text style={styles.errorText}>
-            FactTrace could not load the evidence
-            details for this claim.
+            FactTrace could not load the evidence details
+            for this claim.
           </Text>
 
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.errorButton}
-            onPress={() =>
-              navigation.goBack()
-            }
+            onPress={() => void returnFromTour()}
           >
-            <Text
-              style={styles.errorButtonText}
-            >
+            <Text style={styles.errorButtonText}>
               Go Back
             </Text>
           </TouchableOpacity>
@@ -127,10 +300,9 @@ export default function EvidenceDetailsScreen({
       <StatusBar style="dark" />
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER */}
@@ -138,52 +310,33 @@ export default function EvidenceDetailsScreen({
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.backButton}
-            onPress={() =>
-              navigation.goBack()
-            }
+            onPress={() => void returnFromTour()}
           >
             <Ionicons
               name="arrow-back"
               size={23}
-              color={
-                COLORS.textPrimary
-              }
+              color={COLORS.textPrimary}
             />
           </TouchableOpacity>
 
-          <View
-            style={
-              styles.headerTextArea
-            }
-          >
-            <Text
-              style={
-                styles.headerTitle
-              }
-            >
+          <View style={styles.headerTextArea}>
+            <Text style={styles.headerTitle}>
               {selectedSource
                 ? 'Source Details'
                 : 'Full Evidence'}
             </Text>
 
-            <Text
-              style={
-                styles.headerSubtitle
-              }
-            >
+            <Text style={styles.headerSubtitle}>
               {selectedSource
                 ? 'Review this source and its provenance'
                 : 'Review sources and supporting details'}
             </Text>
           </View>
 
-          <View
-            style={
-              styles.headerSpacer
-            }
-          />
+          <View style={styles.headerSpacer} />
         </View>
 
+        {/* DATASET NOTICE */}
         {result.datasetNotice ? (
           <View style={styles.datasetNotice}>
             <Text style={styles.datasetNoticeText}>
@@ -192,28 +345,43 @@ export default function EvidenceDetailsScreen({
           </View>
         ) : null}
 
+        {/* WALKTHROUGH GUIDE */}
+        {isWalkthrough ? (
+          <View style={styles.practiceGuide}>
+            <View style={styles.practiceGuideHeader}>
+              <Text style={styles.practiceGuideTitle}>
+                {tourStep === 'evidence_details'
+                  ? 'Practice: inspect the evidence'
+                  : 'Great! Return to your results'}
+              </Text>
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => void skipTour()}
+              >
+                <Text style={styles.practiceSkip}>
+                  Skip Walkthrough
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.practiceGuideText}>
+              {tourStep === 'evidence_details'
+                ? 'Read the source information, evidence text, and provenance below. This is a fictional teaching example, not a real publication. When you finish, tap Continue after the source.'
+                : 'You have finished inspecting the practice source. Tap Back to Evidence Results at the bottom of the page to make your decision.'}
+            </Text>
+          </View>
+        ) : null}
+
         {/* HERO */}
         <LinearGradient
-          colors={[
-            '#102B49',
-            '#123D67',
-            '#17568C',
-          ]}
+          colors={['#102B49', '#123D67', '#17568C']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
         >
-          <View
-            style={
-              styles.heroCircleLarge
-            }
-          />
-
-          <View
-            style={
-              styles.heroCircleSmall
-            }
-          />
+          <View style={styles.heroCircleLarge} />
+          <View style={styles.heroCircleSmall} />
 
           <View style={styles.heroIcon}>
             <Ionicons
@@ -229,11 +397,7 @@ export default function EvidenceDetailsScreen({
               : 'Explore the evidence'}
           </Text>
 
-          <Text
-            style={
-              styles.heroDescription
-            }
-          >
+          <Text style={styles.heroDescription}>
             {selectedSource
               ? 'Review the source information, evidence, publication details and provenance.'
               : 'Review each source, its publication details, and the evidence connected to the matched claim.'}
@@ -241,57 +405,34 @@ export default function EvidenceDetailsScreen({
 
           <View style={styles.heroStats}>
             <View style={styles.heroStat}>
-              <Text
-                style={
-                  styles.heroStatNumber
-                }
-              >
+              <Text style={styles.heroStatNumber}>
                 {selectedSource
                   ? 1
                   : result.evidence.length}
               </Text>
 
-              <Text
-                style={
-                  styles.heroStatLabel
-                }
-              >
+              <Text style={styles.heroStatLabel}>
                 {selectedSource
                   ? 'Source'
                   : 'Sources'}
               </Text>
             </View>
 
-            <View
-              style={styles.heroDivider}
-            />
+            <View style={styles.heroDivider} />
 
             <View style={styles.heroStat}>
-              <Text
-                style={
-                  styles.heroStatNumber
-                }
-              >
-                {result.matchScore !==
-                undefined
-                  ? `${Math.round(
-                      result.matchScore,
-                    )}%`
+              <Text style={styles.heroStatNumber}>
+                {result.matchScore !== undefined
+                  ? `${Math.round(result.matchScore)}%`
                   : '—'}
               </Text>
 
-              <Text
-                style={
-                  styles.heroStatLabel
-                }
-              >
+              <Text style={styles.heroStatLabel}>
                 Match
               </Text>
             </View>
 
-            <View
-              style={styles.heroDivider}
-            />
+            <View style={styles.heroDivider} />
 
             <View style={styles.heroStat}>
               <Ionicons
@@ -300,11 +441,7 @@ export default function EvidenceDetailsScreen({
                 color="#DCEBFF"
               />
 
-              <Text
-                style={
-                  styles.heroStatLabel
-                }
-              >
+              <Text style={styles.heroStatLabel}>
                 Traceable
               </Text>
             </View>
@@ -327,11 +464,7 @@ export default function EvidenceDetailsScreen({
                 YOUR CLAIM
               </Text>
 
-              <Text
-                style={
-                  styles.claimHelper
-                }
-              >
+              <Text style={styles.claimHelper}>
                 The claim you submitted
               </Text>
             </View>
@@ -343,22 +476,10 @@ export default function EvidenceDetailsScreen({
         </View>
 
         {/* MATCHED CLAIM */}
-        {result.matchedClaim && (
-          <View
-            style={
-              styles.matchedClaimCard
-            }
-          >
-            <View
-              style={
-                styles.matchedClaimHeader
-              }
-            >
-              <View
-                style={
-                  styles.matchedClaimIcon
-                }
-              >
+        {result.matchedClaim ? (
+          <View style={styles.matchedClaimCard}>
+            <View style={styles.matchedClaimHeader}>
+              <View style={styles.matchedClaimIcon}>
                 <Ionicons
                   name="git-compare-outline"
                   size={21}
@@ -366,478 +487,309 @@ export default function EvidenceDetailsScreen({
                 />
               </View>
 
-              <View>
-                <Text
-                  style={
-                    styles.matchedClaimLabel
-                  }
-                >
+              <View style={styles.matchedClaimHeaderText}>
+                <Text style={styles.matchedClaimLabel}>
                   MATCHED CLAIM
                 </Text>
 
-                <Text
-                  style={
-                    styles.matchedClaimHelper
-                  }
-                >
+                <Text style={styles.matchedClaimHelper}>
                   Closest claim found in the evidence record
                 </Text>
               </View>
             </View>
 
-            <Text
-              style={
-                styles.matchedClaimText
-              }
-            >
+            <Text style={styles.matchedClaimText}>
               “{result.matchedClaim}”
             </Text>
           </View>
-        )}
+        ) : null}
 
         {/* SOURCES */}
         {displayedSources.length > 0 ? (
-          displayedSources.map(
-            (source, index) => (
-              <React.Fragment
-                key={source.id}
+          displayedSources.map((source, index) => (
+            <React.Fragment key={source.id}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderText}>
+                  <Text style={styles.sectionTitle}>
+                    {source.isPrimary
+                      ? 'Primary source'
+                      : 'Supporting source'}
+                  </Text>
+
+                  <Text style={styles.sectionSubtitle}>
+                    {source.isPrimary
+                      ? 'Main evidence linked to the claim'
+                      : 'Additional context related to the claim'}
+                  </Text>
+                </View>
+
+                {source.isPrimary ? (
+                  <View style={styles.primaryBadge}>
+                    <Ionicons
+                      name="star"
+                      size={12}
+                      color="#B66D00"
+                    />
+
+                    <Text style={styles.primaryBadgeText}>
+                      PRIMARY
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* SOURCE CARD */}
+              <View
+                style={[
+                  styles.sourceCard,
+                  isWalkthrough &&
+                    tourStep === 'evidence_details' &&
+                    index === 0 &&
+                    styles.walkthroughHighlight,
+                ]}
               >
-                <View
-                  style={
-                    styles.sectionHeader
-                  }
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.sectionTitle
+                {/* SOURCE IDENTITY */}
+                <View style={styles.sourceTop}>
+                  <View
+                    style={
+                      source.isPrimary
+                        ? styles.sourceIconBlue
+                        : styles.sourceIconPurple
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        source.isPrimary
+                          ? 'newspaper-outline'
+                          : 'library-outline'
                       }
-                    >
-                      {source.isPrimary
-                        ? 'Primary source'
-                        : 'Supporting source'}
+                      size={24}
+                      color={
+                        source.isPrimary
+                          ? COLORS.blue
+                          : '#7357D9'
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.sourceIdentity}>
+                    <Text style={styles.sourceName}>
+                      {source.sourceName}
                     </Text>
 
-                    <Text
-                      style={
-                        styles.sectionSubtitle
-                      }
-                    >
-                      {source.isPrimary
-                        ? 'Main evidence linked to the claim'
-                        : 'Additional context related to the claim'}
+                    <Text style={styles.sourceOrganization}>
+                      {source.organization ||
+                        'Published source'}
                     </Text>
                   </View>
 
-                  {source.isPrimary && (
-                    <View
-                      style={
-                        styles.primaryBadge
-                      }
-                    >
-                      <Ionicons
-                        name="star"
-                        size={12}
-                        color="#B66D00"
-                      />
-
-                      <Text
-                        style={
-                          styles.primaryBadgeText
-                        }
-                      >
-                        PRIMARY
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View
-                  style={styles.sourceCard}
-                >
-                  <View
-                    style={styles.sourceTop}
-                  >
-                    <View
-                      style={
-                        source.isPrimary
-                          ? styles.sourceIconBlue
-                          : styles.sourceIconPurple
-                      }
-                    >
-                      <Ionicons
-                        name={
-                          source.isPrimary
-                            ? 'newspaper-outline'
-                            : 'library-outline'
-                        }
-                        size={24}
-                        color={
-                          source.isPrimary
-                            ? COLORS.blue
-                            : '#7357D9'
-                        }
-                      />
-                    </View>
-
-                    <View
-                      style={
-                        styles.sourceIdentity
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.sourceName
-                        }
-                      >
-                        {source.sourceName}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.sourceOrganization
-                        }
-                      >
-                        {source.organization ||
-                          'Published source'}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.verifiedSourceIcon
-                      }
-                    >
+                  {!isWalkthrough ? (
+                    <View style={styles.verifiedSourceIcon}>
                       <Ionicons
                         name="checkmark-circle"
                         size={22}
                         color="#28A36A"
                       />
                     </View>
-                  </View>
+                  ) : null}
+                </View>
 
-                  {/* SOURCE TITLE */}
-                  <View
-                    style={
-                      styles.sourceTitleBlock
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.sourceTitleLabel
-                      }
-                    >
-                      SOURCE TITLE
-                    </Text>
+                {/* SOURCE TITLE */}
+                <View style={styles.sourceTitleBlock}>
+                  <Text style={styles.sourceTitleLabel}>
+                    SOURCE TITLE
+                  </Text>
 
-                    <Text
-                      style={
-                        styles.sourceTitleText
-                      }
-                    >
-                      {source.title}
-                    </Text>
-                  </View>
+                  <Text style={styles.sourceTitleText}>
+                    {source.title}
+                  </Text>
+                </View>
 
-                  {/* METADATA */}
-                  <View
-                    style={
-                      styles.metadataGrid
-                    }
-                  >
-                    <View
-                      style={
-                        styles.metadataItem
-                      }
-                    >
-                      <Ionicons
-                        name="calendar-outline"
-                        size={17}
-                        color={
-                          COLORS.textSecondary
-                        }
-                      />
+                {/* SOURCE METADATA */}
+                <View style={styles.metadataGrid}>
+                  <View style={styles.metadataItem}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={17}
+                      color={COLORS.textSecondary}
+                    />
 
-                      <View
-                        style={
-                          styles.metadataTextArea
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.metadataLabel
-                          }
-                        >
-                          Published
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.metadataValue
-                          }
-                          numberOfLines={2}
-                        >
-                          {source.publicationDate ||
-                            'Not available'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View
-                      style={
-                        styles.metadataItem
-                      }
-                    >
-                      <Ionicons
-                        name={
-                          source.author
-                            ? 'person-outline'
-                            : 'business-outline'
-                        }
-                        size={17}
-                        color={
-                          COLORS.textSecondary
-                        }
-                      />
-
-                      <View
-                        style={
-                          styles.metadataTextArea
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.metadataLabel
-                          }
-                        >
-                          {source.author
-                            ? 'Author'
-                            : 'Organization'}
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.metadataValue
-                          }
-                          numberOfLines={2}
-                        >
-                          {source.author ||
-                            source.organization ||
-                            'Not available'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* SUMMARY */}
-                  {source.summary && (
-                    <View
-                      style={
-                        styles.summaryBlock
-                      }
-                    >
-                      <View
-                        style={
-                          styles.evidenceBlockHeader
-                        }
-                      >
-                        <Ionicons
-                          name="information-circle-outline"
-                          size={18}
-                          color={COLORS.blue}
-                        />
-
-                        <Text
-                          style={
-                            styles.evidenceBlockTitle
-                          }
-                        >
-                          Source summary
-                        </Text>
-                      </View>
+                    <View style={styles.metadataTextArea}>
+                      <Text style={styles.metadataLabel}>
+                        Published
+                      </Text>
 
                       <Text
-                        style={
-                          styles.evidenceText
-                        }
+                        style={styles.metadataValue}
+                        numberOfLines={2}
                       >
-                        {source.summary}
+                        {source.publicationDate ||
+                          'Not available'}
                       </Text>
                     </View>
-                  )}
+                  </View>
 
-                  {/* EVIDENCE */}
-                  <View
-                    style={
-                      styles.evidenceBlock
-                    }
-                  >
-                    <View
-                      style={
-                        styles.evidenceBlockHeader
+                  <View style={styles.metadataItem}>
+                    <Ionicons
+                      name={
+                        source.author
+                          ? 'person-outline'
+                          : 'business-outline'
                       }
-                    >
+                      size={17}
+                      color={COLORS.textSecondary}
+                    />
+
+                    <View style={styles.metadataTextArea}>
+                      <Text style={styles.metadataLabel}>
+                        {source.author
+                          ? 'Author'
+                          : 'Organization'}
+                      </Text>
+
+                      <Text
+                        style={styles.metadataValue}
+                        numberOfLines={2}
+                      >
+                        {source.author ||
+                          source.organization ||
+                          'Not available'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* SUMMARY */}
+                {source.summary ? (
+                  <View style={styles.summaryBlock}>
+                    <View style={styles.evidenceBlockHeader}>
                       <Ionicons
-                        name="document-text-outline"
+                        name="information-circle-outline"
                         size={18}
                         color={COLORS.blue}
                       />
 
-                      <Text
-                        style={
-                          styles.evidenceBlockTitle
-                        }
-                      >
-                        Evidence
+                      <Text style={styles.evidenceBlockTitle}>
+                        Source summary
                       </Text>
                     </View>
 
-                    <Text
-                      style={
-                        styles.evidenceText
-                      }
-                    >
-                      {source.evidenceText}
+                    <Text style={styles.evidenceText}>
+                      {source.summary}
                     </Text>
-                    {source.stance && (
-                      <Text style={styles.evidenceStance}>
-                        {source.stance === 'supports'
-                          ? 'Supports the submitted claim'
-                          : source.stance === 'contradicts'
-                            ? 'Contradicts the submitted claim'
-                            : 'Provides context for the submitted claim'}
-                      </Text>
-                    )}
+                  </View>
+                ) : null}
+
+                {/* EVIDENCE TEXT */}
+                <View style={styles.evidenceBlock}>
+                  <View style={styles.evidenceBlockHeader}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={18}
+                      color={COLORS.blue}
+                    />
+
+                    <Text style={styles.evidenceBlockTitle}>
+                      Evidence
+                    </Text>
                   </View>
 
-                  {/* PROVENANCE */}
-                  <View
-                    style={
-                      styles.provenanceBlock
-                    }
-                  >
-                    <View
-                      style={
-                        styles.provenanceHeader
-                      }
-                    >
-                      <View
-                        style={
-                          styles.provenanceIcon
-                        }
-                      >
-                        <Ionicons
-                          name="git-branch-outline"
-                          size={19}
-                          color="#7357D9"
-                        />
-                      </View>
+                  <Text style={styles.evidenceText}>
+                    {source.evidenceText}
+                  </Text>
 
-                      <View
-                        style={
-                          styles.provenanceHeaderText
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.provenanceTitle
-                          }
-                        >
-                          Source provenance
-                        </Text>
+                  {source.stance ? (
+                    <Text style={styles.evidenceStance}>
+                      {source.stance === 'supports'
+                        ? 'Supports the submitted claim'
+                        : source.stance === 'contradicts'
+                          ? 'Contradicts the submitted claim'
+                          : 'Provides context for the submitted claim'}
+                    </Text>
+                  ) : null}
+                </View>
 
-                        <Text
-                          style={
-                            styles.provenanceSubtitle
-                          }
-                        >
-                          Where this evidence comes from
-                        </Text>
-                      </View>
+                {/* PROVENANCE */}
+                <View style={styles.provenanceBlock}>
+                  <View style={styles.provenanceHeader}>
+                    <View style={styles.provenanceIcon}>
+                      <Ionicons
+                        name="git-branch-outline"
+                        size={19}
+                        color="#7357D9"
+                      />
                     </View>
 
-                    <View
-                      style={
-                        styles.provenanceRow
-                      }
-                    >
-                      <View
-                        style={
-                          styles.provenanceDot
-                        }
-                      />
+                    <View style={styles.provenanceHeaderText}>
+                      <Text style={styles.provenanceTitle}>
+                        Source provenance
+                      </Text>
 
-                      <View
-                        style={
-                          styles.provenanceStep
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.provenanceStepTitle
-                          }
-                        >
-                          Original publication
-                        </Text>
+                      <Text style={styles.provenanceSubtitle}>
+                        Where this evidence comes from
+                      </Text>
+                    </View>
+                  </View>
 
-                        <Text
-                          style={
-                            styles.provenanceStepText
-                          }
-                        >
-                          {source.organization
+                  <View style={styles.provenanceRow}>
+                    <View style={styles.provenanceDot} />
+
+                    <View style={styles.provenanceStep}>
+                      <Text style={styles.provenanceStepTitle}>
+                        {isWalkthrough
+                          ? 'Practice source'
+                          : 'Original publication'}
+                      </Text>
+
+                      <Text style={styles.provenanceStepText}>
+                        {isWalkthrough
+                          ? 'This is a fictional example created for the FactTrace tutorial.'
+                          : source.organization
                             ? `Published by ${source.organization}`
                             : `Published by ${source.sourceName}`}
-                        </Text>
-                      </View>
+                      </Text>
                     </View>
-
-                        {source.provenance && (
-                          <>
-                            <View
-                              style={styles.provenanceLine}
-                            />
-
-                            <View
-                              style={styles.provenanceRow}
-                            >
-                              <View style={styles.provenanceDot} />
-
-                              <View style={styles.provenanceStep}>
-                                <Text style={styles.provenanceStepTitle}>
-                                  Evidence record
-                                </Text>
-
-                                <Text style={styles.provenanceStepText}>
-                                  {source.provenance}
-                                </Text>
-                              </View>
-                            </View>
-                          </>
-                        )}
                   </View>
 
-                  {/* OPEN SOURCE */}
-                  {source.originalUrl && (
+                  {source.provenance ? (
                     <>
-                      <Text
-                        selectable
-                        style={styles.sourceUrl}
-                      >
-                        {source.originalUrl}
-                      </Text>
-                      <TouchableOpacity
+                      <View style={styles.provenanceLine} />
+
+                      <View style={styles.provenanceRow}>
+                        <View style={styles.provenanceDot} />
+
+                        <View style={styles.provenanceStep}>
+                          <Text style={styles.provenanceStepTitle}>
+                            Evidence record
+                          </Text>
+
+                          <Text style={styles.provenanceStepText}>
+                            {source.provenance}
+                          </Text>
+                        </View>
+                      </View>
+                    </>
+                  ) : null}
+                </View>
+
+                {/* OPEN ORIGINAL SOURCE — NORMAL MODE ONLY */}
+                {!isWalkthrough && source.originalUrl ? (
+                  <>
+                    <Text
+                      selectable
+                      style={styles.sourceUrl}
+                    >
+                      {source.originalUrl}
+                    </Text>
+
+                    <TouchableOpacity
                       activeOpacity={0.85}
                       style={
                         source.isPrimary
                           ? styles.openSourceButton
                           : styles.secondarySourceButton
                       }
-                      onPress={() =>
-                        openSource(
-                          source.originalUrl,
-                        )
-                      }
+                      onPress={() => void openSource(source)}
                     >
                       <View
                         style={
@@ -880,17 +832,36 @@ export default function EvidenceDetailsScreen({
                             : COLORS.blue
                         }
                       />
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </React.Fragment>
-            ),
-          )
+                    </TouchableOpacity>
+                  </>
+                ) : null}
+              </View>
+
+              {/* PRACTICE CONTINUE */}
+              {isWalkthrough &&
+              index === 0 &&
+              tourStep === 'evidence_details' ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  activeOpacity={0.85}
+                  style={styles.practiceContinue}
+                  onPress={() => void continueTour()}
+                >
+                  <Text style={styles.practiceContinueText}>
+                    I've reviewed this source — Continue
+                  </Text>
+
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={COLORS.white}
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </React.Fragment>
+          ))
         ) : (
-          <View
-            style={styles.emptyCard}
-          >
+          <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
               <Ionicons
                 name="search-outline"
@@ -904,38 +875,49 @@ export default function EvidenceDetailsScreen({
             </Text>
 
             <Text style={styles.emptyText}>
-              FactTrace did not receive any
-              evidence sources for this claim.
+              FactTrace did not receive any evidence
+              sources for this claim.
             </Text>
           </View>
         )}
 
-        {/* BACK */}
-        <TouchableOpacity
-          activeOpacity={0.8}
+        {/* BACK TO RESULTS */}
+        <View
           style={
-            styles.backToResultsButton
-          }
-          onPress={() =>
-            navigation.goBack()
+            isWalkthrough &&
+            tourStep === 'evidence_return'
+              ? styles.walkthroughHighlight
+              : undefined
           }
         >
-          <Ionicons
-            name="arrow-back"
-            size={19}
-            color={
-              COLORS.textPrimary
-            }
-          />
-
-          <Text
-            style={
-              styles.backToResultsText
-            }
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.backToResultsButton}
+            onPress={() => void returnFromTour()}
           >
-            Back to Evidence Results
-          </Text>
-        </TouchableOpacity>
+            <Ionicons
+              name="arrow-back"
+              size={19}
+              color={COLORS.textPrimary}
+            />
+
+            <Text style={styles.backToResultsText}>
+              Back to Evidence Results
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isWalkthrough ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.bottomSkip}
+            onPress={() => void skipTour()}
+          >
+            <Text style={styles.practiceSkip}>
+              Skip Walkthrough
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -956,6 +938,77 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  /* WALKTHROUGH */
+
+  practiceGuide: {
+    marginTop: 16,
+    padding: 15,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDCC77',
+    backgroundColor: '#FFF9EB',
+  },
+
+  practiceGuideHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  practiceGuideTitle: {
+    flex: 1,
+    color: '#162E4A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  practiceGuideText: {
+    marginTop: 9,
+    color: '#785814',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  practiceSkip: {
+    color: COLORS.blue,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  walkthroughHighlight: {
+    borderWidth: 3,
+    borderColor: '#FFD166',
+    borderRadius: 18,
+    padding: 3,
+  },
+
+  practiceContinue: {
+    marginTop: 14,
+    minHeight: 54,
+    borderRadius: 15,
+    backgroundColor: COLORS.blue,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+  },
+
+  practiceContinueText: {
+    flex: 1,
+    marginRight: 10,
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  bottomSkip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+
   /* HEADER */
 
   header: {
@@ -971,7 +1024,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-
     shadowColor: '#1B3655',
     shadowOpacity: 0.07,
     shadowRadius: 10,
@@ -979,7 +1031,6 @@ const styles = StyleSheet.create({
       width: 0,
       height: 4,
     },
-
     elevation: 2,
   },
 
@@ -1027,7 +1078,6 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     padding: 19,
     overflow: 'hidden',
-
     shadowColor: '#0B2542',
     shadowOpacity: 0.18,
     shadowRadius: 15,
@@ -1035,7 +1085,6 @@ const styles = StyleSheet.create({
       width: 0,
       height: 7,
     },
-
     elevation: 6,
   },
 
@@ -1045,8 +1094,7 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 75,
     borderWidth: 24,
-    borderColor:
-      'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(255,255,255,0.03)',
     right: -45,
     top: -60,
   },
@@ -1056,8 +1104,7 @@ const styles = StyleSheet.create({
     width: 75,
     height: 75,
     borderRadius: 38,
-    backgroundColor:
-      'rgba(255,255,255,0.025)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
     right: 18,
     bottom: -26,
   },
@@ -1066,8 +1113,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
-    backgroundColor:
-      'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1114,8 +1160,7 @@ const styles = StyleSheet.create({
   heroDivider: {
     width: 1,
     height: 30,
-    backgroundColor:
-      'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
 
   /* CLAIM */
@@ -1185,6 +1230,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  matchedClaimHeaderText: {
+    flex: 1,
+  },
+
   matchedClaimIcon: {
     width: 36,
     height: 36,
@@ -1222,9 +1271,12 @@ const styles = StyleSheet.create({
     marginTop: 23,
     marginBottom: 10,
     flexDirection: 'row',
-    justifyContent:
-      'space-between',
+    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+
+  sectionHeaderText: {
+    flex: 1,
   },
 
   sectionTitle: {
@@ -1246,6 +1298,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 9,
+    marginLeft: 8,
   },
 
   primaryBadgeText: {
@@ -1256,7 +1309,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  /* SOURCE */
+  /* SOURCE CARD */
 
   sourceCard: {
     borderRadius: 19,
@@ -1264,7 +1317,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E1E8F0',
     padding: 15,
-
     shadowColor: '#18334E',
     shadowOpacity: 0.04,
     shadowRadius: 9,
@@ -1272,7 +1324,6 @@ const styles = StyleSheet.create({
       width: 0,
       height: 3,
     },
-
     elevation: 1,
   },
 
@@ -1380,7 +1431,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* SUMMARY / EVIDENCE */
+  /* SUMMARY AND EVIDENCE */
 
   summaryBlock: {
     marginTop: 15,
@@ -1447,6 +1498,7 @@ const styles = StyleSheet.create({
 
   provenanceHeaderText: {
     marginLeft: 9,
+    flex: 1,
   },
 
   provenanceTitle: {
@@ -1502,7 +1554,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#CFC4F5',
   },
 
-  /* BUTTONS */
+  /* SOURCE BUTTONS */
 
   sourceUrl: {
     marginTop: 15,
@@ -1525,8 +1577,7 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 10,
-    backgroundColor:
-      'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1587,7 +1638,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* EMPTY */
+  /* EMPTY STATE */
 
   emptyCard: {
     marginTop: 22,
@@ -1623,7 +1674,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  /* ERROR */
+  /* ERROR STATE */
 
   errorScreen: {
     flex: 1,

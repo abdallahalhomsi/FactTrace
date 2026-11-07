@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 import {
@@ -17,6 +18,8 @@ type Props = {
   visible: boolean;
   isSubmitting: boolean;
   error?: string | null;
+  practice?: boolean;
+  onSkip?: () => void;
   onSelect: (intention: SharingIntention) => void;
 };
 
@@ -33,6 +36,8 @@ export default function SharingIntentionModal({
   visible,
   isSubmitting,
   error,
+  practice = false,
+  onSkip,
   onSelect,
 }: Props) {
   return (
@@ -48,13 +53,19 @@ export default function SharingIntentionModal({
           accessibilityViewIsModal
           style={styles.card}
         >
-          <Text style={styles.title}>Would you share this claim?</Text>
+          <Text style={styles.title}>
+            Would you share this claim?
+          </Text>
+
           <Text style={styles.description}>
-            Now that you’ve reviewed the verification results and sources,
+            Now that you've reviewed the verification results and sources,
             would you share this claim with others?
           </Text>
+
           <Text style={styles.note}>
-            This will not share anything automatically.
+            {practice
+              ? 'PRACTICE ONLY: choose whether you would share it. Nothing will be shared or saved.'
+              : 'This will not share anything automatically.'}
           </Text>
 
           <View style={styles.options}>
@@ -70,7 +81,9 @@ export default function SharingIntentionModal({
                 {isSubmitting ? (
                   <ActivityIndicator color={COLORS.blue} />
                 ) : (
-                  <Text style={styles.optionText}>{option.label}</Text>
+                  <Text style={styles.optionText}>
+                    {option.label}
+                  </Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -81,9 +94,22 @@ export default function SharingIntentionModal({
               {error}
             </Text>
           ) : null}
+
           <Text style={styles.footer}>
             Choose one answer to continue.
           </Text>
+
+          {practice && onSkip ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={onSkip}
+              style={styles.practiceSkip}
+            >
+              <Text style={styles.practiceSkipText}>
+                Skip Walkthrough
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -146,6 +172,16 @@ const styles = StyleSheet.create({
     color: COLORS.red,
     fontSize: 12,
     lineHeight: 17,
+  },
+  practiceSkip: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  practiceSkipText: {
+    color: COLORS.blue,
+    fontSize: 14,
+    fontWeight: '700',
   },
   footer: {
     marginTop: 24,
