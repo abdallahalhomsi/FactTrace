@@ -1,7 +1,15 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentAuthenticatedUser } from './authService';
 
 const WALKTHROUGH_STORAGE_KEY = '@facttrace/interactive-walkthrough';
+
+function getStorageKey(): string {
+  const user = getCurrentAuthenticatedUser();
+  return user
+    ? `${WALKTHROUGH_STORAGE_KEY}:${user.id}`
+    : WALKTHROUGH_STORAGE_KEY;
+}
 
 // Serialize tutorial writes so a late keystroke save cannot overwrite Skip
 // or Completed status. This queue touches no verification or study data.
@@ -40,7 +48,7 @@ export type WalkthroughState = {
 };
 
 export async function getWalkthroughState(): Promise<WalkthroughState | null> {
-  const stored = await AsyncStorage.getItem(WALKTHROUGH_STORAGE_KEY);
+  const stored = await AsyncStorage.getItem(getStorageKey());
 
   if (!stored) {
     return null;
@@ -97,11 +105,12 @@ export function saveWalkthroughState(
   state: WalkthroughState,
 ): Promise<void> {
   const value = JSON.stringify(state);
+  const storageKey = getStorageKey();
 
   const nextWrite = lastWalkthroughWrite
     .catch(() => undefined)
     .then(() =>
-      AsyncStorage.setItem(WALKTHROUGH_STORAGE_KEY, value),
+      AsyncStorage.setItem(storageKey, value),
     );
 
   lastWalkthroughWrite = nextWrite;

@@ -80,14 +80,68 @@ function getApiErrorMessage(
 }
 
 function isPracticeClaim(value: string): boolean {
-  const normalize = (text: string) =>
-    text
-      .trim()
-      .replace(/\s+/g, ' ')
-      .replace(/[.!?;:,]+$/, '')
-      .toLowerCase();
+  const words = value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .match(/[a-z0-9]+/g)
+    ?.map(word => word.replace(/s$/, '')) ?? [];
 
-  return normalize(value) === normalize(PRACTICE_CLAIM);
+  if (words.includes('honey') && words.includes('spoil')) {
+    return true;
+  }
+
+  const compact = (text: string) =>
+    text
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+
+  const input = compact(value);
+  const expected = compact(PRACTICE_CLAIM);
+  const maxEdits = Math.max(2, Math.floor(expected.length * 0.15));
+
+  if (Math.abs(input.length - expected.length) > maxEdits) {
+    return false;
+  }
+
+  let previousRow = Array.from(
+    { length: input.length + 1 },
+    (_, index) => index,
+  );
+
+  for (
+    let expectedIndex = 1;
+    expectedIndex <= expected.length;
+    expectedIndex++
+  ) {
+    const currentRow = [expectedIndex];
+    let minimum = expectedIndex;
+
+    for (let inputIndex = 1; inputIndex <= input.length; inputIndex++) {
+      const substitutionCost =
+        expected[expectedIndex - 1] === input[inputIndex - 1]
+          ? 0
+          : 1;
+      const distance = Math.min(
+        previousRow[inputIndex] + 1,
+        currentRow[inputIndex - 1] + 1,
+        previousRow[inputIndex - 1] + substitutionCost,
+      );
+
+      currentRow.push(distance);
+      minimum = Math.min(minimum, distance);
+    }
+
+    if (minimum > maxEdits) {
+      return false;
+    }
+
+    previousRow = currentRow;
+  }
+
+  return previousRow[input.length] <= maxEdits;
 }
 
 export default function ClaimReviewScreen({

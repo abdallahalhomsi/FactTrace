@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ViewInstance,
 } from 'react-native';
 
 import { StatusBar } from 'expo-status-bar';
@@ -27,6 +28,7 @@ import {
 
 import { MatchStatus } from '../types/verification';
 import { saveWalkthroughState } from '../services/walkthroughService';
+import WalkthroughOverlay from '../components/WalkthroughOverlay';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -105,6 +107,7 @@ export default function VerificationHistoryScreen({
   const [hasError, setHasError] = useState(false);
 
   const [retryCount, setRetryCount] = useState(0);
+  const continueWalkthroughRef = React.useRef<ViewInstance>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -375,6 +378,7 @@ export default function VerificationHistoryScreen({
             </Text>
 
             <TouchableOpacity
+              ref={continueWalkthroughRef}
               accessibilityRole="button"
               activeOpacity={0.85}
               style={styles.primaryButton}
@@ -385,7 +389,7 @@ export default function VerificationHistoryScreen({
               <Text
                 style={styles.primaryButtonText}
               >
-                Back to Home
+                Continue to Home
               </Text>
             </TouchableOpacity>
 
@@ -524,6 +528,18 @@ export default function VerificationHistoryScreen({
           </ScrollView>
         )}
       </View>
+
+      {isWalkthrough ? (
+        <WalkthroughOverlay
+          mode="spotlight"
+          step="history"
+          targetRef={continueWalkthroughRef}
+          title="Your verification history"
+          message="Real completed checks appear here. The practice check from this walkthrough was not saved. Tap Continue to return to the walkthrough."
+          onContinue={() => void returnToWalkthroughHome()}
+          onSkip={() => void skipWalkthrough()}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

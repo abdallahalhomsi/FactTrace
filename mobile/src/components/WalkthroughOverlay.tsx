@@ -311,12 +311,10 @@ export default function WalkthroughOverlay({
           <TouchableOpacity
             accessibilityRole="button"
             style={styles.primaryButton}
-            onPress={onStart}
+            onPress={onContinue ?? onStart}
           >
             <Text style={styles.primaryButtonText}>
-              {resume
-                ? 'Resume Walkthrough'
-                : 'Start Walkthrough'}
+              Continue
             </Text>
           </TouchableOpacity>
         ) : mode === 'complete' && onFinish ? (
@@ -368,12 +366,12 @@ const createStyles = (
 
     fullScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(5, 16, 29, 0.88)',
+      backgroundColor: 'rgba(5, 16, 29, 0.45)',
     },
 
     scrim: {
       position: 'absolute',
-      backgroundColor: 'rgba(5, 16, 29, 0.88)',
+      backgroundColor: 'rgba(5, 16, 29, 0.45)',
     },
 
     highlightBorder: {

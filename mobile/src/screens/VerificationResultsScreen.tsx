@@ -1344,7 +1344,17 @@ export default function VerificationResultsScreen({
                     void updateTourStep(
                       'result_source',
                     )
-                : undefined
+                : tourStep === 'result_source'
+                  ? () => {
+                      const source = result.evidence[0];
+                      if (source) {
+                        void handleOpenSource(source.id);
+                      }
+                    }
+                  : tourStep === 'result_decision'
+                    ? () =>
+                        void handleDecision('unsure')
+                    : undefined
             }
             onFinish={
               tourStep === 'complete'

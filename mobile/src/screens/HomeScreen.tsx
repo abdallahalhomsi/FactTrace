@@ -71,6 +71,7 @@ export default function HomeScreen({ navigation, route }: Props) {
 
   const replayHandled = useRef(false);
   const continueHandled = useRef(false);
+  const welcomeContinuePending = useRef(false);
 
   const revealScanButton = React.useCallback(() => {
     scrollViewRef.current?.scrollTo({
@@ -248,6 +249,7 @@ export default function HomeScreen({ navigation, route }: Props) {
     }, [
       studyContext,
       navigation,
+      user?.id,
       revealScanButton,
       revealTourHomeTarget,
       route.params?.walkthroughReplay,
@@ -279,7 +281,9 @@ export default function HomeScreen({ navigation, route }: Props) {
     });
   };
 
-  const startWalkthrough = async () => {
+  const startWalkthrough = async (
+    delaySpotlightForWelcome = false,
+  ) => {
     const step = canResumeWalkthrough
       ? walkthroughStep ?? 'scan'
       : 'scan';
@@ -377,6 +381,10 @@ export default function HomeScreen({ navigation, route }: Props) {
         status: 'in_progress',
         step,
       });
+
+      if (delaySpotlightForWelcome) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
 
       setWalkthroughStep(step);
       setCanResumeWalkthrough(false);
@@ -1483,12 +1491,24 @@ export default function HomeScreen({ navigation, route }: Props) {
           onStart={() =>
             void startWalkthrough()
           }
-          onContinue={
-            walkthroughStep === 'scan'
-              ? () =>
-                  void showManualEntryStep()
-              : undefined
-          }
+          onContinue={() => {
+            if (walkthroughMode === 'welcome') {
+              if (welcomeContinuePending.current) return;
+
+              welcomeContinuePending.current = true;
+              void startWalkthrough(true).finally(() => {
+                welcomeContinuePending.current = false;
+              });
+            } else if (walkthroughStep === 'scan') {
+              void showManualEntryStep();
+            } else if (walkthroughStep === 'manual') {
+              void preparePracticeTransition();
+            } else if (walkthroughStep === 'history') {
+              void openWalkthroughHistory();
+            } else if (walkthroughStep === 'browser') {
+              void openWalkthroughBrowser();
+            }
+          }}
           onFinish={
             walkthroughMode ===
             'complete'

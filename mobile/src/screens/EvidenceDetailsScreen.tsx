@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ThemeColors } from '../constants/app';
 import { useAppTheme } from '../theme/AppTheme';
 import { EvidenceSource } from '../types/evidence';
+import WalkthroughOverlay from '../components/WalkthroughOverlay';
 
 import {
   getWalkthroughState,
@@ -62,6 +64,9 @@ export default function EvidenceDetailsScreen({
     useState<TourStep>('evidence_details');
 
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const practiceEvidenceRef = useRef<ViewInstance>(null);
+  const backToResultsRef = useRef<ViewInstance>(null);
+  const [measurementVersion, setMeasurementVersion] = useState(0);
 
   const allSources = result?.evidence ?? [];
 
@@ -100,6 +105,38 @@ export default function EvidenceDetailsScreen({
       active = false;
     };
   }, [isWalkthrough]);
+
+  useEffect(() => {
+    if (!isWalkthrough) return;
+
+    if (tourStep === 'evidence_details') {
+      requestAnimationFrame(() => {
+        const scrollView = scrollRef.current;
+        if (!scrollView) return;
+
+        practiceEvidenceRef.current?.measureLayout(
+          scrollView,
+          (_x, y) => {
+            scrollView.scrollTo({
+              y: Math.max(0, y - 16),
+              animated: false,
+            });
+            requestAnimationFrame(() => {
+              setMeasurementVersion(version => version + 1);
+            });
+          },
+        );
+      });
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+      requestAnimationFrame(() => {
+        setMeasurementVersion(version => version + 1);
+      });
+    });
+  }, [isWalkthrough, tourStep]);
 
   const continueTour = async () => {
     try {
@@ -494,13 +531,7 @@ export default function EvidenceDetailsScreen({
               </View>
 
               <View
-                style={[
-                  styles.sourceCard,
-                  isWalkthrough &&
-                    tourStep === 'evidence_details' &&
-                    index === 0 &&
-                    styles.walkthroughHighlight,
-                ]}
+                style={styles.sourceCard}
               >
                 <View style={styles.sourceTop}>
                   <View
@@ -630,7 +661,23 @@ export default function EvidenceDetailsScreen({
                   </View>
                 ) : null}
 
-                <View style={styles.evidenceBlock}>
+                <View
+                  ref={
+                    isWalkthrough &&
+                    tourStep === 'evidence_details' &&
+                    index === 0
+                      ? practiceEvidenceRef
+                      : undefined
+                  }
+                  style={[
+                    styles.evidenceBlock,
+                    isWalkthrough &&
+                    tourStep === 'evidence_details' &&
+                    index === 0
+                      ? styles.walkthroughHighlight
+                      : undefined,
+                  ]}
+                >
                   <View style={styles.evidenceBlockHeader}>
                     <Ionicons
                       name="document-text-outline"
@@ -778,8 +825,8 @@ export default function EvidenceDetailsScreen({
               {isWalkthrough &&
               index === 0 &&
               tourStep === 'evidence_details' ? (
-                <TouchableOpacity
-                  accessibilityRole="button"
+              <TouchableOpacity
+                accessibilityRole="button"
                   activeOpacity={0.85}
                   style={styles.practiceContinue}
                   onPress={() => void continueTour()}
@@ -826,6 +873,7 @@ export default function EvidenceDetailsScreen({
           }
         >
           <TouchableOpacity
+            ref={backToResultsRef}
             activeOpacity={0.8}
             style={styles.backToResultsButton}
             onPress={() => void returnFromTour()}
@@ -854,6 +902,37 @@ export default function EvidenceDetailsScreen({
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+
+      {isWalkthrough ? (
+        <WalkthroughOverlay
+          mode="spotlight"
+          step={tourStep}
+          targetRef={
+            tourStep === 'evidence_details'
+              ? practiceEvidenceRef
+              : backToResultsRef
+          }
+          measurementVersion={measurementVersion}
+          title={
+            tourStep === 'evidence_details'
+              ? 'Review the source'
+              : 'Return to your results'
+          }
+          message={
+            tourStep === 'evidence_details'
+              ? 'Review the evidence shown here. Tap Continue when you are ready to return to the results.'
+              : 'Tap Back to Evidence Results to continue the walkthrough and make your decision.'
+          }
+          onContinue={() => {
+            if (tourStep === 'evidence_details') {
+              void continueTour();
+            } else {
+              void returnFromTour();
+            }
+          }}
+          onSkip={() => void skipTour()}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
