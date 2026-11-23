@@ -169,9 +169,20 @@ export interface DecisionRequest {
   weakMatchConfirmed?: boolean | null; //answer to "is this the claim you saw?", only on weak matches
   factCheckFound?: boolean | null; //true if the /verify result had factcheck.found true, only on no matches
   clientRecordId?: string; //id the app makes for this answer, stops the same answer being saved twice
-  trialIndex?: number; //which claim this is for the participant: 1, 2, 3 and so on
-  isPractice?: boolean; //true for a warm up claim that is not counted in the results
-  appVersion?: string; //app version, so results before and after a design change can be compared
+  trialIndex?: number;
+  //true for warm-up claims
+  isPractice?: boolean;
+  /*
+  * Whether the participant had seen/heard
+  * this claim before the study.
+  *
+  * null/undefined is allowed for practice
+  * or old/non-study records.
+  */
+  claimFamiliarity?:
+    | boolean
+    | null;
+  appVersion?: string;
   decision: string; //the participant's verdict, one of the values from get /api/config
   sharingIntention: string; //would they share it, one of the values from get /api/config
   sourcesOpened: string[]; //source ids (app) or urls (browser) the participant opened
@@ -187,6 +198,57 @@ export interface DecisionResponse {
 
 //which condition the participant did first (for counterbalancing)
 export type ConditionOrder = "app_first" | "browser_first";
+
+export type GenderOption =
+  | "female"
+  | "male";
+
+export type EducationLevel =
+  | "undergraduate"
+  | "graduate"
+  | "other";
+
+export type SmartphoneUseRange =
+  | "lt_1"
+  | "1_3"
+  | "3_5"
+  | "5_7"
+  | "gt_7";
+
+export type SocialMediaUseRange =
+  | "lt_1"
+  | "1_2"
+  | "2_4"
+  | "4_6"
+  | "gt_6";
+
+//what the app sends to POST /sessions before a participant starts
+export interface SessionRequest {
+  participantId: string;
+  conditionOrder: ConditionOrder;
+
+  age: number;
+
+  //optional because participants may choose not to answer gender
+  gender?: GenderOption;
+
+  educationLevel: EducationLevel;
+
+  smartphoneUse: SmartphoneUseRange;
+  socialMediaUse: SocialMediaUseRange;
+
+  //1 = never, 7 = always
+  factCheckFrequency: number;
+  sourceCheckFrequency: number;
+  multiSourceFrequency: number;
+
+  usedFactCheckTool: boolean;
+  factCheckToolName?: string;
+
+  usedFactTraceBefore: boolean;
+
+  notes?: string;
+}
 
 //what the app sends to POST /sessions before a participant starts
 export interface SessionRequest {

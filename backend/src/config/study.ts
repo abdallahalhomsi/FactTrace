@@ -1,40 +1,116 @@
-//study settings that the frontend design may still change
-//the decision buttons and sharing answers are defined only here, so changing them is a one-file edit
-//the app can read these from get /api/config and build its buttons from them, so nothing is hardcoded twice
+// Study settings shared by the backend.
+//
+// Verdict:
+//   trust
+//   don't trust
+//   unsure
+//
+// Sharing intention:
+//   1 = extremely unlikely
+//   7 = extremely likely
 
-import { ClaimAnswer } from "../types/api"; //the stored correct answer of a claim (never sent to the app)
+import {
+  ClaimAnswer,
+} from "../types/api";
 
-//one decision button: the value the app sends, the label it can show, and which answers make it correct
 export interface VerdictOption {
-  value: string; //what the app sends in the decision field
-  label: string; //text for the button
-  correctFor: ClaimAnswer[]; //claim answers for which this choice counts as correct, empty means never scored as correct
+  value: string;
+  label: string;
+  correctFor: ClaimAnswer[];
 }
 
-//one sharing answer
 export interface SharingOption {
-  value: string; //what the app sends in the sharing intention field
-  label: string; //text for the button
+  value: string;
+  label: string;
 }
 
-//current figma (screen 04): trust, don't trust, unsure
-//to switch to true / false / misleading later, replace this list, nothing else in the backend changes
-export const VERDICT_OPTIONS: VerdictOption[] = [
-  { value: "trust", label: "Trust", correctFor: ["true"] }, //right when the claim is true
-  { value: "dont_trust", label: "Don't Trust", correctFor: ["false", "misleading"] }, //right when the claim is false or misleading
-  { value: "unsure", label: "Unsure", correctFor: [] }, //counted separately, never right or wrong
+export const VERDICT_OPTIONS:
+VerdictOption[] = [
+  {
+    value: "trust",
+    label: "Trust",
+    correctFor: ["true"],
+  },
+
+  {
+    value: "dont_trust",
+    label: "Don't Trust",
+    correctFor: [
+      "false",
+      "misleading",
+    ],
+  },
+
+  {
+    value: "unsure",
+    label: "Unsure",
+
+    /*
+     * Unsure is never a correct answer.
+     *
+     * It is still retained separately as
+     * decision = "unsure" so Unsure rate
+     * can be analysed independently.
+     */
+    correctFor: [],
+  },
 ];
 
-//sharing intention popup shown after the decision
-export const SHARING_OPTIONS: SharingOption[] = [
-  { value: "yes", label: "Yes" },
-  { value: "no", label: "No" },
-  { value: "not_sure", label: "Not sure" },
+export const SHARING_OPTIONS:
+SharingOption[] = [
+  {
+    value: "1",
+    label: "Extremely unlikely",
+  },
+  {
+    value: "2",
+    label: "Very unlikely",
+  },
+  {
+    value: "3",
+    label: "Unlikely",
+  },
+  {
+    value: "4",
+    label: "Neither likely nor unlikely",
+  },
+  {
+    value: "5",
+    label: "Likely",
+  },
+  {
+    value: "6",
+    label: "Very likely",
+  },
+  {
+    value: "7",
+    label: "Extremely likely",
+  },
 ];
 
-//returns true or false if the choice can be scored, or null for choices like unsure
-export function scoreDecision(decision: string, answer: ClaimAnswer): boolean | null {
-  const option = VERDICT_OPTIONS.find((o) => o.value === decision); //find the chosen button
-  if (!option || option.correctFor.length === 0) return null; //unsure (or unknown) is not scored
-  return option.correctFor.includes(answer); //correct if the claim's answer is in the list
+/*
+ * Returns:
+ *
+ * true  = correct verdict
+ * false = incorrect verdict, INCLUDING Unsure
+ * null  = unknown/invalid verdict that cannot be scored
+ */
+export function scoreDecision(
+  decision: string,
+  answer: ClaimAnswer,
+): boolean | null {
+  const option =
+    VERDICT_OPTIONS.find(
+      item =>
+        item.value ===
+        decision,
+    );
+
+  if (!option) {
+    return null;
+  }
+
+  return option.correctFor.includes(
+    answer,
+  );
 }

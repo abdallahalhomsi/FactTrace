@@ -62,6 +62,13 @@ export async function postDecision(req: Request, res: Response): Promise<void> {
     .custom("factCheckFound", optionalBoolean(body.factCheckFound), "must be true, false or null")
     .custom("trialIndex", optionalNumber(body.trialIndex, 1, 999, true), "must be a whole number from 1 to 999")
     .custom("isPractice", optionalBoolean(body.isPractice), "must be true or false")
+    .custom(
+      "claimFamiliarity",
+      optionalBoolean(
+        body.claimFamiliarity,
+      ),
+      "must be true, false or null",
+    )
     .string("clientRecordId", { optional: true, maxLength: 64 })
     .string("appVersion", { optional: true, maxLength: 20 })
     .oneOf("decision", VERDICTS)
@@ -98,8 +105,24 @@ export async function postDecision(req: Request, res: Response): Promise<void> {
     factCheckFound: MATCH_STATUS_TO_BACKEND[String(body.matchStatus)] === "NO_MATCH" ? ((body.factCheckFound as boolean | undefined) ?? null) : null,
     clientRecordId: body.clientRecordId as string | undefined,
     trialIndex: body.trialIndex as number | undefined,
-    isPractice: (body.isPractice as boolean | undefined) ?? false, //not sent means a real, counted answer
-    appVersion: body.appVersion as string | undefined,
+    isPractice:
+      (
+        body.isPractice as
+          | boolean
+          | undefined
+      ) ?? false,
+
+    claimFamiliarity:
+      (
+        body.claimFamiliarity as
+          | boolean
+          | undefined
+      ) ?? null,
+
+    appVersion:
+      body.appVersion as
+        | string
+        | undefined,
     decision: body.decision as string,
     sharingIntention: body.sharingIntention as string,
     sourcesOpened: body.sourcesOpened as string[],

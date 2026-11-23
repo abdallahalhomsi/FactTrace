@@ -72,7 +72,19 @@ function isEvaluationRecord(value: unknown): value is EvaluationRecord {
     typeof r.serverMessage === 'string' &&
     typeof r.claimText === 'string' &&
     ['trust', 'dont_trust', 'unsure'].includes(String(r.decision)) &&
-    ['yes', 'no', 'not_sure'].includes(String(r.sharingIntention)) &&
+          [
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+      ].includes(
+        String(
+          r.sharingIntention,
+        ),
+      ) &&
     (r.localTrialKey === undefined || typeof r.localTrialKey === 'string') &&
     (r.localTrialNumber === undefined ||
       (typeof r.localTrialNumber === 'number' &&

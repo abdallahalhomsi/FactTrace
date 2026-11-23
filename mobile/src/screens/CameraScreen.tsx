@@ -1,101 +1,405 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
+  type ViewInstance,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+
+import {
+  CameraView,
+  useCameraPermissions,
+} from 'expo-camera';
+
+import {
+  manipulateAsync,
+  SaveFormat,
+} from 'expo-image-manipulator';
+
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import {
+  NativeStackScreenProps,
+} from '@react-navigation/native-stack';
 
 import { ThemeColors } from '../constants/app';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/AppTheme';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
+type Props =
+  NativeStackScreenProps<
+    RootStackParamList,
+    'Camera'
+  >;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+type ScanFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
-export default function CameraScreen({ navigation, route }: Props) {
-  const { colors: COLORS, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+type PhotoDimensions = {
+  width: number;
+  height: number;
+};
 
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView | null>(null);
+function clamp(
+  value: number,
+  min: number,
+  max: number,
+): number {
+  return Math.min(
+    Math.max(value, min),
+    max,
+  );
+}
 
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+function mapPreviewFrameToPhoto(
+  frame: ScanFrame,
+  previewWidth: number,
+  previewHeight: number,
+  photo: PhotoDimensions,
+) {
+  const scale = Math.max(
+    previewWidth / photo.width,
+    previewHeight / photo.height,
+  );
 
-  const studyContext = route.params?.studyContext;
+  const displayedPhotoWidth =
+    photo.width * scale;
+
+  const displayedPhotoHeight =
+    photo.height * scale;
+
+  const horizontalCrop =
+    (displayedPhotoWidth - previewWidth) / 2;
+
+  const verticalCrop =
+    (displayedPhotoHeight - previewHeight) / 2;
+
+  const originX =
+    (frame.x + horizontalCrop) / scale;
+
+  const originY =
+    (frame.y + verticalCrop) / scale;
+
+  const width =
+    frame.width / scale;
+
+  const height =
+    frame.height / scale;
+
+  const safeOriginX =
+    clamp(
+      Math.round(originX),
+      0,
+      Math.max(
+        0,
+        photo.width - 1,
+      ),
+    );
+
+  const safeOriginY =
+    clamp(
+      Math.round(originY),
+      0,
+      Math.max(
+        0,
+        photo.height - 1,
+      ),
+    );
+
+  const safeWidth =
+    clamp(
+      Math.round(width),
+      1,
+      photo.width - safeOriginX,
+    );
+
+  const safeHeight =
+    clamp(
+      Math.round(height),
+      1,
+      photo.height - safeOriginY,
+    );
+
+  return {
+    originX: safeOriginX,
+    originY: safeOriginY,
+    width: safeWidth,
+    height: safeHeight,
+  };
+}
+
+export default function CameraScreen({
+  navigation,
+  route,
+}: Props) {
+  const {
+    colors: COLORS,
+    isDark,
+  } = useAppTheme();
+
+  const {
+    width: windowWidth,
+    height: windowHeight,
+  } = useWindowDimensions();
+
+  const styles =
+    useMemo(
+      () =>
+        createStyles(
+          COLORS,
+          windowWidth,
+        ),
+      [
+        COLORS,
+        windowWidth,
+      ],
+    );
+
+  const [
+    permission,
+    requestPermission,
+  ] =
+    useCameraPermissions();
+
+  const cameraRef =
+    useRef<CameraView | null>(
+      null,
+    );
+
+  const guideBoxRef =
+    useRef<ViewInstance>(
+      null,
+    );
+
+  const [
+    isCameraReady,
+    setIsCameraReady,
+  ] =
+    useState(false);
+
+  const [
+    isCapturing,
+    setIsCapturing,
+  ] =
+    useState(false);
+
+  const studyContext =
+    route.params?.studyContext;
 
   useEffect(() => {
     if (!permission) {
       return;
     }
 
-    if (!permission.granted && permission.canAskAgain) {
+    if (
+      !permission.granted &&
+      permission.canAskAgain
+    ) {
       void requestPermission();
     }
-  }, [permission, requestPermission]);
+  }, [
+    permission,
+    requestPermission,
+  ]);
 
-  const handleClose = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home');
-    }
-  };
+  const handleClose =
+    () => {
+      if (
+        navigation.canGoBack()
+      ) {
+        navigation.goBack();
+      } else {
+        navigation.navigate(
+          'Home',
+        );
+      }
+    };
 
-  const handleCapture = async () => {
-    if (!cameraRef.current || !isCameraReady || isCapturing) {
-      return;
-    }
+  const measureGuideFrame =
+    (): Promise<ScanFrame> =>
+      new Promise(
+        (
+          resolve,
+          reject,
+        ) => {
+          const guide =
+            guideBoxRef.current;
 
-    try {
-      setIsCapturing(true);
+          if (!guide) {
+            reject(
+              new Error(
+                'Scan frame is not ready.',
+              ),
+            );
 
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.85,
-        skipProcessing: false,
-      });
+            return;
+          }
 
-      if (!photo?.uri) {
-        throw new Error('No image was captured.');
+          guide.measureInWindow(
+            (
+              x,
+              y,
+              width,
+              height,
+            ) => {
+              if (
+                width <= 0 ||
+                height <= 0
+              ) {
+                reject(
+                  new Error(
+                    'Scan frame could not be measured.',
+                  ),
+                );
+
+                return;
+              }
+
+              resolve({
+                x,
+                y,
+                width,
+                height,
+              });
+            },
+          );
+        },
+      );
+
+  const handleCapture =
+    async () => {
+      if (
+        !cameraRef.current ||
+        !isCameraReady ||
+        isCapturing
+      ) {
+        return;
       }
 
-      navigation.navigate('ClaimReview', {
-        imageUri: photo.uri,
-        studyContext,
-      });
-    } catch (error) {
-      console.error('Camera capture failed:', error);
+      try {
+        setIsCapturing(true);
 
-      Alert.alert(
-        'Could not capture image',
-        'Please try taking the photo again.',
-      );
-    } finally {
-      setIsCapturing(false);
-    }
-  };
+        const scanFrame =
+          await measureGuideFrame();
+
+        const photo =
+          await cameraRef.current
+            .takePictureAsync({
+              quality: 0.9,
+              skipProcessing: false,
+            });
+
+        if (!photo?.uri) {
+          throw new Error(
+            'No image was captured.',
+          );
+        }
+
+        if (
+          !photo.width ||
+          !photo.height
+        ) {
+          throw new Error(
+            'The captured image dimensions are unavailable.',
+          );
+        }
+
+        const crop =
+          mapPreviewFrameToPhoto(
+            scanFrame,
+            windowWidth,
+            windowHeight,
+            {
+              width: photo.width,
+              height: photo.height,
+            },
+          );
+
+        const croppedImage =
+          await manipulateAsync(
+            photo.uri,
+            [
+              {
+                crop,
+              },
+            ],
+            {
+              compress: 0.9,
+              format:
+                SaveFormat.JPEG,
+            },
+          );
+
+        if (!croppedImage.uri) {
+          throw new Error(
+            'The captured claim could not be cropped.',
+          );
+        }
+
+        navigation.navigate(
+          'ClaimReview',
+          {
+            imageUri:
+              croppedImage.uri,
+            studyContext,
+          },
+        );
+      } catch (error) {
+        console.error(
+          'Camera capture/crop failed:',
+          error,
+        );
+
+        Alert.alert(
+          'Could not capture claim',
+          'FactTrace could not crop the selected claim area. Please try again.',
+        );
+      } finally {
+        setIsCapturing(false);
+      }
+    };
 
   if (!permission) {
     return (
-      <SafeAreaView style={styles.permissionScreen}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
+      <SafeAreaView
+        style={
+          styles.permissionScreen
+        }
+      >
+        <StatusBar
+          style={
+            isDark
+              ? 'light'
+              : 'dark'
+          }
+        />
 
         <ActivityIndicator
           size="large"
           color={COLORS.blue}
         />
 
-        <Text style={styles.permissionText}>
+        <Text
+          style={
+            styles.permissionText
+          }
+        >
           Checking camera permission...
         </Text>
       </SafeAreaView>
@@ -104,11 +408,29 @@ export default function CameraScreen({ navigation, route }: Props) {
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.permissionScreen}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
+      <SafeAreaView
+        style={
+          styles.permissionScreen
+        }
+      >
+        <StatusBar
+          style={
+            isDark
+              ? 'light'
+              : 'dark'
+          }
+        />
 
-        <View style={styles.permissionCard}>
-          <View style={styles.permissionIcon}>
+        <View
+          style={
+            styles.permissionCard
+          }
+        >
+          <View
+            style={
+              styles.permissionIcon
+            }
+          >
             <Ionicons
               name="camera-outline"
               size={38}
@@ -116,11 +438,19 @@ export default function CameraScreen({ navigation, route }: Props) {
             />
           </View>
 
-          <Text style={styles.permissionTitle}>
+          <Text
+            style={
+              styles.permissionTitle
+            }
+          >
             Camera access is required
           </Text>
 
-          <Text style={styles.permissionText}>
+          <Text
+            style={
+              styles.permissionText
+            }
+          >
             FactTrace uses your camera to capture printed or on-screen claims
             for OCR and verification.
           </Text>
@@ -128,15 +458,27 @@ export default function CameraScreen({ navigation, route }: Props) {
           {permission.canAskAgain ? (
             <TouchableOpacity
               accessibilityRole="button"
-              style={styles.permissionButton}
-              onPress={() => void requestPermission()}
+              style={
+                styles.permissionButton
+              }
+              onPress={() =>
+                void requestPermission()
+              }
             >
-              <Text style={styles.permissionButtonText}>
+              <Text
+                style={
+                  styles.permissionButtonText
+                }
+              >
                 Allow Camera Access
               </Text>
             </TouchableOpacity>
           ) : (
-            <Text style={styles.permissionHelp}>
+            <Text
+              style={
+                styles.permissionHelp
+              }
+            >
               Camera permission is disabled in your device settings. Enable it
               for FactTrace and reopen the camera.
             </Text>
@@ -144,10 +486,18 @@ export default function CameraScreen({ navigation, route }: Props) {
 
           <TouchableOpacity
             accessibilityRole="button"
-            style={styles.backToHomeButton}
-            onPress={handleClose}
+            style={
+              styles.backToHomeButton
+            }
+            onPress={
+              handleClose
+            }
           >
-            <Text style={styles.backToHomeText}>
+            <Text
+              style={
+                styles.backToHomeText
+              }
+            >
               Go Back
             </Text>
           </TouchableOpacity>
@@ -157,23 +507,43 @@ export default function CameraScreen({ navigation, route }: Props) {
   }
 
   return (
-    <View style={styles.screen}>
+    <View
+      style={
+        styles.screen
+      }
+    >
       <StatusBar style="light" />
 
       <CameraView
         ref={cameraRef}
-        style={StyleSheet.absoluteFill}
+        style={
+          StyleSheet.absoluteFill
+        }
         facing="back"
-        onCameraReady={() => setIsCameraReady(true)}
+        onCameraReady={() =>
+          setIsCameraReady(true)
+        }
       />
 
-      <SafeAreaView style={styles.overlay}>
-        <View style={styles.topBar}>
+      <SafeAreaView
+        style={
+          styles.overlay
+        }
+      >
+        <View
+          style={
+            styles.topBar
+          }
+        >
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Close camera"
-            style={styles.closeButton}
-            onPress={handleClose}
+            style={
+              styles.closeButton
+            }
+            onPress={
+              handleClose
+            }
           >
             <Ionicons
               name="close"
@@ -182,60 +552,130 @@ export default function CameraScreen({ navigation, route }: Props) {
             />
           </TouchableOpacity>
 
-          <View style={styles.topTitleContainer}>
-            <Text style={styles.topTitle}>
+          <View
+            style={
+              styles.topTitleContainer
+            }
+          >
+            <Text
+              style={
+                styles.topTitle
+              }
+            >
               Scan a Claim
             </Text>
 
             {studyContext ? (
-              <Text style={styles.studyLabel}>
-                Study Trial {studyContext.trialIndex}
+              <Text
+                style={
+                  styles.studyLabel
+                }
+              >
+                Study Trial{' '}
+                {
+                  studyContext.trialIndex
+                }
               </Text>
             ) : null}
           </View>
 
-          <View style={styles.topSpacer} />
+          <View
+            style={
+              styles.topSpacer
+            }
+          />
         </View>
 
-        <View style={styles.centerArea}>
-          <View style={styles.guideBox}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
+        <View
+          style={
+            styles.centerArea
+          }
+        >
+          <View
+            ref={guideBoxRef}
+            collapsable={false}
+            style={
+              styles.guideBox
+            }
+          >
+            <View
+              style={[
+                styles.corner,
+                styles.topLeft,
+              ]}
+            />
 
-            <View style={styles.guideTextContainer}>
-              <Text style={styles.guideTitle}>
-                Position the claim inside the frame
-              </Text>
+            <View
+              style={[
+                styles.corner,
+                styles.topRight,
+              ]}
+            />
 
-              <Text style={styles.guideText}>
-                Keep the text clear, well lit, and as straight as possible.
-              </Text>
-            </View>
+            <View
+              style={[
+                styles.corner,
+                styles.bottomLeft,
+              ]}
+            />
+
+            <View
+              style={[
+                styles.corner,
+                styles.bottomRight,
+              ]}
+            />
           </View>
+
+          <Text
+            style={
+              styles.outsideGuideNote
+            }
+          >
+            Only content inside this frame will be scanned.
+          </Text>
         </View>
 
-        <View style={styles.bottomArea}>
-          <Text style={styles.captureHint}>
+        <View
+          style={
+            styles.bottomArea
+          }
+        >
+          <Text
+            style={
+              styles.captureHint
+            }
+          >
             Capture one factual claim at a time.
           </Text>
 
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Capture claim"
-            disabled={!isCameraReady || isCapturing}
+            disabled={
+              !isCameraReady ||
+              isCapturing
+            }
             style={[
               styles.captureOuter,
-              (!isCameraReady || isCapturing) &&
+              (
+                !isCameraReady ||
+                isCapturing
+              ) &&
                 styles.captureOuterDisabled,
             ]}
-            onPress={() => void handleCapture()}
+            onPress={() =>
+              void handleCapture()
+            }
           >
-            <View style={styles.captureInner}>
+            <View
+              style={
+                styles.captureInner
+              }
+            >
               {isCapturing ? (
                 <ActivityIndicator
-                  color="#FFFFFF"
+                  color={COLORS.blue}
                   size="small"
                 />
               ) : null}
@@ -247,7 +687,10 @@ export default function CameraScreen({ navigation, route }: Props) {
   );
 }
 
-const createStyles = (COLORS: ThemeColors) =>
+const createStyles = (
+  COLORS: ThemeColors,
+  screenWidth: number,
+) =>
   StyleSheet.create({
     screen: {
       flex: 1,
@@ -256,8 +699,10 @@ const createStyles = (COLORS: ThemeColors) =>
 
     overlay: {
       flex: 1,
-      justifyContent: 'space-between',
-      backgroundColor: 'rgba(0, 0, 0, 0.18)',
+      justifyContent:
+        'space-between',
+      backgroundColor:
+        'rgba(0, 0, 0, 0.18)',
     },
 
     topBar: {
@@ -273,7 +718,8 @@ const createStyles = (COLORS: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 23,
-      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+      backgroundColor:
+        'rgba(0, 0, 0, 0.45)',
     },
 
     topTitleContainer: {
@@ -307,11 +753,19 @@ const createStyles = (COLORS: ThemeColors) =>
     },
 
     guideBox: {
-      width: Math.min(SCREEN_WIDTH - 44, 420),
+      width:
+        Math.min(
+          screenWidth - 44,
+          420,
+        ),
+
       minHeight: 260,
-      justifyContent: 'flex-end',
+
       borderRadius: 18,
-      backgroundColor: 'rgba(0, 0, 0, 0.08)',
+
+      backgroundColor:
+        'rgba(0, 0, 0, 0.04)',
+
       overflow: 'hidden',
     },
 
@@ -354,27 +808,15 @@ const createStyles = (COLORS: ThemeColors) =>
       borderBottomRightRadius: 16,
     },
 
-    guideTextContainer: {
-      margin: 18,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-      backgroundColor: 'rgba(0, 0, 0, 0.56)',
-    },
-
-    guideTitle: {
+    outsideGuideNote: {
+      marginTop: 16,
       color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: '800',
+      fontSize: 13,
+      fontWeight: '700',
       textAlign: 'center',
-    },
-
-    guideText: {
-      marginTop: 4,
-      color: '#E2E8F0',
-      fontSize: 12,
-      lineHeight: 17,
-      textAlign: 'center',
+      textShadowColor:
+        'rgba(0, 0, 0, 0.85)',
+      textShadowRadius: 4,
     },
 
     bottomArea: {
@@ -389,7 +831,8 @@ const createStyles = (COLORS: ThemeColors) =>
       fontSize: 13,
       fontWeight: '600',
       textAlign: 'center',
-      textShadowColor: 'rgba(0, 0, 0, 0.75)',
+      textShadowColor:
+        'rgba(0, 0, 0, 0.75)',
       textShadowRadius: 4,
     },
 
@@ -401,7 +844,8 @@ const createStyles = (COLORS: ThemeColors) =>
       borderRadius: 40,
       borderWidth: 5,
       borderColor: '#FFFFFF',
-      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      backgroundColor:
+        'rgba(255, 255, 255, 0.18)',
     },
 
     captureOuterDisabled: {
@@ -422,7 +866,8 @@ const createStyles = (COLORS: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 24,
-      backgroundColor: COLORS.background,
+      backgroundColor:
+        COLORS.background,
     },
 
     permissionCard: {
@@ -430,9 +875,11 @@ const createStyles = (COLORS: ThemeColors) =>
       maxWidth: 430,
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: COLORS.border,
+      borderColor:
+        COLORS.border,
       borderRadius: 20,
-      backgroundColor: COLORS.surface,
+      backgroundColor:
+        COLORS.surface,
       padding: 26,
     },
 
@@ -442,12 +889,14 @@ const createStyles = (COLORS: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 36,
-      backgroundColor: COLORS.blueLight,
+      backgroundColor:
+        COLORS.blueLight,
       marginBottom: 18,
     },
 
     permissionTitle: {
-      color: COLORS.textPrimary,
+      color:
+        COLORS.textPrimary,
       fontSize: 21,
       fontWeight: '800',
       textAlign: 'center',
@@ -455,7 +904,8 @@ const createStyles = (COLORS: ThemeColors) =>
 
     permissionText: {
       marginTop: 10,
-      color: COLORS.textSecondary,
+      color:
+        COLORS.textSecondary,
       fontSize: 14,
       lineHeight: 21,
       textAlign: 'center',
@@ -463,7 +913,8 @@ const createStyles = (COLORS: ThemeColors) =>
 
     permissionHelp: {
       marginTop: 18,
-      color: COLORS.textMuted,
+      color:
+        COLORS.textMuted,
       fontSize: 13,
       lineHeight: 19,
       textAlign: 'center',
@@ -476,11 +927,13 @@ const createStyles = (COLORS: ThemeColors) =>
       justifyContent: 'center',
       marginTop: 22,
       borderRadius: 13,
-      backgroundColor: COLORS.blue,
+      backgroundColor:
+        COLORS.blue,
     },
 
     permissionButtonText: {
-      color: COLORS.white,
+      color:
+        COLORS.white,
       fontSize: 15,
       fontWeight: '800',
     },
@@ -493,7 +946,8 @@ const createStyles = (COLORS: ThemeColors) =>
     },
 
     backToHomeText: {
-      color: COLORS.blue,
+      color:
+        COLORS.blue,
       fontSize: 14,
       fontWeight: '700',
     },

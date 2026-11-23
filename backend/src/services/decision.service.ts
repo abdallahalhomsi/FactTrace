@@ -36,13 +36,13 @@ export async function recordDecision(input: DecisionRequest): Promise<DecisionRe
     await pool.execute(
       `INSERT INTO decisions (
         decision_id, client_record_id, participant_id, study_condition,
-        trial_index, is_practice, app_version, claim_id, claim_text,
+        trial_index, is_practice, claim_familiarity, app_version, claim_id, claim_text,
         original_ocr_text, text_was_edited, input_source,
         match_status, match_score, weak_reason, weak_match_confirmed,
         fact_check_found, ocr_engine, ocr_error, ocr_confidence, ocr_retakes,
         decision, sharing_intention, sources_opened, sources_opened_count,
         started_at, ended_at, duration_ms, correct_answer, was_correct, received_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         decisionId,
         input.clientRecordId ?? null,
@@ -50,6 +50,7 @@ export async function recordDecision(input: DecisionRequest): Promise<DecisionRe
         input.condition,
         input.trialIndex ?? null,
         input.isPractice ?? false,
+        input.claimFamiliarity ?? null,
         input.appVersion ?? null,
         input.claimId,
         input.claimText,

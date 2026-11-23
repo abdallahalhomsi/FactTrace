@@ -68,10 +68,20 @@ export type DecisionRequest = {
     | 'dont_trust'
     | 'unsure';
   sharingIntention:
-    | 'yes'
-    | 'no'
-    | 'not_sure';
+    | '1'
+    | '2'
+    | '3'
+    | '4'
+    | '5'
+    | '6'
+    | '7';
   sourcesOpened: string[];
+
+  trialIndex?: number;
+  isPractice?: boolean;
+  claimFamiliarity?: boolean | null;
+  appVersion?: string;
+
   startedAt: string;
   endedAt: string;
 };

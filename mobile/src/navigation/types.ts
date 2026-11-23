@@ -3,16 +3,36 @@ import { VerificationEvaluationContext } from '../types/api';
 
 export type StudyTrialContext = {
   participantId: string;
+
   conditionOrder:
     | 'app_first'
     | 'browser_first';
-  condition: 'app' | 'browser';
+
+  condition:
+    | 'app'
+    | 'browser';
+
   claimId: string;
+
   claimText: string;
+
   trialIndex: number;
+
   isPractice: boolean;
+
+  /*
+   * Asked BEFORE the measured verification
+   * task starts.
+   *
+   * undefined for practice trials.
+   */
+  claimFamiliarity?:
+    boolean;
+
   sessionId?: string;
+
   trialId?: string;
+
   startedAt?: string;
 };
 

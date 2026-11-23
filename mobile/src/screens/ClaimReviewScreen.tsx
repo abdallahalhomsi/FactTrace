@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   ActivityIndicator,
   Image,
@@ -20,18 +27,36 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import {
+  NativeStackScreenProps,
+} from '@react-navigation/native-stack';
 
 import {
   RootStackParamList,
   StudyTrialContext,
 } from '../navigation/types';
+
 import { ThemeColors } from '../constants/app';
+
 import { useAppTheme } from '../theme/AppTheme';
-import { verifyClaim } from '../services/verificationService';
-import { extractTextFromImage } from '../services/ocrService';
-import { createHistoryEntryId } from '../services/historyService';
-import { PRACTICE_RESULT } from '../services/walkthroughData';
+
+import {
+  verifyClaim,
+} from '../services/verificationService';
+
+import {
+  extractTextFromImage,
+} from '../services/ocrService';
+
+import {
+  createHistoryEntryId,
+} from '../services/historyService';
+
+import {
+  PRACTICE_RESULT,
+} from '../services/walkthroughData';
+
 import WalkthroughOverlay from '../components/WalkthroughOverlay';
 
 import {
@@ -47,21 +72,37 @@ import {
   OcrResponse,
 } from '../types/api';
 
-type Props = NativeStackScreenProps<
-  RootStackParamList,
-  'ClaimReview'
->;
+type Props =
+  NativeStackScreenProps<
+    RootStackParamList,
+    'ClaimReview'
+  >;
 
-function getVerificationErrorMessage(message: string): string {
-  if (/failed to fetch|network request failed|networkerror/i.test(message)) {
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
+
+function getVerificationErrorMessage(
+  message: string,
+): string {
+  if (
+    /failed to fetch|network request failed|networkerror/i.test(
+      message,
+    )
+  ) {
     const apiBaseUrl =
       process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ||
-      (Platform.OS === 'web' ? 'http://localhost:3000' : null);
+      (
+        Platform.OS === 'web'
+          ? 'http://localhost:3000'
+          : null
+      );
 
     return `FactTrace could not reach ${
-      apiBaseUrl ?? 'the configured backend'
+      apiBaseUrl ??
+      'the configured backend'
     }${
-      apiBaseUrl ? '/api/verify' : ''
+      apiBaseUrl
+        ? '/api/verify'
+        : ''
     }. Start the backend with “npm run dev” in the backend folder, check EXPO_PUBLIC_API_BASE_URL, then try again.`;
   }
 
@@ -69,730 +110,1581 @@ function getVerificationErrorMessage(message: string): string {
 }
 
 function getApiErrorMessage(
-  error: ApiResponse<unknown>['error'],
+  error:
+    ApiResponse<unknown>['error'],
   fallback: string,
 ): string {
-  if (typeof error === 'string') {
+  if (
+    typeof error === 'string'
+  ) {
     return error;
   }
 
-  return error?.message ?? fallback;
+  return (
+    error?.message ??
+    fallback
+  );
 }
 
-function isPracticeClaim(value: string): boolean {
-  const words = value
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .match(/[a-z0-9]+/g)
-    ?.map(word => word.replace(/s$/, '')) ?? [];
+function getFriendlyOcrEngine(
+  engine:
+    | BackendOcrResult['engine']
+    | null
+    | undefined,
+): string | null {
+  if (
+    engine ===
+    'cloud_vision'
+  ) {
+    return 'Google Cloud Vision';
+  }
 
-  if (words.includes('honey') && words.includes('spoil')) {
+  if (
+    engine ===
+    'tesseract'
+  ) {
+    return 'Tesseract';
+  }
+
+  return null;
+}
+
+function normalizeText(
+  value: string,
+): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function isPracticeClaim(
+  value: string,
+): boolean {
+  const words =
+    value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(
+        /[\u0300-\u036f]/g,
+        '',
+      )
+      .match(
+        /[a-z0-9]+/g,
+      )
+      ?.map(
+        word =>
+          word.replace(
+            /s$/,
+            '',
+          ),
+      ) ?? [];
+
+  if (
+    words.includes(
+      'honey',
+    ) &&
+    words.includes(
+      'spoil',
+    )
+  ) {
     return true;
   }
 
-  const compact = (text: string) =>
-    text
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '');
+  const compact =
+    (
+      text: string,
+    ) =>
+      text
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(
+          /[\u0300-\u036f]/g,
+          '',
+        )
+        .replace(
+          /[^a-z0-9]/g,
+          '',
+        );
 
-  const input = compact(value);
-  const expected = compact(PRACTICE_CLAIM);
-  const maxEdits = Math.max(2, Math.floor(expected.length * 0.15));
+  const input =
+    compact(
+      value,
+    );
 
-  if (Math.abs(input.length - expected.length) > maxEdits) {
+  const expected =
+    compact(
+      PRACTICE_CLAIM,
+    );
+
+  const maxEdits =
+    Math.max(
+      2,
+      Math.floor(
+        expected.length *
+          0.15,
+      ),
+    );
+
+  if (
+    Math.abs(
+      input.length -
+        expected.length,
+    ) >
+    maxEdits
+  ) {
     return false;
   }
 
-  let previousRow = Array.from(
-    { length: input.length + 1 },
-    (_, index) => index,
-  );
+  let previousRow =
+    Array.from(
+      {
+        length:
+          input.length +
+          1,
+      },
+      (
+        _,
+        index,
+      ) => index,
+    );
 
   for (
-    let expectedIndex = 1;
-    expectedIndex <= expected.length;
+    let expectedIndex =
+      1;
+    expectedIndex <=
+    expected.length;
     expectedIndex++
   ) {
-    const currentRow = [expectedIndex];
-    let minimum = expectedIndex;
+    const currentRow = [
+      expectedIndex,
+    ];
 
-    for (let inputIndex = 1; inputIndex <= input.length; inputIndex++) {
+    let minimum =
+      expectedIndex;
+
+    for (
+      let inputIndex =
+        1;
+      inputIndex <=
+      input.length;
+      inputIndex++
+    ) {
       const substitutionCost =
-        expected[expectedIndex - 1] === input[inputIndex - 1]
+        expected[
+          expectedIndex -
+            1
+        ] ===
+        input[
+          inputIndex -
+            1
+        ]
           ? 0
           : 1;
-      const distance = Math.min(
-        previousRow[inputIndex] + 1,
-        currentRow[inputIndex - 1] + 1,
-        previousRow[inputIndex - 1] + substitutionCost,
+
+      const distance =
+        Math.min(
+          previousRow[
+            inputIndex
+          ] + 1,
+
+          currentRow[
+            inputIndex -
+              1
+          ] + 1,
+
+          previousRow[
+            inputIndex -
+              1
+          ] +
+            substitutionCost,
+        );
+
+      currentRow.push(
+        distance,
       );
 
-      currentRow.push(distance);
-      minimum = Math.min(minimum, distance);
+      minimum =
+        Math.min(
+          minimum,
+          distance,
+        );
     }
 
-    if (minimum > maxEdits) {
+    if (
+      minimum >
+      maxEdits
+    ) {
       return false;
     }
 
-    previousRow = currentRow;
+    previousRow =
+      currentRow;
   }
 
-  return previousRow[input.length] <= maxEdits;
+  return (
+    previousRow[
+      input.length
+    ] <= maxEdits
+  );
 }
 
 export default function ClaimReviewScreen({
   navigation,
   route,
 }: Props) {
-  const { colors: COLORS, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
+  const {
+    colors: COLORS,
+    isDark,
+  } =
+    useAppTheme();
 
-  const imageUri = route.params?.imageUri;
-  const studyContext = route.params?.studyContext;
-
-  const isWalkthrough =
-    Boolean(route.params?.walkthrough) && !studyContext;
-
-  const initialClaim = isWalkthrough
-    ? ''
-    : route.params?.claimText ||
-      (!imageUri ? studyContext?.claimText : '') ||
-      '';
-
-  const [claimText, setClaimText] = useState(initialClaim);
-
-  const [walkthroughStep, setWalkthroughStep] =
-    useState<WalkthroughStep | null>(
-      isWalkthrough ? 'practice_claim' : null,
+  const styles =
+    useMemo(
+      () =>
+        createStyles(
+          COLORS,
+          isDark,
+        ),
+      [
+        COLORS,
+        isDark,
+      ],
     );
 
-  const [practicePromptFeedback, setPracticePromptFeedback] =
-    useState<string | null>(null);
+  const imageUri =
+    route.params?.imageUri;
 
-  const [measurementVersion, setMeasurementVersion] = useState(0);
+  const studyContext =
+    route.params
+      ?.studyContext;
 
-  const [isChecking, setIsChecking] = useState(false);
+  const isWalkthrough =
+    Boolean(
+      route.params
+        ?.walkthrough,
+    ) &&
+    !studyContext;
 
-  const [verificationError, setVerificationError] =
-    useState<string | null>(null);
+  const initialClaim =
+    isWalkthrough
+      ? ''
+      : route.params
+          ?.claimText ||
+        (
+          !imageUri
+            ? studyContext
+                ?.claimText
+            : ''
+        ) ||
+        '';
 
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [
+    claimText,
+    setClaimText,
+  ] =
+    useState(
+      initialClaim,
+    );
 
-  const [originalOcrText, setOriginalOcrText] =
-    useState<string | undefined>();
+  const [
+    walkthroughStep,
+    setWalkthroughStep,
+  ] =
+    useState<
+      WalkthroughStep | null
+    >(
+      isWalkthrough
+        ? 'practice_claim'
+        : null,
+    );
 
-  const [ocrMetadata, setOcrMetadata] =
-    useState<OcrResponse['data'] | null>(null);
+  const [
+    practicePromptFeedback,
+    setPracticePromptFeedback,
+  ] =
+    useState<
+      string | null
+    >(null);
 
-  const [ocrErrorCode, setOcrErrorCode] =
-    useState<BackendOcrResult['error']>(null);
+  const [
+    measurementVersion,
+    setMeasurementVersion,
+  ] =
+    useState(0);
 
-  const taskStartedAt = useRef(
-    studyContext?.startedAt ?? new Date().toISOString(),
-  );
+  const [
+    isChecking,
+    setIsChecking,
+  ] =
+    useState(false);
 
-  const walkthroughReady = useRef(false);
-  const claimTextRef = useRef(initialClaim);
-  const scrollViewRef = useRef<ScrollViewInstance>(null);
-  const inputTargetRef = useRef<ViewInstance>(null);
-  const checkButtonRef = useRef<ViewInstance>(null);
-  const scrollOffset = useRef(0);
+  const [
+    verificationError,
+    setVerificationError,
+  ] =
+    useState<
+      string | null
+    >(null);
 
-  const { height: windowHeight } = useWindowDimensions();
+  const [
+    isExtracting,
+    setIsExtracting,
+  ] =
+    useState(false);
 
-  const revealCheckButton = useCallback(() => {
-    requestAnimationFrame(() => {
-      checkButtonRef.current?.measureInWindow((_x, y, _width, buttonHeight) => {
-        const visibleBottom = windowHeight - 80;
-        const overflow = y + buttonHeight - visibleBottom;
+  const [
+    ocrError,
+    setOcrError,
+  ] =
+    useState<
+      string | null
+    >(null);
 
-        if (overflow > 0) {
-          scrollViewRef.current?.scrollTo({
-            y: scrollOffset.current + overflow,
-            animated: true,
-          });
-        }
+  const [
+    originalOcrText,
+    setOriginalOcrText,
+  ] =
+    useState<
+      string | undefined
+    >();
 
-        requestAnimationFrame(() => {
-          setMeasurementVersion(version => version + 1);
-        });
-      });
-    });
-  }, [windowHeight]);
+  const [
+    ocrMetadata,
+    setOcrMetadata,
+  ] =
+    useState<
+      OcrResponse['data'] | null
+    >(null);
+
+  const [
+    ocrErrorCode,
+    setOcrErrorCode,
+  ] =
+    useState<
+      BackendOcrResult['error']
+    >(null);
+
+  const taskStartedAt =
+    useRef(
+      studyContext
+        ?.startedAt ??
+        new Date()
+          .toISOString(),
+    );
+
+  const walkthroughReady =
+    useRef(false);
+
+  const claimTextRef =
+    useRef(
+      initialClaim,
+    );
+
+  const scrollViewRef =
+    useRef<
+      ScrollViewInstance
+    >(null);
+
+  const inputTargetRef =
+    useRef<
+      ViewInstance
+    >(null);
+
+  const checkButtonRef =
+    useRef<
+      ViewInstance
+    >(null);
+
+  const scrollOffset =
+    useRef(0);
+
+  const {
+    height:
+      windowHeight,
+  } =
+    useWindowDimensions();
+
+  const isFromCamera =
+    Boolean(
+      imageUri,
+    );
+
+  const hasOcrText =
+    Boolean(
+      originalOcrText
+        ?.trim(),
+    );
+
+  const ocrConfidence =
+    ocrMetadata
+      ?.confidence ??
+    null;
+
+  const confidencePercent =
+    ocrConfidence ===
+    null
+      ? null
+      : Math.round(
+          ocrConfidence *
+            100,
+        );
+
+  const isLowConfidence =
+    ocrConfidence !==
+      null &&
+    ocrConfidence <
+      LOW_CONFIDENCE_THRESHOLD;
+
+  const isPartialOcr =
+    ocrErrorCode ===
+    'PARTIAL';
+
+  const hasOcrWarning =
+    hasOcrText &&
+    (
+      isLowConfidence ||
+      isPartialOcr
+    );
+
+  const hasEditedOcrText =
+    hasOcrText &&
+    normalizeText(
+      claimText,
+    ) !==
+      normalizeText(
+        originalOcrText ??
+          '',
+      );
+
+  const friendlyOcrEngine =
+    getFriendlyOcrEngine(
+      ocrMetadata
+        ?.engine,
+    );
+
+  const revealCheckButton =
+    useCallback(
+      () => {
+        requestAnimationFrame(
+          () => {
+            checkButtonRef
+              .current
+              ?.measureInWindow(
+                (
+                  _x,
+                  y,
+                  _width,
+                  buttonHeight,
+                ) => {
+                  const visibleBottom =
+                    windowHeight -
+                    80;
+
+                  const overflow =
+                    y +
+                    buttonHeight -
+                    visibleBottom;
+
+                  if (
+                    overflow >
+                    0
+                  ) {
+                    scrollViewRef
+                      .current
+                      ?.scrollTo(
+                        {
+                          y:
+                            scrollOffset
+                              .current +
+                            overflow,
+
+                          animated:
+                            true,
+                        },
+                      );
+                  }
+
+                  requestAnimationFrame(
+                    () => {
+                      setMeasurementVersion(
+                        version =>
+                          version +
+                          1,
+                      );
+                    },
+                  );
+                },
+              );
+          },
+        );
+      },
+      [
+        windowHeight,
+      ],
+    );
 
   useEffect(() => {
-    if (!isWalkthrough) return;
+    if (
+      !isWalkthrough
+    ) {
+      return;
+    }
 
     let active = true;
 
     void getWalkthroughState()
-      .then(savedState => {
-        if (!active) return;
+      .then(
+        savedState => {
+          if (
+            !active
+          ) {
+            return;
+          }
 
-        const savedClaim =
-          savedState?.status === 'in_progress'
-            ? savedState.practiceClaim ?? ''
-            : '';
+          const savedClaim =
+            savedState
+              ?.status ===
+            'in_progress'
+              ? savedState
+                  .practiceClaim ??
+                ''
+              : '';
 
-        const claimAlreadyTyped = claimTextRef.current.length > 0;
+          const claimAlreadyTyped =
+            claimTextRef
+              .current
+              .length >
+            0;
 
-        const restoredClaim = claimAlreadyTyped
-          ? claimTextRef.current
-          : savedClaim;
+          const restoredClaim =
+            claimAlreadyTyped
+              ? claimTextRef
+                  .current
+              : savedClaim;
 
-        const validSavedClaim = isPracticeClaim(restoredClaim);
+          const validSavedClaim =
+            isPracticeClaim(
+              restoredClaim,
+            );
 
-        claimTextRef.current = restoredClaim;
-        setClaimText(restoredClaim);
+          claimTextRef.current =
+            restoredClaim;
 
-        setWalkthroughStep('practice_claim');
-
-        walkthroughReady.current = true;
-
-        if (claimAlreadyTyped) {
-          void saveWalkthroughState({
-            status: 'in_progress',
-            step: 'practice_claim',
-            practiceClaim: restoredClaim,
-          }).catch(error => {
-            console.warn('Could not save practice claim progress.', error);
-          });
-        }
-
-        if (
-          savedState?.status === 'in_progress' &&
-          savedState.step === 'practice_pending' &&
-          validSavedClaim
-        ) {
-          void saveWalkthroughState({
-            status: 'in_progress',
-            step: 'result_match',
-            practiceClaim: savedClaim,
-          })
-            .then(() => {
-              if (active) {
-                navigation.replace('VerificationResults', {
-                  result: PRACTICE_RESULT,
-                  walkthrough: true,
-                });
-              }
-            })
-            .catch(error => {
-              console.warn(
-                'Could not resume practice results.',
-                error,
-              );
-
-              if (active) {
-                setVerificationError(
-                  'Could not resume the practice results. Please try again.',
-                );
-              }
-            });
-        }
-      })
-      .catch(error => {
-        console.warn(
-          'Could not restore walkthrough progress.',
-          error,
-        );
-
-        if (active) {
-          setVerificationError(
-            'Walkthrough progress could not be restored. You can skip and continue normally.',
+          setClaimText(
+            restoredClaim,
           );
 
-          walkthroughReady.current = true;
-        }
-      });
+          setWalkthroughStep(
+            'practice_claim',
+          );
+
+          walkthroughReady.current =
+            true;
+
+          if (
+            claimAlreadyTyped
+          ) {
+            void saveWalkthroughState(
+              {
+                status:
+                  'in_progress',
+
+                step:
+                  'practice_claim',
+
+                practiceClaim:
+                  restoredClaim,
+              },
+            ).catch(
+              error => {
+                console.warn(
+                  'Could not save practice claim progress.',
+                  error,
+                );
+              },
+            );
+          }
+
+          if (
+            savedState
+              ?.status ===
+              'in_progress' &&
+            savedState.step ===
+              'practice_pending' &&
+            validSavedClaim
+          ) {
+            void saveWalkthroughState(
+              {
+                status:
+                  'in_progress',
+
+                step:
+                  'result_match',
+
+                practiceClaim:
+                  savedClaim,
+              },
+            )
+              .then(
+                () => {
+                  if (
+                    active
+                  ) {
+                    navigation.replace(
+                      'VerificationResults',
+                      {
+                        result:
+                          PRACTICE_RESULT,
+
+                        walkthrough:
+                          true,
+                      },
+                    );
+                  }
+                },
+              )
+              .catch(
+                error => {
+                  console.warn(
+                    'Could not resume practice results.',
+                    error,
+                  );
+
+                  if (
+                    active
+                  ) {
+                    setVerificationError(
+                      'Could not resume the practice results. Please try again.',
+                    );
+                  }
+                },
+              );
+          }
+        },
+      )
+      .catch(
+        error => {
+          console.warn(
+            'Could not restore walkthrough progress.',
+            error,
+          );
+
+          if (
+            active
+          ) {
+            setVerificationError(
+              'Walkthrough progress could not be restored. You can skip and continue normally.',
+            );
+
+            walkthroughReady.current =
+              true;
+          }
+        },
+      );
 
     return () => {
       active = false;
     };
-  }, [isWalkthrough, navigation, revealCheckButton]);
+  }, [
+    isWalkthrough,
+    navigation,
+    revealCheckButton,
+  ]);
 
   useEffect(() => {
-    if (!isWalkthrough) return;
+    if (
+      !isWalkthrough
+    ) {
+      return;
+    }
 
-    const showSubscription = Keyboard.addListener(
-      'keyboardDidShow',
-      () => setMeasurementVersion(version => version + 1),
-    );
+    const showSubscription =
+      Keyboard.addListener(
+        'keyboardDidShow',
+        () =>
+          setMeasurementVersion(
+            version =>
+              version +
+              1,
+          ),
+      );
 
-    const hideSubscription = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        if (walkthroughStep === 'practice_check') {
-          revealCheckButton();
-        } else {
-          setMeasurementVersion(version => version + 1);
-        }
-      },
-    );
+    const hideSubscription =
+      Keyboard.addListener(
+        'keyboardDidHide',
+        () => {
+          if (
+            walkthroughStep ===
+            'practice_check'
+          ) {
+            revealCheckButton();
+          } else {
+            setMeasurementVersion(
+              version =>
+                version +
+                1,
+            );
+          }
+        },
+      );
 
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, [isWalkthrough, revealCheckButton, walkthroughStep]);
+  }, [
+    isWalkthrough,
+    revealCheckButton,
+    walkthroughStep,
+  ]);
 
-  const handlePracticeClaimChange = (value: string) => {
-    claimTextRef.current = value;
-    setClaimText(value);
-    setVerificationError(null);
-    setPracticePromptFeedback(null);
+  const handlePracticeClaimChange =
+    (
+      value: string,
+    ) => {
+      claimTextRef.current =
+        value;
 
-    if (!isWalkthrough || !walkthroughReady.current) {
-      return;
-    }
-
-    setWalkthroughStep('practice_claim');
-
-    void saveWalkthroughState({
-      status: 'in_progress',
-      step: 'practice_claim',
-      practiceClaim: value,
-    }).catch(error => {
-      console.warn(
-        'Could not save practice claim progress.',
-        error,
+      setClaimText(
+        value,
       );
 
       setVerificationError(
-        'Walkthrough progress could not be saved. Please try again.',
-      );
-    });
-  };
-
-  const continuePractice = async () => {
-    await handleCheckEvidence();
-  };
-
-  const skipWalkthrough = async () => {
-    try {
-      Keyboard.dismiss();
-
-      await saveWalkthroughState({
-        status: 'skipped',
-      });
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home' }],
-      });
-    } catch (error) {
-      console.warn(
-        'Could not skip walkthrough.',
-        error,
+        null,
       );
 
-      setVerificationError(
-        'The walkthrough could not be skipped because its status could not be saved.',
+      setPracticePromptFeedback(
+        null,
       );
-    }
-  };
+
+      if (
+        !isWalkthrough ||
+        !walkthroughReady.current
+      ) {
+        return;
+      }
+
+      setWalkthroughStep(
+        'practice_claim',
+      );
+
+      void saveWalkthroughState(
+        {
+          status:
+            'in_progress',
+
+          step:
+            'practice_claim',
+
+          practiceClaim:
+            value,
+        },
+      ).catch(
+        error => {
+          console.warn(
+            'Could not save practice claim progress.',
+            error,
+          );
+
+          setVerificationError(
+            'Walkthrough progress could not be saved. Please try again.',
+          );
+        },
+      );
+    };
+
+  const continuePractice =
+    async () => {
+      await handleCheckEvidence();
+    };
+
+  const skipWalkthrough =
+    async () => {
+      try {
+        Keyboard.dismiss();
+
+        await saveWalkthroughState(
+          {
+            status:
+              'skipped',
+          },
+        );
+
+        navigation.reset({
+          index: 0,
+
+          routes: [
+            {
+              name:
+                'Home',
+            },
+          ],
+        });
+      } catch (
+        error
+      ) {
+        console.warn(
+          'Could not skip walkthrough.',
+          error,
+        );
+
+        setVerificationError(
+          'The walkthrough could not be skipped because its status could not be saved.',
+        );
+      }
+    };
 
   const activeStudyContext:
     | StudyTrialContext
-    | undefined = studyContext
-    ? {
-        ...studyContext,
-        startedAt: taskStartedAt.current,
-      }
-    : undefined;
+    | undefined =
+    studyContext
+      ? {
+          ...studyContext,
 
-  const isFromCamera = Boolean(imageUri);
-  const hasOcrText = Boolean(originalOcrText?.trim());
+          startedAt:
+            taskStartedAt
+              .current,
+        }
+      : undefined;
 
-  const applyOcrResponse = (response: OcrResponse) => {
-    setOcrMetadata(response.data ?? null);
-
-    setOcrErrorCode(
-      response.data?.ocrError ??
-        (response.success ? null : 'OCR_FAILED'),
-    );
-
-    setOriginalOcrText(
-      response.data?.extractedText || undefined,
-    );
-
-    if (
-      response.success &&
-      response.data?.extractedText
-    ) {
-      setClaimText(response.data.extractedText);
-
-      setOcrError(
-        response.data.ocrError === 'PARTIAL'
-          ? 'Some text may be incomplete. Review and correct it before verifying.'
-          : null,
+  const applyOcrResponse =
+    (
+      response:
+        OcrResponse,
+    ) => {
+      setOcrMetadata(
+        response.data ??
+          null,
       );
 
+      setOcrErrorCode(
+        response.data
+          ?.ocrError ??
+          (
+            response.success
+              ? null
+              : 'OCR_FAILED'
+          ),
+      );
+
+      setOriginalOcrText(
+        response.data
+          ?.extractedText ||
+          undefined,
+      );
+
+      if (
+        response.success &&
+        response.data
+          ?.extractedText
+      ) {
+        setClaimText(
+          response.data
+            .extractedText,
+        );
+
+        claimTextRef.current =
+          response.data
+            .extractedText;
+
+        setOcrError(
+          null,
+        );
+
+        return;
+      }
+
+      setOcrError(
+        getApiErrorMessage(
+          response.error,
+
+          'No readable text was detected. You can enter the claim manually.',
+        ),
+      );
+    };
+
+  useEffect(() => {
+    if (
+      !imageUri ||
+      isWalkthrough
+    ) {
       return;
     }
 
-    setOcrError(
-      getApiErrorMessage(
-        response.error,
-        'No readable text was detected. You can enter the claim manually.',
-      ),
-    );
-  };
-
-  useEffect(() => {
-    if (!imageUri || isWalkthrough) return;
-
     let active = true;
 
-    const runOcr = async () => {
-      setIsExtracting(true);
-      setOcrError(null);
+    const runOcr =
+      async () => {
+        setIsExtracting(
+          true,
+        );
 
-      try {
-        const response = await extractTextFromImage(imageUri);
+        setOcrError(
+          null,
+        );
 
-        if (active) {
-          applyOcrResponse(response);
-        }
-      } catch (error) {
-        console.warn('OCR error:', error);
+        try {
+          const response =
+            await extractTextFromImage(
+              imageUri,
+            );
 
-        if (active) {
-          setOcrError(
-            'FactTrace could not extract text from this image.',
+          if (
+            active
+          ) {
+            applyOcrResponse(
+              response,
+            );
+          }
+        } catch (
+          error
+        ) {
+          console.warn(
+            'OCR error:',
+            error,
           );
+
+          if (
+            active
+          ) {
+            setOcrErrorCode(
+              'OCR_FAILED',
+            );
+
+            setOcrError(
+              'FactTrace could not extract text from this image. You can retry OCR, retake the photo, or enter the claim manually.',
+            );
+          }
+        } finally {
+          if (
+            active
+          ) {
+            setIsExtracting(
+              false,
+            );
+          }
         }
-      } finally {
-        if (active) {
-          setIsExtracting(false);
-        }
-      }
-    };
+      };
 
     void runOcr();
 
     return () => {
       active = false;
     };
-  }, [imageUri, isWalkthrough]);
+  }, [
+    imageUri,
+    isWalkthrough,
+  ]);
 
-  const handleRetryOcr = async () => {
-    if (
-      !imageUri ||
-      isExtracting ||
-      isWalkthrough
-    ) {
-      return;
-    }
-
-    setIsExtracting(true);
-    setOcrError(null);
-
-    try {
-      const response = await extractTextFromImage(imageUri);
-      applyOcrResponse(response);
-    } catch (error) {
-      console.warn('OCR retry error:', error);
-
-      setOcrError(
-        'FactTrace could not extract text from this image.',
-      );
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  const handleCheckEvidence = async () => {
-    const submittedClaim = isWalkthrough
-      ? claimTextRef.current
-      : claimText;
-
-    const cleanedClaim = submittedClaim.trim();
-
-    if (
-      !cleanedClaim ||
-      isChecking ||
-      isExtracting
-    ) {
-      return;
-    }
-
-    if (isWalkthrough) {
-      if (!isPracticeClaim(cleanedClaim)) {
-        setPracticePromptFeedback(
-          'Enter the honey practice claim shown above, then tap Continue.',
-        );
+  const handleRetryOcr =
+    async () => {
+      if (
+        !imageUri ||
+        isExtracting ||
+        isWalkthrough
+      ) {
         return;
       }
 
+      setIsExtracting(
+        true,
+      );
+
+      setOcrError(
+        null,
+      );
+
       try {
-        Keyboard.dismiss();
+        const response =
+          await extractTextFromImage(
+            imageUri,
+          );
 
-        await saveWalkthroughState({
-          status: 'in_progress',
-          step: 'result_match',
-          practiceClaim: submittedClaim,
-        });
-
-        navigation.navigate('VerificationResults', {
-          result: PRACTICE_RESULT,
-          walkthrough: true,
-        });
-      } catch (error) {
+        applyOcrResponse(
+          response,
+        );
+      } catch (
+        error
+      ) {
         console.warn(
-          'Could not save practice completion state.',
+          'OCR retry error:',
           error,
         );
 
-        setVerificationError(
-          'The practice step could not be saved. Please try again.',
+        setOcrErrorCode(
+          'OCR_FAILED',
+        );
+
+        setOcrError(
+          'FactTrace could not extract text from this image. You can retry OCR, retake the photo, or enter the claim manually.',
+        );
+      } finally {
+        setIsExtracting(
+          false,
         );
       }
+    };
 
-      return;
-    }
+  const handleRetake =
+    () => {
+      navigation.replace(
+        'Camera',
 
-    setVerificationError(null);
-
-    try {
-      setIsChecking(true);
-
-      const response = await verifyClaim(cleanedClaim, {
-        source: hasOcrText ? 'ocr' : 'manual',
-
-        ...(hasOcrText
+        activeStudyContext
           ? {
-              originalOcrText,
-              ocrConfidence: ocrMetadata?.confidence,
+              studyContext:
+                activeStudyContext,
             }
-          : {}),
-      });
+          : undefined,
+      );
+    };
 
-      if (!response.success || !response.data) {
-        setVerificationError(
-          getVerificationErrorMessage(
-            response.message ||
-              getApiErrorMessage(
-                response.error,
-                'FactTrace could not check this claim. Please try again.',
-              ),
-          ),
-        );
+  const handleCheckEvidence =
+    async () => {
+      const submittedClaim =
+        isWalkthrough
+          ? claimTextRef
+              .current
+          : claimText;
 
+      const cleanedClaim =
+        submittedClaim.trim();
+
+      if (
+        !cleanedClaim ||
+        isChecking ||
+        isExtracting
+      ) {
         return;
       }
 
       if (
-        activeStudyContext &&
-        response.data.claimId &&
-        response.data.claimId !== activeStudyContext.claimId
+        isWalkthrough
       ) {
-        setVerificationError(
-          'This result matched a different claim than the one assigned for this trial. Check the scanned or entered wording before continuing.',
-        );
+        if (
+          !isPracticeClaim(
+            cleanedClaim,
+          )
+        ) {
+          setPracticePromptFeedback(
+            'Enter the honey practice claim shown above, then tap Continue.',
+          );
+
+          return;
+        }
+
+        try {
+          Keyboard.dismiss();
+
+          await saveWalkthroughState(
+            {
+              status:
+                'in_progress',
+
+              step:
+                'result_match',
+
+              practiceClaim:
+                submittedClaim,
+            },
+          );
+
+          navigation.navigate(
+            'VerificationResults',
+            {
+              result:
+                PRACTICE_RESULT,
+
+              walkthrough:
+                true,
+            },
+          );
+        } catch (
+          error
+        ) {
+          console.warn(
+            'Could not save practice completion state.',
+            error,
+          );
+
+          setVerificationError(
+            'The practice step could not be saved. Please try again.',
+          );
+        }
 
         return;
       }
 
-      navigation.navigate('VerificationResults', {
-        result: response.data,
-
-        ...(activeStudyContext
-          ? {
-              studyContext: activeStudyContext,
-            }
-          : {}),
-
-        historyEntryId: createHistoryEntryId(),
-
-        evaluation: {
-          inputSource: hasOcrText ? 'ocr' : 'manual',
-
-          ...(hasOcrText
-            ? {
-                originalOcrText,
-                ocrEngine: ocrMetadata?.engine,
-                ocrError: ocrErrorCode,
-              }
-            : {}),
-
-          startedAt: taskStartedAt.current,
-        },
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'FactTrace could not check the claim.';
-
       setVerificationError(
-        getVerificationErrorMessage(message),
+        null,
       );
-    } finally {
-      setIsChecking(false);
-    }
-  };
+
+      try {
+        setIsChecking(
+          true,
+        );
+
+        const response =
+          await verifyClaim(
+            cleanedClaim,
+            {
+              source:
+                hasOcrText
+                  ? 'ocr'
+                  : 'manual',
+
+              ...(
+                hasOcrText
+                  ? {
+                      originalOcrText,
+
+                      ocrConfidence:
+                        ocrMetadata
+                          ?.confidence,
+                    }
+                  : {}
+              ),
+            },
+          );
+
+        if (
+          !response.success ||
+          !response.data
+        ) {
+          setVerificationError(
+            getVerificationErrorMessage(
+              response.message ||
+                getApiErrorMessage(
+                  response.error,
+
+                  'FactTrace could not check this claim. Please try again.',
+                ),
+            ),
+          );
+
+          return;
+        }
+
+        if (
+          activeStudyContext &&
+          response.data
+            .claimId &&
+          response.data
+            .claimId !==
+            activeStudyContext
+              .claimId
+        ) {
+          setVerificationError(
+            'This result matched a different claim than the one assigned for this trial. Check the scanned or entered wording before continuing.',
+          );
+
+          return;
+        }
+
+        navigation.navigate(
+          'VerificationResults',
+          {
+            result:
+              response.data,
+
+            ...(
+              activeStudyContext
+                ? {
+                    studyContext:
+                      activeStudyContext,
+                  }
+                : {}
+            ),
+
+            historyEntryId:
+              createHistoryEntryId(),
+
+            evaluation: {
+              inputSource:
+                hasOcrText
+                  ? 'ocr'
+                  : 'manual',
+
+              ...(
+                hasOcrText
+                  ? {
+                      originalOcrText,
+
+                      ocrEngine:
+                        ocrMetadata
+                          ?.engine,
+
+                      ocrError:
+                        ocrErrorCode,
+                    }
+                  : {}
+              ),
+
+              startedAt:
+                taskStartedAt
+                  .current,
+            },
+          },
+        );
+      } catch (
+        error
+      ) {
+        const message =
+          error instanceof
+          Error
+            ? error.message
+            : 'FactTrace could not check the claim.';
+
+        setVerificationError(
+          getVerificationErrorMessage(
+            message,
+          ),
+        );
+      } finally {
+        setIsChecking(
+          false,
+        );
+      }
+    };
 
   const buttonDisabled =
     !claimText.trim() ||
     isChecking ||
     isExtracting ||
-    (isWalkthrough && !isPracticeClaim(claimText));
+    (
+      isWalkthrough &&
+      !isPracticeClaim(
+        claimText,
+      )
+    );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+    <SafeAreaView
+      style={
+        styles.safeArea
+      }
+    >
+      <StatusBar
+        style={
+          isDark
+            ? 'light'
+            : 'dark'
+        }
+      />
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={
+          styles.keyboardView
+        }
+
         behavior={
-          Platform.OS === 'ios'
+          Platform.OS ===
+          'ios'
             ? 'padding'
             : undefined
         }
       >
         <ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          ref={
+            scrollViewRef
+          }
+
+          style={
+            styles.scrollView
+          }
+
+          contentContainerStyle={
+            styles.scrollContent
+          }
+
+          showsVerticalScrollIndicator={
+            false
+          }
+
           keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={16}
-          onScroll={event => {
-            scrollOffset.current = event.nativeEvent.contentOffset.y;
-            setMeasurementVersion(version => version + 1);
-          }}
+
+          scrollEventThrottle={
+            16
+          }
+
+          onScroll={
+            event => {
+              scrollOffset.current =
+                event
+                  .nativeEvent
+                  .contentOffset
+                  .y;
+
+              setMeasurementVersion(
+                version =>
+                  version +
+                  1,
+              );
+            }
+          }
         >
-          <View style={styles.header}>
+          <View
+            style={
+              styles.header
+            }
+          >
             <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
+              activeOpacity={
+                0.8
+              }
+
+              style={
+                styles.backButton
+              }
+
+              onPress={() =>
+                navigation.goBack()
+              }
             >
               <Ionicons
                 name="arrow-back"
+
                 size={23}
-                color={COLORS.textPrimary}
+
+                color={
+                  COLORS.textPrimary
+                }
               />
             </TouchableOpacity>
 
-            <View style={styles.headerTextArea}>
-              <Text style={styles.headerTitle}>
+            <View
+              style={
+                styles.headerTextArea
+              }
+            >
+              <Text
+                style={
+                  styles.headerTitle
+                }
+              >
                 Review Claim
               </Text>
 
-              <Text style={styles.headerSubtitle}>
+              <Text
+                style={
+                  styles.headerSubtitle
+                }
+              >
                 Make sure the extracted text is correct
               </Text>
             </View>
 
-            <View style={styles.headerSpacer} />
+            <View
+              style={
+                styles.headerSpacer
+              }
+            />
           </View>
 
-          <View style={styles.progressRow}>
-            <View style={styles.progressItem}>
-              <View style={styles.progressComplete}>
+          <View
+            style={
+              styles.progressRow
+            }
+          >
+            <View
+              style={
+                styles.progressItem
+              }
+            >
+              <View
+                style={
+                  styles.progressComplete
+                }
+              >
                 <Ionicons
                   name="checkmark"
+
                   size={15}
-                  color={COLORS.white}
+
+                  color={
+                    COLORS.white
+                  }
                 />
               </View>
 
-              <Text style={styles.progressCompleteText}>
+              <Text
+                style={
+                  styles.progressCompleteText
+                }
+              >
                 Capture
               </Text>
             </View>
 
-            <View style={styles.progressLineActive} />
+            <View
+              style={
+                styles.progressLineActive
+              }
+            />
 
-            <View style={styles.progressItem}>
-              <View style={styles.progressCurrent}>
-                <Text style={styles.progressCurrentNumber}>
+            <View
+              style={
+                styles.progressItem
+              }
+            >
+              <View
+                style={
+                  styles.progressCurrent
+                }
+              >
+                <Text
+                  style={
+                    styles.progressCurrentNumber
+                  }
+                >
                   2
                 </Text>
               </View>
 
-              <Text style={styles.progressCurrentText}>
+              <Text
+                style={
+                  styles.progressCurrentText
+                }
+              >
                 Review
               </Text>
             </View>
 
-            <View style={styles.progressLine} />
+            <View
+              style={
+                styles.progressLine
+              }
+            />
 
-            <View style={styles.progressItem}>
-              <View style={styles.progressInactive}>
-                <Text style={styles.progressInactiveNumber}>
+            <View
+              style={
+                styles.progressItem
+              }
+            >
+              <View
+                style={
+                  styles.progressInactive
+                }
+              >
+                <Text
+                  style={
+                    styles.progressInactiveNumber
+                  }
+                >
                   3
                 </Text>
               </View>
 
-              <Text style={styles.progressInactiveText}>
+              <Text
+                style={
+                  styles.progressInactiveText
+                }
+              >
                 Evidence
               </Text>
             </View>
           </View>
 
-          {isFromCamera && (
-            <View style={styles.imageCard}>
+          {isFromCamera ? (
+            <View
+              style={
+                styles.imageCard
+              }
+            >
               <Image
-                source={{ uri: imageUri }}
-                style={styles.image}
+                source={{
+                  uri:
+                    imageUri,
+                }}
+
+                style={
+                  styles.image
+                }
+
                 resizeMode="cover"
               />
 
-              <View style={styles.imageOverlay}>
-                <View style={styles.capturedBadge}>
+              <View
+                style={
+                  styles.imageOverlay
+                }
+              >
+                <View
+                  style={
+                    styles.capturedBadge
+                  }
+                >
                   <Ionicons
                     name="camera-outline"
+
                     size={15}
-                    color={COLORS.white}
+
+                    color={
+                      COLORS.white
+                    }
                   />
 
-                  <Text style={styles.capturedBadgeText}>
+                  <Text
+                    style={
+                      styles.capturedBadgeText
+                    }
+                  >
                     CAPTURED CLAIM
                   </Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.retakeButton}
-                onPress={() =>
-                  navigation.replace(
-                    'Camera',
-                    activeStudyContext
-                      ? {
-                          studyContext: activeStudyContext,
-                        }
-                      : undefined,
-                  )
+                activeOpacity={
+                  0.8
+                }
+
+                style={
+                  styles.retakeButton
+                }
+
+                onPress={
+                  handleRetake
                 }
               >
                 <Ionicons
                   name="camera-reverse-outline"
+
                   size={19}
-                  color={COLORS.textPrimary}
+
+                  color={
+                    COLORS.textPrimary
+                  }
                 />
 
-                <Text style={styles.retakeText}>
+                <Text
+                  style={
+                    styles.retakeText
+                  }
+                >
                   Retake
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
 
-          <View style={styles.statusCard}>
-            <View style={styles.statusIcon}>
+          <View
+            style={
+              styles.statusCard
+            }
+          >
+            <View
+              style={
+                styles.statusIcon
+              }
+            >
               {isExtracting ? (
                 <ActivityIndicator
                   size="small"
-                  color={COLORS.blue}
+
+                  color={
+                    COLORS.blue
+                  }
                 />
               ) : (
                 <Ionicons
@@ -801,14 +1693,26 @@ export default function ClaimReviewScreen({
                       ? 'document-text-outline'
                       : 'create-outline'
                   }
+
                   size={22}
-                  color={COLORS.blue}
+
+                  color={
+                    COLORS.blue
+                  }
                 />
               )}
             </View>
 
-            <View style={styles.statusTextArea}>
-              <Text style={styles.statusTitle}>
+            <View
+              style={
+                styles.statusTextArea
+              }
+            >
+              <Text
+                style={
+                  styles.statusTitle
+                }
+              >
                 {isExtracting
                   ? 'Extracting text...'
                   : isFromCamera
@@ -816,150 +1720,558 @@ export default function ClaimReviewScreen({
                     : 'Enter your claim'}
               </Text>
 
-              <Text style={styles.statusDescription}>
+              <Text
+                style={
+                  styles.statusDescription
+                }
+              >
                 {isExtracting
                   ? 'FactTrace is reading the claim from your captured image.'
                   : isFromCamera
-                    ? 'Review the text below and correct anything the scan may have captured incorrectly.'
+                    ? 'Review the OCR result and correct any mistakes before checking evidence.'
                     : 'Type or paste the exact claim you want to check.'}
               </Text>
             </View>
 
-            <View style={styles.statusBadge}>
+            <View
+              style={
+                styles.statusBadge
+              }
+            >
               <View
                 style={[
                   styles.statusDot,
-                  ocrError && styles.statusDotError,
-                  isExtracting && styles.statusDotLoading,
+
+                  (
+                    ocrError ||
+                    hasOcrWarning
+                  ) &&
+                    styles.statusDotWarning,
+
+                  isExtracting &&
+                    styles.statusDotLoading,
                 ]}
               />
 
-              <Text style={styles.statusBadgeText}>
-                {isFromCamera ? 'OCR' : 'MANUAL'}
+              <Text
+                style={
+                  styles.statusBadgeText
+                }
+              >
+                {isFromCamera
+                  ? 'OCR'
+                  : 'MANUAL'}
               </Text>
             </View>
           </View>
 
-          {ocrError && (
-            <View style={styles.ocrErrorCard}>
-              <View style={styles.ocrErrorIcon}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={21}
-                  color={COLORS.orange}
+          {isFromCamera &&
+          !isExtracting &&
+          hasOcrText ? (
+            <View
+              style={
+                styles.ocrMetadataCard
+              }
+            >
+              <View
+                style={
+                  styles.ocrMetadataTopRow
+                }
+              >
+                <View
+                  style={
+                    styles.ocrMetadataItem
+                  }
+                >
+                  <Text
+                    style={
+                      styles.ocrMetadataLabel
+                    }
+                  >
+                    OCR ENGINE
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.ocrMetadataValue
+                    }
+                  >
+                    {
+                      friendlyOcrEngine ??
+                      'OCR'
+                    }
+                  </Text>
+                </View>
+
+                <View
+                  style={
+                    styles.metadataDivider
+                  }
                 />
-              </View>
 
-              <View style={styles.ocrErrorTextArea}>
-                <Text style={styles.ocrErrorTitle}>
-                  {ocrErrorCode === 'PARTIAL' && hasOcrText
-                    ? 'Text may be incomplete'
-                    : 'Text extraction failed'}
-                </Text>
+                <View
+                  style={
+                    styles.ocrMetadataItem
+                  }
+                >
+                  <Text
+                    style={
+                      styles.ocrMetadataLabel
+                    }
+                  >
+                    CONFIDENCE
+                  </Text>
 
-                <Text style={styles.ocrErrorText}>
-                  {ocrError}
-                </Text>
+                  <Text
+                    style={[
+                      styles.ocrMetadataValue,
+
+                      isLowConfidence &&
+                        styles.ocrMetadataValueWarning,
+                    ]}
+                  >
+                    {confidencePercent !==
+                    null
+                      ? `${confidencePercent}%`
+                      : 'Unavailable'}
+                  </Text>
+                </View>
               </View>
 
               <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.retryButton}
-                onPress={() => void handleRetryOcr()}
+                activeOpacity={
+                  0.8
+                }
+
+                disabled={
+                  isExtracting
+                }
+
+                style={
+                  styles.retryOcrWideButton
+                }
+
+                onPress={() =>
+                  void handleRetryOcr()
+                }
               >
-                <Text style={styles.retryButtonText}>
-                  Retry
+                <Ionicons
+                  name="refresh-outline"
+
+                  size={17}
+
+                  color={
+                    COLORS.blue
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.retryOcrWideText
+                  }
+                >
+                  Retry OCR
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
 
-          <View style={styles.editorSection}>
-            <View style={styles.editorHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sectionLabel}>
+          {hasOcrWarning ? (
+            <View
+              accessibilityRole="alert"
+
+              style={
+                styles.ocrWarningCard
+              }
+            >
+              <View
+                style={
+                  styles.ocrWarningIcon
+                }
+              >
+                <Ionicons
+                  name="warning-outline"
+
+                  size={21}
+
+                  color={
+                    COLORS.orange
+                  }
+                />
+              </View>
+
+              <View
+                style={
+                  styles.ocrWarningTextArea
+                }
+              >
+                <Text
+                  style={
+                    styles.ocrWarningTitle
+                  }
+                >
+                  Review this scan carefully
+                </Text>
+
+                <Text
+                  style={
+                    styles.ocrWarningText
+                  }
+                >
+                  {isPartialOcr &&
+                  isLowConfidence
+                    ? 'The OCR result may be incomplete and its confidence is low. Compare the text with the captured claim and correct any mistakes.'
+                    : isPartialOcr
+                      ? 'The OCR service reported that some text may be incomplete. Compare the extracted text with the captured claim before continuing.'
+                      : 'OCR confidence is low. Compare the extracted text with the captured claim and correct any mistakes before continuing.'}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {ocrError ? (
+            <View
+              accessibilityRole="alert"
+
+              style={
+                styles.ocrErrorCard
+              }
+            >
+              <View
+                style={
+                  styles.ocrErrorIcon
+                }
+              >
+                <Ionicons
+                  name="alert-circle-outline"
+
+                  size={21}
+
+                  color={
+                    COLORS.red
+                  }
+                />
+              </View>
+
+              <View
+                style={
+                  styles.ocrErrorTextArea
+                }
+              >
+                <Text
+                  style={
+                    styles.ocrErrorTitle
+                  }
+                >
+                  Text extraction failed
+                </Text>
+
+                <Text
+                  style={
+                    styles.ocrErrorText
+                  }
+                >
+                  {ocrError}
+                </Text>
+
+                <View
+                  style={
+                    styles.ocrErrorActions
+                  }
+                >
+                  <TouchableOpacity
+                    activeOpacity={
+                      0.8
+                    }
+
+                    style={
+                      styles.errorActionButton
+                    }
+
+                    onPress={() =>
+                      void handleRetryOcr()
+                    }
+                  >
+                    <Ionicons
+                      name="refresh-outline"
+
+                      size={16}
+
+                      color={
+                        COLORS.blue
+                      }
+                    />
+
+                    <Text
+                      style={
+                        styles.errorActionText
+                      }
+                    >
+                      Retry OCR
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={
+                      0.8
+                    }
+
+                    style={
+                      styles.errorActionButton
+                    }
+
+                    onPress={
+                      handleRetake
+                    }
+                  >
+                    <Ionicons
+                      name="camera-outline"
+
+                      size={16}
+
+                      color={
+                        COLORS.blue
+                      }
+                    />
+
+                    <Text
+                      style={
+                        styles.errorActionText
+                      }
+                    >
+                      Retake Photo
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          <View
+            style={
+              styles.editorSection
+            }
+          >
+            <View
+              style={
+                styles.editorHeader
+              }
+            >
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                <Text
+                  style={
+                    styles.sectionLabel
+                  }
+                >
                   {isFromCamera
                     ? 'EXTRACTED CLAIM TEXT'
                     : 'CLAIM TEXT'}
                 </Text>
 
-                <Text style={styles.editorHint}>
+                <Text
+                  style={
+                    styles.editorHint
+                  }
+                >
                   {isFromCamera
-                    ? 'Make sure this matches the claim shown in the photo'
+                    ? 'Compare this wording with the captured image'
                     : 'Enter the wording as accurately as possible'}
                 </Text>
               </View>
 
-              {claimText.length > 0 && !isExtracting && (
+              {claimText.length >
+                0 &&
+              !isExtracting ? (
                 <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.clearButton}
+                  activeOpacity={
+                    0.75
+                  }
+
+                  style={
+                    styles.clearButton
+                  }
+
                   onPress={() =>
-                    handlePracticeClaimChange('')
+                    handlePracticeClaimChange(
+                      '',
+                    )
                   }
                 >
-                  <Text style={styles.clearText}>
+                  <Text
+                    style={
+                      styles.clearText
+                    }
+                  >
                     Clear
                   </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
 
+            {hasEditedOcrText &&
+            !isExtracting ? (
+              <View
+                style={
+                  styles.editedBadge
+                }
+              >
+                <Ionicons
+                  name="create-outline"
+
+                  size={14}
+
+                  color={
+                    COLORS.blue
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.editedBadgeText
+                  }
+                >
+                  Edited after OCR
+                </Text>
+              </View>
+            ) : null}
+
             <View
-              ref={inputTargetRef}
-              collapsable={false}
-              onLayout={() =>
-                setMeasurementVersion(version => version + 1)
+              ref={
+                inputTargetRef
               }
-              style={styles.textInputCard}
+
+              collapsable={
+                false
+              }
+
+              onLayout={() =>
+                setMeasurementVersion(
+                  version =>
+                    version +
+                    1,
+                )
+              }
+
+              style={[
+                styles.textInputCard,
+
+                hasEditedOcrText &&
+                  styles.textInputCardEdited,
+              ]}
             >
               {isExtracting ? (
-                <View style={styles.extractingArea}>
+                <View
+                  style={
+                    styles.extractingArea
+                  }
+                >
                   <ActivityIndicator
                     size="large"
-                    color={COLORS.blue}
+
+                    color={
+                      COLORS.blue
+                    }
                   />
 
-                  <Text style={styles.extractingTitle}>
+                  <Text
+                    style={
+                      styles.extractingTitle
+                    }
+                  >
                     Reading your claim
                   </Text>
 
-                  <Text style={styles.extractingText}>
+                  <Text
+                    style={
+                      styles.extractingText
+                    }
+                  >
                     Extracting readable text from the captured image...
                   </Text>
                 </View>
               ) : (
                 <>
                   <TextInput
-                    style={styles.textInput}
-                    value={claimText}
-                    onChangeText={handlePracticeClaimChange}
+                    style={
+                      styles.textInput
+                    }
+
+                    value={
+                      claimText
+                    }
+
+                    onChangeText={
+                      handlePracticeClaimChange
+                    }
+
                     placeholder={
                       isFromCamera
                         ? 'Extracted text will appear here...'
                         : 'Type or paste your claim here...'
                     }
-                    placeholderTextColor={COLORS.textMuted}
+
+                    placeholderTextColor={
+                      COLORS.textMuted
+                    }
+
                     multiline
+
                     textAlignVertical="top"
-                    maxLength={800}
+
+                    maxLength={
+                      800
+                    }
                   />
 
-                  <View style={styles.inputFooter}>
-                    <View style={styles.editableRow}>
+                  <View
+                    style={
+                      styles.inputFooter
+                    }
+                  >
+                    <View
+                      style={
+                        styles.editableRow
+                      }
+                    >
                       <Ionicons
                         name="create-outline"
+
                         size={15}
-                        color={COLORS.textMuted}
+
+                        color={
+                          hasEditedOcrText
+                            ? COLORS.blue
+                            : COLORS.textMuted
+                        }
                       />
 
-                      <Text style={styles.editableText}>
-                        Tap to edit
+                      <Text
+                        style={[
+                          styles.editableText,
+
+                          hasEditedOcrText &&
+                            styles.editableTextEdited,
+                        ]}
+                      >
+                        {hasEditedOcrText
+                          ? 'Edited by participant'
+                          : 'Tap to edit'}
                       </Text>
                     </View>
 
-                    <Text style={styles.characterCount}>
-                      {claimText.length}/800
+                    <Text
+                      style={
+                        styles.characterCount
+                      }
+                    >
+                      {
+                        claimText.length
+                      }
+                      /800
                     </Text>
                   </View>
                 </>
@@ -967,69 +2279,150 @@ export default function ClaimReviewScreen({
             </View>
           </View>
 
-          <View style={styles.noteCard}>
-            <View style={styles.noteIcon}>
+          <View
+            style={
+              styles.noteCard
+            }
+          >
+            <View
+              style={
+                styles.noteIcon
+              }
+            >
               <Ionicons
                 name="information-circle-outline"
+
                 size={21}
-                color={COLORS.orange}
+
+                color={
+                  COLORS.orange
+                }
               />
             </View>
 
-            <View style={styles.noteContent}>
-              <Text style={styles.noteTitle}>
+            <View
+              style={
+                styles.noteContent
+              }
+            >
+              <Text
+                style={
+                  styles.noteTitle
+                }
+              >
                 Check the text
               </Text>
 
-              <Text style={styles.noteText}>
-                Correct any mistakes before continuing.
+              <Text
+                style={
+                  styles.noteText
+                }
+              >
+                Correct any OCR mistakes before continuing. FactTrace will check the text shown above, including any edits you make.
               </Text>
             </View>
           </View>
 
           <View
-            ref={checkButtonRef}
-            collapsable={false}
+            ref={
+              checkButtonRef
+            }
+
+            collapsable={
+              false
+            }
+
             onLayout={() =>
-              setMeasurementVersion(version => version + 1)
+              setMeasurementVersion(
+                version =>
+                  version +
+                  1,
+              )
             }
           >
             <TouchableOpacity
-              activeOpacity={0.88}
-              disabled={buttonDisabled}
+              activeOpacity={
+                0.88
+              }
+
+              disabled={
+                buttonDisabled
+              }
+
               style={[
                 styles.verifyWrapper,
-                buttonDisabled && styles.verifyWrapperDisabled,
+
+                buttonDisabled &&
+                  styles.verifyWrapperDisabled,
               ]}
-              onPress={() => void handleCheckEvidence()}
+
+              onPress={() =>
+                void handleCheckEvidence()
+              }
             >
               <LinearGradient
                 colors={
                   !buttonDisabled
-                    ? ['#3478F6', '#2563EB']
-                    : ['#AEBAC8', '#9FAAB7']
+                    ? [
+                        '#3478F6',
+                        '#2563EB',
+                      ]
+                    : [
+                        '#AEBAC8',
+                        '#9FAAB7',
+                      ]
                 }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.verifyButton}
+
+                start={{
+                  x: 0,
+                  y: 0,
+                }}
+
+                end={{
+                  x: 1,
+                  y: 1,
+                }}
+
+                style={
+                  styles.verifyButton
+                }
               >
-                <View style={styles.verifyIcon}>
+                <View
+                  style={
+                    styles.verifyIcon
+                  }
+                >
                   {isChecking ? (
                     <ActivityIndicator
                       size="small"
-                      color={COLORS.white}
+
+                      color={
+                        COLORS.white
+                      }
                     />
                   ) : (
                     <Ionicons
                       name="search-outline"
+
                       size={23}
-                      color={COLORS.white}
+
+                      color={
+                        COLORS.white
+                      }
                     />
                   )}
                 </View>
 
-                <View style={styles.verifyTextArea}>
-                  <Text style={styles.verifyTitle}>
+                <View
+                  style={
+                    styles.verifyTextArea
+                  }
+                >
+                  <Text
+                    style={
+                      styles.verifyTitle
+                    }
+                  >
                     {isChecking
                       ? 'Checking Evidence...'
                       : isExtracting
@@ -1037,7 +2430,11 @@ export default function ClaimReviewScreen({
                         : 'Check Evidence'}
                   </Text>
 
-                  <Text style={styles.verifySubtitle}>
+                  <Text
+                    style={
+                      styles.verifySubtitle
+                    }
+                  >
                     {isChecking
                       ? 'Looking for relevant sources'
                       : isExtracting
@@ -1046,13 +2443,18 @@ export default function ClaimReviewScreen({
                   </Text>
                 </View>
 
-                {!isChecking && !isExtracting && (
+                {!isChecking &&
+                !isExtracting ? (
                   <Ionicons
                     name="arrow-forward"
+
                     size={22}
-                    color={COLORS.white}
+
+                    color={
+                      COLORS.white
+                    }
                   />
-                )}
+                ) : null}
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -1060,29 +2462,58 @@ export default function ClaimReviewScreen({
           {verificationError ? (
             <View
               accessibilityRole="alert"
-              style={styles.verificationErrorCard}
+
+              style={
+                styles.verificationErrorCard
+              }
             >
               <Ionicons
                 name="alert-circle-outline"
+
                 size={21}
-                color={COLORS.red}
+
+                color={
+                  COLORS.red
+                }
               />
 
-              <View style={styles.verificationErrorContent}>
-                <Text style={styles.verificationErrorTitle}>
+              <View
+                style={
+                  styles.verificationErrorContent
+                }
+              >
+                <Text
+                  style={
+                    styles.verificationErrorTitle
+                  }
+                >
                   Could not check evidence
                 </Text>
 
-                <Text style={styles.verificationErrorText}>
+                <Text
+                  style={
+                    styles.verificationErrorText
+                  }
+                >
                   {verificationError}
                 </Text>
 
                 <TouchableOpacity
                   accessibilityRole="button"
-                  disabled={buttonDisabled}
-                  onPress={() => void handleCheckEvidence()}
+
+                  disabled={
+                    buttonDisabled
+                  }
+
+                  onPress={() =>
+                    void handleCheckEvidence()
+                  }
                 >
-                  <Text style={styles.verificationRetryText}>
+                  <Text
+                    style={
+                      styles.verificationRetryText
+                    }
+                  >
                     Try Again
                   </Text>
                 </TouchableOpacity>
@@ -1093,29 +2524,51 @@ export default function ClaimReviewScreen({
       </KeyboardAvoidingView>
 
       {isWalkthrough &&
-      (walkthroughStep === 'practice_claim' ||
-        walkthroughStep === 'practice_check') ? (
+      (
+        walkthroughStep ===
+          'practice_claim' ||
+        walkthroughStep ===
+          'practice_check'
+      ) ? (
         <WalkthroughOverlay
           mode="spotlight"
-          step={walkthroughStep}
+
+          step={
+            walkthroughStep
+          }
+
           targetRef={
-            walkthroughStep === 'practice_check'
+            walkthroughStep ===
+            'practice_check'
               ? checkButtonRef
               : inputTargetRef
           }
-          measurementVersion={measurementVersion}
+
+          measurementVersion={
+            measurementVersion
+          }
+
           title={
-            walkthroughStep === 'practice_check'
+            walkthroughStep ===
+            'practice_check'
               ? 'Now check the practice claim'
               : 'Type the practice claim'
           }
+
           message={
-            walkthroughStep === 'practice_check'
+            walkthroughStep ===
+            'practice_check'
               ? 'Your claim is ready. Tap Continue to open the practice results, or tap the highlighted Check Evidence button.'
               : `${practicePromptFeedback ?? 'Type this practice claim:'}\n"${PRACTICE_CLAIM}"`
           }
-          onContinue={() => void continuePractice()}
-          onSkip={() => void skipWalkthrough()}
+
+          onContinue={() =>
+            void continuePractice()
+          }
+
+          onSkip={() =>
+            void skipWalkthrough()
+          }
         />
       ) : null}
     </SafeAreaView>
@@ -1129,7 +2582,8 @@ const createStyles = (
   StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: COLORS.background,
+      backgroundColor:
+        COLORS.background,
     },
 
     keyboardView: {
@@ -1141,46 +2595,66 @@ const createStyles = (
     },
 
     scrollContent: {
-      paddingHorizontal: 22,
-      paddingBottom: 35,
+      paddingHorizontal:
+        22,
+      paddingBottom:
+        35,
     },
 
     header: {
-      marginTop: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
+      marginTop:
+        12,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
     },
 
     backButton: {
       width: 45,
       height: 45,
       borderRadius: 15,
-      backgroundColor: COLORS.surface,
+      backgroundColor:
+        COLORS.surface,
       alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#1B3655',
-      shadowOpacity: 0.07,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
+      justifyContent:
+        'center',
+      shadowColor:
+        '#1B3655',
+      shadowOpacity:
+        0.07,
+      shadowRadius:
+        10,
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
       elevation: 2,
     },
 
     headerTextArea: {
       flex: 1,
-      alignItems: 'center',
+      alignItems:
+        'center',
     },
 
     headerTitle: {
-      color: COLORS.textPrimary,
+      color:
+        COLORS.textPrimary,
       fontSize: 21,
-      fontWeight: '800',
-      letterSpacing: -0.3,
+      fontWeight:
+        '800',
+      letterSpacing:
+        -0.3,
     },
 
     headerSubtitle: {
-      marginTop: 2,
-      color: COLORS.textSecondary,
-      fontSize: 11.5,
+      marginTop:
+        2,
+      color:
+        COLORS.textSecondary,
+      fontSize:
+        11.5,
     },
 
     headerSpacer: {
@@ -1188,515 +2662,997 @@ const createStyles = (
     },
 
     progressRow: {
-      marginTop: 22,
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 6,
+      marginTop:
+        22,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      paddingHorizontal:
+        6,
     },
 
     progressItem: {
-      alignItems: 'center',
+      alignItems:
+        'center',
     },
 
     progressComplete: {
       width: 29,
       height: 29,
-      borderRadius: 15,
-      backgroundColor: '#3C78F2',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius:
+        15,
+      backgroundColor:
+        '#3C78F2',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     progressCurrent: {
       width: 29,
       height: 29,
-      borderRadius: 15,
+      borderRadius:
+        15,
       borderWidth: 2,
-      borderColor: COLORS.blue,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#EAF1FF',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderColor:
+        COLORS.blue,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#EAF1FF',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     progressInactive: {
       width: 29,
       height: 29,
-      borderRadius: 15,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#E8EDF3',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius:
+        15,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#E8EDF3',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     progressCompleteText: {
-      marginTop: 4,
-      color: COLORS.blue,
-      fontSize: 10,
-      fontWeight: '700',
+      marginTop:
+        4,
+      color:
+        COLORS.blue,
+      fontSize:
+        10,
+      fontWeight:
+        '700',
     },
 
     progressCurrentText: {
-      marginTop: 4,
-      color: COLORS.textPrimary,
-      fontSize: 10,
-      fontWeight: '700',
+      marginTop:
+        4,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        10,
+      fontWeight:
+        '700',
     },
 
     progressInactiveText: {
-      marginTop: 4,
-      color: COLORS.textMuted,
-      fontSize: 10,
-      fontWeight: '600',
+      marginTop:
+        4,
+      color:
+        COLORS.textMuted,
+      fontSize:
+        10,
+      fontWeight:
+        '600',
     },
 
     progressCurrentNumber: {
-      color: COLORS.blue,
-      fontSize: 12,
-      fontWeight: '800',
+      color:
+        COLORS.blue,
+      fontSize:
+        12,
+      fontWeight:
+        '800',
     },
 
     progressInactiveNumber: {
-      color: COLORS.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
+      color:
+        COLORS.textMuted,
+      fontSize:
+        12,
+      fontWeight:
+        '700',
     },
 
     progressLine: {
       flex: 1,
       height: 2,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#DFE5EC',
-      marginHorizontal: 7,
-      marginBottom: 15,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#DFE5EC',
+      marginHorizontal:
+        7,
+      marginBottom:
+        15,
     },
 
     progressLineActive: {
       flex: 1,
       height: 2,
-      backgroundColor: COLORS.blue,
-      marginHorizontal: 7,
-      marginBottom: 15,
+      backgroundColor:
+        COLORS.blue,
+      marginHorizontal:
+        7,
+      marginBottom:
+        15,
     },
 
     imageCard: {
-      marginTop: 22,
+      marginTop:
+        22,
       height: 185,
-      borderRadius: 22,
-      overflow: 'hidden',
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#DCE3EB',
-      shadowColor: '#18334E',
-      shadowOpacity: 0.12,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 5 },
+      borderRadius:
+        22,
+      overflow:
+        'hidden',
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#DCE3EB',
+      shadowColor:
+        '#18334E',
+      shadowOpacity:
+        0.12,
+      shadowRadius:
+        14,
+      shadowOffset: {
+        width: 0,
+        height: 5,
+      },
       elevation: 4,
     },
 
     image: {
-      width: '100%',
-      height: '100%',
+      width:
+        '100%',
+      height:
+        '100%',
     },
 
     imageOverlay: {
-      position: 'absolute',
+      position:
+        'absolute',
       top: 0,
       left: 0,
       right: 0,
       padding: 12,
-      flexDirection: 'row',
+      flexDirection:
+        'row',
     },
 
     capturedBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: 'rgba(8, 25, 43, 0.72)',
-      borderRadius: 10,
-      paddingHorizontal: 9,
-      paddingVertical: 6,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      backgroundColor:
+        'rgba(8, 25, 43, 0.72)',
+      borderRadius:
+        10,
+      paddingHorizontal:
+        9,
+      paddingVertical:
+        6,
     },
 
     capturedBadgeText: {
-      marginLeft: 5,
-      color: COLORS.white,
-      fontSize: 10,
-      fontWeight: '700',
-      letterSpacing: 0.6,
+      marginLeft:
+        5,
+      color:
+        COLORS.white,
+      fontSize:
+        10,
+      fontWeight:
+        '700',
+      letterSpacing:
+        0.6,
     },
 
     retakeButton: {
-      position: 'absolute',
+      position:
+        'absolute',
       right: 12,
       bottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: COLORS.surface,
-      borderRadius: 11,
-      paddingHorizontal: 11,
-      paddingVertical: 8,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      backgroundColor:
+        COLORS.surface,
+      borderRadius:
+        11,
+      paddingHorizontal:
+        11,
+      paddingVertical:
+        8,
     },
 
     retakeText: {
-      marginLeft: 5,
-      color: COLORS.textPrimary,
-      fontSize: 11.5,
-      fontWeight: '700',
+      marginLeft:
+        5,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        11.5,
+      fontWeight:
+        '700',
     },
 
     statusCard: {
-      marginTop: 18,
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#EEF4FB',
-      borderRadius: 16,
-      paddingHorizontal: 13,
-      paddingVertical: 12,
+      marginTop:
+        18,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#EEF4FB',
+      borderRadius:
+        16,
+      paddingHorizontal:
+        13,
+      paddingVertical:
+        12,
     },
 
     statusIcon: {
       width: 41,
       height: 41,
-      borderRadius: 12,
-      backgroundColor: isDark
-        ? COLORS.surface
-        : '#E0EBFA',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius:
+        12,
+      backgroundColor:
+        isDark
+          ? COLORS.surface
+          : '#E0EBFA',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     statusTextArea: {
       flex: 1,
-      marginLeft: 10,
+      marginLeft:
+        10,
     },
 
     statusTitle: {
-      color: COLORS.textPrimary,
-      fontSize: 13.5,
-      fontWeight: '700',
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        13.5,
+      fontWeight:
+        '700',
     },
 
     statusDescription: {
-      marginTop: 2,
-      color: COLORS.textSecondary,
-      fontSize: 10.5,
-      lineHeight: 15,
+      marginTop:
+        2,
+      color:
+        COLORS.textSecondary,
+      fontSize:
+        10.5,
+      lineHeight:
+        15,
     },
 
     statusBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginLeft: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 6,
-      borderRadius: 9,
-      backgroundColor: COLORS.surface,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      marginLeft:
+        8,
+      paddingHorizontal:
+        8,
+      paddingVertical:
+        6,
+      borderRadius:
+        9,
+      backgroundColor:
+        COLORS.surface,
     },
 
     statusDot: {
       width: 7,
       height: 7,
-      borderRadius: 4,
-      backgroundColor: '#35B873',
-      marginRight: 5,
+      borderRadius:
+        4,
+      backgroundColor:
+        '#35B873',
+      marginRight:
+        5,
     },
 
-    statusDotError: {
-      backgroundColor: '#D96C48',
+    statusDotWarning: {
+      backgroundColor:
+        '#E49A32',
     },
 
     statusDotLoading: {
-      backgroundColor: '#5D8DEB',
+      backgroundColor:
+        '#5D8DEB',
     },
 
     statusBadgeText: {
-      color: COLORS.textSecondary,
-      fontSize: 9.5,
-      fontWeight: '800',
-      letterSpacing: 0.5,
+      color:
+        COLORS.textSecondary,
+      fontSize:
+        9.5,
+      fontWeight:
+        '800',
+      letterSpacing:
+        0.5,
+    },
+
+    ocrMetadataCard: {
+      marginTop:
+        12,
+      borderRadius:
+        15,
+      borderWidth:
+        1,
+      borderColor:
+        COLORS.border,
+      backgroundColor:
+        COLORS.surface,
+      padding: 12,
+    },
+
+    ocrMetadataTopRow: {
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+    },
+
+    ocrMetadataItem: {
+      flex: 1,
+    },
+
+    metadataDivider: {
+      width: 1,
+      height: 34,
+      marginHorizontal:
+        12,
+      backgroundColor:
+        COLORS.border,
+    },
+
+    ocrMetadataLabel: {
+      color:
+        COLORS.textMuted,
+      fontSize:
+        9.5,
+      fontWeight:
+        '800',
+      letterSpacing:
+        0.7,
+    },
+
+    ocrMetadataValue: {
+      marginTop:
+        4,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        12.5,
+      fontWeight:
+        '700',
+    },
+
+    ocrMetadataValueWarning: {
+      color:
+        COLORS.orange,
+    },
+
+    retryOcrWideButton: {
+      marginTop:
+        12,
+      minHeight:
+        40,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      borderRadius:
+        11,
+      borderWidth:
+        1,
+      borderColor:
+        COLORS.border,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#F7FAFD',
+    },
+
+    retryOcrWideText: {
+      marginLeft:
+        6,
+      color:
+        COLORS.blue,
+      fontSize:
+        12,
+      fontWeight:
+        '700',
+    },
+
+    ocrWarningCard: {
+      marginTop:
+        12,
+      flexDirection:
+        'row',
+      alignItems:
+        'flex-start',
+      borderRadius:
+        15,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#FFF7E9',
+      borderWidth:
+        1,
+      borderColor:
+        isDark
+          ? COLORS.border
+          : '#F5E4C3',
+      padding: 12,
+    },
+
+    ocrWarningIcon: {
+      width: 36,
+      height: 36,
+      borderRadius:
+        10,
+      backgroundColor:
+        isDark
+          ? COLORS.surface
+          : '#FFEDCC',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    ocrWarningTextArea: {
+      flex: 1,
+      marginLeft:
+        10,
+    },
+
+    ocrWarningTitle: {
+      color:
+        isDark
+          ? COLORS.orange
+          : '#7A4A0A',
+      fontSize:
+        12.5,
+      fontWeight:
+        '700',
+    },
+
+    ocrWarningText: {
+      marginTop:
+        3,
+      color:
+        isDark
+          ? COLORS.textSecondary
+          : '#956522',
+      fontSize:
+        10.5,
+      lineHeight:
+        15,
     },
 
     ocrErrorCard: {
-      marginTop: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: 15,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#FFF1EC',
-      borderWidth: 1,
-      borderColor: isDark
-        ? COLORS.border
-        : '#F2D0C3',
-      padding: 11,
+      marginTop:
+        12,
+      flexDirection:
+        'row',
+      alignItems:
+        'flex-start',
+      borderRadius:
+        15,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#FFF1F0',
+      borderWidth:
+        1,
+      borderColor:
+        isDark
+          ? COLORS.border
+          : '#F3C6C3',
+      padding: 12,
     },
 
     ocrErrorIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
-      backgroundColor: isDark
-        ? COLORS.surface
-        : '#FFE0D4',
-      alignItems: 'center',
-      justifyContent: 'center',
+      width: 36,
+      height: 36,
+      borderRadius:
+        10,
+      backgroundColor:
+        isDark
+          ? COLORS.surface
+          : '#FFE1DE',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     ocrErrorTextArea: {
       flex: 1,
-      marginLeft: 9,
+      marginLeft:
+        10,
     },
 
     ocrErrorTitle: {
-      color: isDark
-        ? COLORS.orange
-        : '#8A422A',
-      fontSize: 12,
-      fontWeight: '700',
+      color:
+        COLORS.red,
+      fontSize:
+        12.5,
+      fontWeight:
+        '700',
     },
 
     ocrErrorText: {
-      marginTop: 2,
-      color: isDark
-        ? COLORS.textSecondary
-        : '#A05D46',
-      fontSize: 10.5,
-      lineHeight: 14,
+      marginTop:
+        3,
+      color:
+        isDark
+          ? COLORS.textSecondary
+          : '#8C4B47',
+      fontSize:
+        10.5,
+      lineHeight:
+        15,
     },
 
-    retryButton: {
-      marginLeft: 8,
-      backgroundColor: COLORS.surface,
-      paddingHorizontal: 11,
-      paddingVertical: 7,
-      borderRadius: 9,
+    ocrErrorActions: {
+      marginTop:
+        10,
+      flexDirection:
+        'row',
+      flexWrap:
+        'wrap',
+      gap: 8,
     },
 
-    retryButtonText: {
-      color: COLORS.orange,
-      fontSize: 11,
-      fontWeight: '700',
+    errorActionButton: {
+      minHeight:
+        36,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      borderRadius:
+        9,
+      paddingHorizontal:
+        10,
+      backgroundColor:
+        COLORS.surface,
+      borderWidth:
+        1,
+      borderColor:
+        COLORS.border,
+    },
+
+    errorActionText: {
+      marginLeft:
+        5,
+      color:
+        COLORS.blue,
+      fontSize:
+        11,
+      fontWeight:
+        '700',
     },
 
     editorSection: {
-      marginTop: 20,
+      marginTop:
+        20,
     },
 
     editorHeader: {
-      marginBottom: 9,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-end',
+      marginBottom:
+        9,
+      flexDirection:
+        'row',
+      justifyContent:
+        'space-between',
+      alignItems:
+        'flex-end',
     },
 
     sectionLabel: {
-      color: COLORS.textPrimary,
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0.8,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        12,
+      fontWeight:
+        '800',
+      letterSpacing:
+        0.8,
     },
 
     editorHint: {
-      marginTop: 3,
-      color: COLORS.textMuted,
-      fontSize: 10.5,
+      marginTop:
+        3,
+      color:
+        COLORS.textMuted,
+      fontSize:
+        10.5,
     },
 
     clearButton: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
+      paddingHorizontal:
+        10,
+      paddingVertical:
+        5,
     },
 
     clearText: {
-      color: COLORS.blue,
-      fontSize: 11.5,
-      fontWeight: '700',
+      color:
+        COLORS.blue,
+      fontSize:
+        11.5,
+      fontWeight:
+        '700',
+    },
+
+    editedBadge: {
+      alignSelf:
+        'flex-start',
+      marginBottom:
+        8,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      borderRadius:
+        999,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#EEF4FF',
+      borderWidth:
+        1,
+      borderColor:
+        isDark
+          ? COLORS.border
+          : '#D6E4FF',
+      paddingHorizontal:
+        9,
+      paddingVertical:
+        6,
+    },
+
+    editedBadgeText: {
+      marginLeft:
+        5,
+      color:
+        COLORS.blue,
+      fontSize:
+        10.5,
+      fontWeight:
+        '700',
     },
 
     textInputCard: {
-      minHeight: 175,
-      backgroundColor: COLORS.surface,
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      borderRadius: 18,
-      padding: 14,
-      shadowColor: '#18334E',
-      shadowOpacity: 0.035,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 3 },
+      minHeight:
+        175,
+      backgroundColor:
+        COLORS.surface,
+      borderWidth:
+        1,
+      borderColor:
+        COLORS.border,
+      borderRadius:
+        18,
+      padding:
+        14,
+      shadowColor:
+        '#18334E',
+      shadowOpacity:
+        0.035,
+      shadowRadius:
+        8,
+      shadowOffset: {
+        width: 0,
+        height: 3,
+      },
       elevation: 1,
     },
 
+    textInputCardEdited: {
+      borderColor:
+        COLORS.blue,
+    },
+
     textInput: {
-      minHeight: 118,
-      color: COLORS.textPrimary,
-      fontSize: 16,
-      lineHeight: 23,
-      fontWeight: '500',
+      minHeight:
+        118,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        16,
+      lineHeight:
+        23,
+      fontWeight:
+        '500',
     },
 
     extractingArea: {
-      minHeight: 145,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 20,
+      minHeight:
+        145,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      paddingHorizontal:
+        20,
     },
 
     extractingTitle: {
-      marginTop: 12,
-      color: COLORS.textPrimary,
-      fontSize: 15,
-      fontWeight: '700',
+      marginTop:
+        12,
+      color:
+        COLORS.textPrimary,
+      fontSize:
+        15,
+      fontWeight:
+        '700',
     },
 
     extractingText: {
-      marginTop: 4,
-      color: COLORS.textSecondary,
-      fontSize: 11.5,
-      lineHeight: 16,
-      textAlign: 'center',
+      marginTop:
+        4,
+      color:
+        COLORS.textSecondary,
+      fontSize:
+        11.5,
+      lineHeight:
+        16,
+      textAlign:
+        'center',
     },
 
     inputFooter: {
-      marginTop: 7,
-      paddingTop: 9,
-      borderTopWidth: 1,
-      borderTopColor: COLORS.border,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      marginTop:
+        7,
+      paddingTop:
+        9,
+      borderTopWidth:
+        1,
+      borderTopColor:
+        COLORS.border,
+      flexDirection:
+        'row',
+      justifyContent:
+        'space-between',
+      alignItems:
+        'center',
     },
 
     editableRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
     },
 
     editableText: {
-      marginLeft: 5,
-      color: COLORS.textMuted,
-      fontSize: 10,
+      marginLeft:
+        5,
+      color:
+        COLORS.textMuted,
+      fontSize:
+        10,
+    },
+
+    editableTextEdited: {
+      color:
+        COLORS.blue,
+      fontWeight:
+        '700',
     },
 
     characterCount: {
-      color: COLORS.textMuted,
-      fontSize: 10,
+      color:
+        COLORS.textMuted,
+      fontSize:
+        10,
     },
 
     noteCard: {
-      marginTop: 15,
-      flexDirection: 'row',
-      borderRadius: 15,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#FFF7E9',
-      padding: 12,
-      borderWidth: 1,
-      borderColor: isDark
-        ? COLORS.border
-        : '#F5E4C3',
+      marginTop:
+        15,
+      flexDirection:
+        'row',
+      borderRadius:
+        15,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#FFF7E9',
+      padding:
+        12,
+      borderWidth:
+        1,
+      borderColor:
+        isDark
+          ? COLORS.border
+          : '#F5E4C3',
     },
 
     noteIcon: {
       width: 34,
       height: 34,
-      borderRadius: 10,
-      backgroundColor: isDark
-        ? COLORS.surface
-        : '#FFEDCC',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius:
+        10,
+      backgroundColor:
+        isDark
+          ? COLORS.surface
+          : '#FFEDCC',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     noteContent: {
       flex: 1,
-      marginLeft: 10,
+      marginLeft:
+        10,
     },
 
     noteTitle: {
-      color: isDark
-        ? COLORS.orange
-        : '#7A4A0A',
-      fontSize: 12.5,
-      fontWeight: '700',
+      color:
+        isDark
+          ? COLORS.orange
+          : '#7A4A0A',
+      fontSize:
+        12.5,
+      fontWeight:
+        '700',
     },
 
     noteText: {
-      marginTop: 3,
-      color: isDark
-        ? COLORS.textSecondary
-        : '#956522',
-      fontSize: 10.5,
-      lineHeight: 14,
+      marginTop:
+        3,
+      color:
+        isDark
+          ? COLORS.textSecondary
+          : '#956522',
+      fontSize:
+        10.5,
+      lineHeight:
+        14,
     },
 
     verifyWrapper: {
-      marginTop: 20,
-      shadowColor: COLORS.blue,
-      shadowOpacity: 0.22,
-      shadowRadius: 11,
-      shadowOffset: { width: 0, height: 6 },
+      marginTop:
+        20,
+      shadowColor:
+        COLORS.blue,
+      shadowOpacity:
+        0.22,
+      shadowRadius:
+        11,
+      shadowOffset: {
+        width: 0,
+        height: 6,
+      },
       elevation: 5,
     },
 
     verifyWrapperDisabled: {
-      shadowOpacity: 0,
-      elevation: 0,
+      shadowOpacity:
+        0,
+      elevation:
+        0,
     },
 
     verifyButton: {
-      minHeight: 68,
-      borderRadius: 18,
-      paddingHorizontal: 15,
-      flexDirection: 'row',
-      alignItems: 'center',
+      minHeight:
+        68,
+      borderRadius:
+        18,
+      paddingHorizontal:
+        15,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
     },
 
     verifyIcon: {
       width: 42,
       height: 42,
-      borderRadius: 12,
-      backgroundColor: 'rgba(255,255,255,0.16)',
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius:
+        12,
+      backgroundColor:
+        'rgba(255,255,255,0.16)',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     verifyTextArea: {
       flex: 1,
-      marginLeft: 11,
+      marginLeft:
+        11,
     },
 
     verifyTitle: {
-      color: COLORS.white,
-      fontSize: 16,
-      fontWeight: '700',
+      color:
+        COLORS.white,
+      fontSize:
+        16,
+      fontWeight:
+        '700',
     },
 
     verifySubtitle: {
-      marginTop: 3,
-      color: '#DCE8FF',
-      fontSize: 11,
+      marginTop:
+        3,
+      color:
+        '#DCE8FF',
+      fontSize:
+        11,
     },
 
     verificationErrorCard: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      columnGap: 10,
-      marginTop: 12,
-      borderWidth: 1,
-      borderColor: isDark
-        ? COLORS.border
-        : '#F3C6C3',
-      borderRadius: 14,
-      backgroundColor: isDark
-        ? COLORS.surfaceElevated
-        : '#FFF5F4',
-      padding: 14,
+      flexDirection:
+        'row',
+      alignItems:
+        'flex-start',
+      columnGap:
+        10,
+      marginTop:
+        12,
+      borderWidth:
+        1,
+      borderColor:
+        isDark
+          ? COLORS.border
+          : '#F3C6C3',
+      borderRadius:
+        14,
+      backgroundColor:
+        isDark
+          ? COLORS.surfaceElevated
+          : '#FFF5F4',
+      padding:
+        14,
     },
 
     verificationErrorContent: {
@@ -1704,25 +3660,37 @@ const createStyles = (
     },
 
     verificationErrorTitle: {
-      color: COLORS.red,
-      fontSize: 14,
-      fontWeight: '700',
+      color:
+        COLORS.red,
+      fontSize:
+        14,
+      fontWeight:
+        '700',
     },
 
     verificationErrorText: {
-      marginTop: 4,
-      color: isDark
-        ? COLORS.textSecondary
-        : '#713B38',
-      fontSize: 13,
-      lineHeight: 19,
+      marginTop:
+        4,
+      color:
+        isDark
+          ? COLORS.textSecondary
+          : '#713B38',
+      fontSize:
+        13,
+      lineHeight:
+        19,
     },
 
     verificationRetryText: {
-      alignSelf: 'flex-start',
-      marginTop: 10,
-      color: COLORS.blue,
-      fontSize: 13,
-      fontWeight: '700',
+      alignSelf:
+        'flex-start',
+      marginTop:
+        10,
+      color:
+        COLORS.blue,
+      fontSize:
+        13,
+      fontWeight:
+        '700',
     },
   });

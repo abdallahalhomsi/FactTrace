@@ -579,6 +579,8 @@ export default function VerificationResultsScreen({
             ? {
                 trialIndex: studyContext.trialIndex,
                 isPractice: studyContext.isPractice,
+                claimFamiliarity:
+                  studyContext.claimFamiliarity ?? null,
               }
             : {}),
         },
@@ -1186,13 +1188,7 @@ export default function VerificationResultsScreen({
           >
             {evaluationStatus}
             {sharingIntention
-              ? ` Sharing intention: ${
-                  sharingIntention === 'not_sure'
-                    ? 'Not Sure'
-                    : sharingIntention === 'yes'
-                      ? 'Yes'
-                      : 'No'
-                }.`
+              ? ` Sharing intention: ${sharingIntention}/7.`
               : ''}
           </Text>
         ) : null}

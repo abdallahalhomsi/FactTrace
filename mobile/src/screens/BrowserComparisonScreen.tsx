@@ -69,6 +69,7 @@ type BrowserStudyContext = {
   claimText: string;
   trialIndex: number;
   isPractice: boolean;
+  claimFamiliarity?: boolean;
   sessionId?: string;
   trialId?: string;
   startedAt?: string;
@@ -125,6 +126,7 @@ function trialSignature(
     study.claimText,
     study.trialIndex,
     study.isPractice,
+    study.claimFamiliarity ?? null,
   ]);
 }
 
@@ -933,6 +935,9 @@ export default function BrowserComparisonScreen({
 
                     isPractice:
                       studyContext.isPractice,
+
+                    claimFamiliarity:
+                      studyContext.claimFamiliarity ?? null,
                   }
                 : {}),
             },
