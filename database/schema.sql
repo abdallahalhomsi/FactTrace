@@ -140,3 +140,21 @@ CREATE TABLE decisions (
   CONSTRAINT chk_decisions_times CHECK (ended_at >= started_at),
   CONSTRAINT chk_decisions_scores CHECK ((match_score IS NULL OR match_score BETWEEN 0 AND 1) AND (ocr_confidence IS NULL OR ocr_confidence BETWEEN 0 AND 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- one row per physical button press on the esp32 device (both conditions)
+-- times are taken from the server clock, so trial start, result and press can be compared directly
+CREATE TABLE hardware_events (
+  event_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  participant_id    VARCHAR(8)  NOT NULL,
+  trial_index       SMALLINT UNSIGNED NOT NULL,
+  claim_id          VARCHAR(20) NOT NULL,
+  study_condition   ENUM('app','browser') NOT NULL,
+  match_state       ENUM('ready','strong_match','weak_match','no_match') NOT NULL, -- what the light showed at the press
+  decision          VARCHAR(16) NOT NULL,
+  trial_started_at  DATETIME(3) NULL,     -- when the app started the trial
+  result_shown_at   DATETIME(3) NULL,     -- when the match result reached the light (app condition only)
+  received_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), -- when the press arrived
+  PRIMARY KEY (event_id),
+  UNIQUE KEY uq_hw_participant_trial (participant_id, trial_index),
+  KEY idx_hw_claim (claim_id),
+  CONSTRAINT fk_hw_claim FOREIGN KEY (claim_id) REFERENCES claims (claim_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

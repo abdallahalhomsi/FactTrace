@@ -37,6 +37,7 @@ export type ErrorCode =
   | "PAYLOAD_TOO_LARGE" //413: the json body is bigger than the size limit
   | "CLAIM_NOT_FOUND" //404: no claim with that id
   | "NOT_FOUND" //404: the url does not exist
+  | "DEVICE_CONFLICT" //409: button press that cannot be accepted for the current trial
   | "INTERNAL_ERROR"; //500: something unexpected broke on the server
 
 //---------- claims, sources and evidence ----------

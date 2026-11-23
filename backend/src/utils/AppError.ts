@@ -12,6 +12,7 @@ const STATUS: Record<ErrorCode, number> = {
   PAYLOAD_TOO_LARGE: 413,
   CLAIM_NOT_FOUND: 404,
   NOT_FOUND: 404,
+  DEVICE_CONFLICT: 409,
   INTERNAL_ERROR: 500,
 };
 

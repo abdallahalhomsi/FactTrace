@@ -4,10 +4,19 @@
 import { parseMatchRequest } from "./claims.controller"; //same input checks as /api/claims/match
 import { verifyClaim } from "../services/verify.service"; //matching plus claim lookup
 import { sendSuccess } from "../utils/apiResponse"; //standard success response
+import { markProcessing, markDoneProcessing, updateMatchState } from "../services/device.service"; //esp32 light
 
 import { Request, Response } from "express";
 
 export async function postVerify(req: Request, res: Response): Promise<void> {
-  const result = await verifyClaim(parseMatchRequest(req.body));
-  sendSuccess(res, result);
+  const request = parseMatchRequest(req.body); //check the input before touching the light
+  markProcessing(); //blue while matching runs (only during an app trial)
+  try {
+    const result = await verifyClaim(request);
+    updateMatchState(result.matchStatus); //green, yellow or red for this trial
+    sendSuccess(res, result);
+  } catch (err) {
+    markDoneProcessing(); //matching failed, so do not leave the light blue
+    throw err;
+  }
 }
