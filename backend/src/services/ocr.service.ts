@@ -16,30 +16,38 @@ const TESSERACT_LANG_PATH = path.join(
   "4.0.0_best_int"
 );
 
-/**
- * Cleans up raw OCR text to improve matching accuracy.
- * - Normalizes whitespace and merges broken lines.
- * - Removes lines that contain only noise/punctuation.
- * - Preserves the original meaning.
- */
-function cleanOcrText(rawText: string): string {
+//a line counts as noise if it has fewer than 2 letters or digits, or if they are under half of its visible characters
+function isNoiseLine(line: string): boolean {
+  const visible = line.replace(/\s/g, ""); //characters without spaces
+  const alnum = (visible.match(/[\p{L}\p{N}]/gu) ?? []).length; //letters and digits in any language
+  return alnum < 2 || alnum / visible.length < 0.5;
+}
+
+//cleans raw ocr text before matching and before the participant reviews it, without changing any words
+//removes noise lines, tabs, bullets and invisible characters, and joins lines (and words split across lines)
+export function cleanOcrText(rawText: string): string {
   if (!rawText) return "";
+  const lines = rawText
+    .normalize("NFC") //one form for accented letters
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") //invisible characters
+    .replace(/[\u2018\u2019]/g, "'") //curly single quotes to straight
+    .replace(/[\u201C\u201D]/g, '"') //curly double quotes to straight
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[\t\f\v ]+/g, " ").trim()) //tabs and repeated spaces
+    .map((line) => line.replace(/^[•·▪◦*>|-]+\s+/u, "")) //bullet marks at the start of a line
+    .filter((line) => line.length > 0 && !isNoiseLine(line)); //drop empty and garbage lines
 
-  // Split into lines to filter out garbage lines
-  const lines = rawText.split(/\r?\n/);
-  
-  const cleanedLines = lines
-    .map((line) => line.trim())
-    // Remove lines that have no alphanumeric characters (just symbols or empty)
-    .filter((line) => /[a-zA-Z0-9]/.test(line));
-
-  // Join the valid lines with a space
-  let text = cleanedLines.join(" ");
-
-  // Collapse multiple spaces into one
-  text = text.replace(/\s{2,}/g, " ").trim();
-
-  return text;
+  let text = "";
+  for (const line of lines) {
+    if (!text) {
+      text = line;
+    } else if (/\p{L}-$/u.test(text) && /^\p{Ll}/u.test(line)) {
+      text = text.slice(0, -1) + line; //word split across lines ("misinfor-" then "mation"): join without the hyphen
+    } else {
+      text += " " + line;
+    }
+  }
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -58,8 +66,7 @@ export async function tesseractOcr(imageBuffer: Buffer): Promise<OcrResult> {
     });
     const { data } = await worker.recognize(imageBuffer);
 
-    const rawText = (data.text ?? "").trim();
-    const text = cleanOcrText(rawText);
+    const text = cleanOcrText(data.text ?? ""); //cleanup also trims
     
     const confidence =
       typeof data.confidence === "number" ? data.confidence / 100 : null;
@@ -119,8 +126,7 @@ export async function cloudVisionOcr(imageBuffer: Buffer): Promise<OcrResult> {
       image: { content: imageBuffer },
     });
 
-    const rawText = (response.fullTextAnnotation?.text ?? "").trim();
-    const text = cleanOcrText(rawText);
+    const text = cleanOcrText(response.fullTextAnnotation?.text ?? ""); //cleanup also trims
 
     const pages = response.fullTextAnnotation?.pages ?? [];
     const wordConfidences: number[] = [];
