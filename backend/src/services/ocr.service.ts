@@ -17,6 +17,32 @@ const TESSERACT_LANG_PATH = path.join(
 );
 
 /**
+ * Cleans up raw OCR text to improve matching accuracy.
+ * - Normalizes whitespace and merges broken lines.
+ * - Removes lines that contain only noise/punctuation.
+ * - Preserves the original meaning.
+ */
+function cleanOcrText(rawText: string): string {
+  if (!rawText) return "";
+
+  // Split into lines to filter out garbage lines
+  const lines = rawText.split(/\r?\n/);
+  
+  const cleanedLines = lines
+    .map((line) => line.trim())
+    // Remove lines that have no alphanumeric characters (just symbols or empty)
+    .filter((line) => /[a-zA-Z0-9]/.test(line));
+
+  // Join the valid lines with a space
+  let text = cleanedLines.join(" ");
+
+  // Collapse multiple spaces into one
+  text = text.replace(/\s{2,}/g, " ").trim();
+
+  return text;
+}
+
+/**
  * Tesseract OCR. Pure JS, no native build.
  * Tesseract returns confidence 0–100; normalized to 0–1 here.
  */
@@ -32,7 +58,9 @@ export async function tesseractOcr(imageBuffer: Buffer): Promise<OcrResult> {
     });
     const { data } = await worker.recognize(imageBuffer);
 
-    const text = (data.text ?? "").trim();
+    const rawText = (data.text ?? "").trim();
+    const text = cleanOcrText(rawText);
+    
     const confidence =
       typeof data.confidence === "number" ? data.confidence / 100 : null;
 
@@ -91,7 +119,8 @@ export async function cloudVisionOcr(imageBuffer: Buffer): Promise<OcrResult> {
       image: { content: imageBuffer },
     });
 
-    const text = (response.fullTextAnnotation?.text ?? "").trim();
+    const rawText = (response.fullTextAnnotation?.text ?? "").trim();
+    const text = cleanOcrText(rawText);
 
     const pages = response.fullTextAnnotation?.pages ?? [];
     const wordConfidences: number[] = [];
