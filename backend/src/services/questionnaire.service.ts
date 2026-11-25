@@ -1,6 +1,8 @@
 //saves the SUS and NASA-TLX answers a participant gives after each block, with the scores
 
+import { RowDataPacket } from "mysql2"; //row type for select results
 import { pool } from "../db/mysql"; //database connection
+import { AppError } from "../utils/AppError"; //standard error type
 import { QuestionnaireRequest, QuestionnaireResponse, TlxRatings } from "../types/api";
 
 //SUS score (Brooke, 1996): odd items count (answer - 1), even items count (5 - answer), the sum times 2.5 gives 0 to 100
@@ -17,6 +19,23 @@ export function rawTlx(tlx: TlxRatings): number {
 
 //one row per participant and condition; sending again replaces it, so a retry after a network error is safe
 export async function recordQuestionnaire(input: QuestionnaireRequest): Promise<QuestionnaireResponse> {
+  //if the participant has a session, the block must match their condition order (app_first: app is block 1)
+  //so a wrong block number from the app is rejected instead of being saved silently
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    "SELECT condition_order FROM study_sessions WHERE participant_id = ?",
+    [input.participantId]
+  );
+  if (rows.length > 0) {
+    const appFirst = rows[0].condition_order === "app_first";
+    const expectedBlock = (input.condition === "app") === appFirst ? 1 : 2;
+    if (input.blockIndex !== expectedBlock) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `blockIndex must be ${expectedBlock}: ${input.participantId} is ${rows[0].condition_order}, so ${input.condition} is block ${expectedBlock}`
+      );
+    }
+  }
+
   const sus = susScore(input.sus);
   const tlx = rawTlx(input.tlx);
 

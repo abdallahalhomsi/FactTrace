@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:ocr": "tsx src/scripts/test-ocr.ts",
     "test:ocr-cleanup": "tsx src/scripts/test-ocr-cleanup.ts",
+    "test:questionnaire": "tsx src/scripts/test-questionnaire.ts",
     "export": "tsx src/scripts/export-csv.ts"
   },
   "dependencies": {
