@@ -8,9 +8,12 @@ import {
   EducationLevel,
   GenderOption,
   SessionRequest,
+  SetOrder,
   SmartphoneUseRange,
   SocialMediaUseRange,
 } from "../types/api";
+
+import { groupFor, STUDY_GROUPS } from "../config/study";
 
 import { recordSession } from "../services/session.service";
 import { sendSuccess } from "../utils/apiResponse";
@@ -21,9 +24,16 @@ const CONDITION_ORDERS = [
   "browser_first",
 ] as const;
 
+const SET_ORDERS = [
+  "a_first",
+  "b_first",
+] as const;
+
 const GENDER_OPTIONS = [
   "female",
   "male",
+  "another",
+  "prefer_not_to_say",
 ] as const;
 
 const EDUCATION_LEVELS = [
@@ -80,6 +90,12 @@ export async function postSession(
       CONDITION_ORDERS,
     )
 
+    .oneOf(
+      "setOrder",
+      SET_ORDERS,
+      { optional: true },
+    )
+
     .custom(
       "age",
       isIntegerInRange(body.age, 18, 100),
@@ -95,6 +111,23 @@ export async function postSession(
     .oneOf(
       "educationLevel",
       EDUCATION_LEVELS,
+    )
+
+    
+    .string(
+      "faculty",
+      {
+        optional: true,
+        maxLength: 100,
+      },
+    )
+
+    .custom(
+      "studyYear",
+      body.studyYear === undefined ||
+        body.studyYear === null ||
+        isIntegerInRange(body.studyYear, 1, 8),
+      "must be an integer from 1 to 8",
     )
 
     .oneOf(
@@ -169,13 +202,20 @@ export async function postSession(
 
     .check();
 
+  const participantId = (
+    body.participantId as string
+  ).toUpperCase();
+
   const session: SessionRequest = {
-    participantId: (
-      body.participantId as string
-    ).toUpperCase(),
+    participantId,
 
     conditionOrder:
       body.conditionOrder as ConditionOrder,
+
+    //the app can leave this out: it then follows the participant's counterbalanced group
+    setOrder:
+      (body.setOrder as SetOrder | undefined) ??
+      STUDY_GROUPS[groupFor(participantId) - 1].setOrder,
 
     age: body.age as number,
 
@@ -186,6 +226,17 @@ export async function postSession(
 
     educationLevel:
       body.educationLevel as EducationLevel,
+
+    faculty:
+      typeof body.faculty === "string" &&
+      body.faculty.trim().length > 0
+        ? body.faculty.trim()
+        : undefined,
+
+    studyYear:
+      typeof body.studyYear === "number"
+        ? body.studyYear
+        : undefined,
 
     smartphoneUse:
       body.smartphoneUse as SmartphoneUseRange,
