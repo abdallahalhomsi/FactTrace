@@ -16,7 +16,7 @@ A claim whose only fact-check gives a different verdict than our label (for exam
 
 ## Study sets
 
-Each set: 3 true, 2 false, 2 misleading, in the same positions. Topics are paired across sets where possible (work: Finland / burnout; misattributed quotes: Einstein / Marie Antoinette; WHO health claims: processed meat / burnout).
+Each set: 3 true, 2 false, 2 misleading, in the same positions. Misleading items in both sets follow the same pattern: a real finding or announcement stretched into a wrong conclusion ("The WHO says...", "A university study found...").
 
 | Set | Pos | Claim | Label | Gold standard |
 |---|---|---|---|---|
@@ -24,24 +24,38 @@ Each set: 3 true, 2 false, 2 misleading, in the same positions. Topics are paire
 | A | 2 | claim_24 Finland four-day week | false | Full Fact |
 | A | 3 | claim_39 WHO processed meat = smoking | misleading | Science Feedback (inaccurate, misleading) |
 | A | 4 | claim_03 Octopus three hearts | true | Live Science, Smithsonian Magazine |
-| A | 5 | claim_33 Einstein insanity quote | false | Check Your Fact |
-| A | 6 | claim_45 Pluto "too small" | misleading | International Astronomical Union (2006 definition) |
+| A | 5 | claim_33 Einstein insanity quote | false | Check Your Fact (+ Quote Investigator) |
+| A | 6 | claim_45 Pluto "too small" | misleading | International Astronomical Union, NASA JPL (planet definition) |
 | A | 7 | claim_09 Göbekli Tepe vs Stonehenge | true | Hürriyet Daily News, English Heritage |
 | B | 1 | claim_16 Ozone recovery | true | World Meteorological Organization + news |
 | B | 2 | claim_25 NASA "six days of darkness" | false | PolitiFact, Lead Stories |
 | B | 3 | claim_38 Vitamin C prevents colds | misleading | Science Feedback (lacks context), Cochrane review |
 | B | 4 | claim_15 Scotland's unicorn | true | National Trust for Scotland, The Scotsman |
-| B | 5 | claim_32 Marie Antoinette "cake" | false | Misbar |
-| B | 6 | claim_51 WHO burnout "medical condition" | misleading | World Health Organization's own correction (28 May 2019) |
+| B | 5 | claim_31 "Martinelli" WhatsApp video | false | Full Fact, Newschecker |
+| B | 6 | claim_52 Horror films and weight loss | misleading | Snopes (Mixture) |
 | B | 7 | claim_05 Venus day vs year | true | Snopes (true) + news |
 
-Removed from the sets: claim_40 (Everest) and claim_41 (Istanbul), because no fact-checker has covered either.
+Removed from the sets: claim_40 (Everest) and claim_41 (Istanbul), because no fact-checker has covered either; claim_32 (Marie Antoinette) and claim_51 (burnout) after labelling round 1 (below).
 
 ## Before the main study
 
 1. **Independent labelling.** Two team members who did not write a claim each label all 14 study claims (true / false / misleading) from the sources alone, without seeing `correct_answer`. Report agreement (Cohen's kappa). A claim the two labellers and the database do not all agree on is discussed, and replaced if the disagreement stays.
 2. **Pretest.** About 10 to 15 people who will not take part in the main study (add them to the exclusion list) rate each claim: "Have you seen this claim before?" (yes / no / unsure) and "How likely is it that this claim is true?" (1 to 7). Replace any claim almost everyone has seen or rates at the very top or bottom of the scale, and check that sets A and B have similar average ratings.
 3. **Links.** Run `npx tsx src/scripts/check-links.ts` (from `backend`) and open any blocked link by hand.
+
+## Labelling round 1 (26 Nov 2026)
+
+Labellers: Syeda Manaal Amir, Rand MO Khaled. Agreement between them 11/14, Cohen's kappa 0.67; agreement with the database 10/14 and 11/14.
+
+| Claim | Labels | Decision |
+|---|---|---|
+| claim_51 burnout | both False (database: misleading) | replaced by claim_52 |
+| claim_32 Marie Antoinette | both Misleading (database: false) | replaced by claim_31 |
+| claim_03 octopus | one False | to confirm with the labeller (sources agree on three hearts) |
+| claim_38 vitamin C | split False / Misleading | kept; Science Feedback rates it "lack of context" |
+| claim_45 Pluto | split Misleading / True | kept; sources replaced (HowStuffWorks and a broken IAU link) |
+
+Round 2: the same labellers label claim_31, claim_52 and claim_45 (new sources).
 
 ## References
 
