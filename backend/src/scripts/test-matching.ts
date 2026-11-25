@@ -41,8 +41,8 @@ const REWORDED: Record<string, string> = {
   claim_25: "NASA says the Earth will be dark for six days this December",
   claim_38: "Vitamin C every day stops you from catching colds",
   claim_15: "The unicorn is the national animal of Scotland",
-  claim_32: "Marie Antoinette said let them eat cake",
-  claim_51: "The WHO made burnout an official medical condition in 2019",
+  claim_31: "Opening a WhatsApp video called Martinelli will hack your phone",
+  claim_52: "Scientists found that horror movies help you lose weight",
   claim_05: "On Venus a day lasts longer than a year",
 };
 
