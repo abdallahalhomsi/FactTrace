@@ -11,6 +11,7 @@ import { postDecision } from "../controllers/decisions.controller";
 import { postVerify } from "../controllers/verify.controller";
 import { imageUpload } from "../middleware/upload"; //reads the photo before the ocr controller runs
 import { postSession } from "../controllers/sessions.controller";
+import { postQuestionnaire } from "../controllers/questionnaires.controller"; //SUS and NASA-TLX after each block
 import { getStudyAssignment, getStudyClaims } from "../controllers/study.controller"; //study claims and group assignment
 import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision } from "../controllers/device.controller"; //esp32 device
 
@@ -27,6 +28,7 @@ router.post("/verify", postVerify); //match and evidence in one call, in the fro
 
 router.post("/decisions", postDecision); //save the participant's decision
 router.post("/sessions", postSession);
+router.post("/questionnaires", postQuestionnaire); //SUS and NASA-TLX after each block
 router.get("/study/claims", getStudyClaims); //practice claims and the two study sets, in order
 router.get("/study/assignment", getStudyAssignment); //counterbalanced group for a participant
 

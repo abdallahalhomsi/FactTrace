@@ -20,6 +20,7 @@ interface DeviceTrial {
   state: DeviceLight;
   resultState: MatchLight | null; //last match result in this trial, so ocr on a rescan can return to it
   startedAt: Date | null; //when the app started the trial (server clock)
+  scanStartedAt: Date | null; //when the first ocr or matching request of the trial started (app condition only)
   resultShownAt: Date | null; //when the last match result was sent (app condition only)
   buttonPressed: boolean;
   decision: string | null;
@@ -33,6 +34,7 @@ const IDLE: DeviceTrial = {
   state: "idle",
   resultState: null,
   startedAt: null,
+  scanStartedAt: null,
   resultShownAt: null,
   buttonPressed: false,
   decision: null,
@@ -90,7 +92,10 @@ export function endTrial(): void {
 
 //called when /api/ocr or /api/verify starts, only changes the light during an open app trial
 export function markProcessing(): void {
-  if (current.condition === "app" && trialOpen()) current.state = "processing";
+  if (current.condition === "app" && trialOpen()) {
+    current.state = "processing";
+    if (current.scanStartedAt === null) current.scanStartedAt = new Date(); //t1: only the first scan of the trial counts
+  }
 }
 
 //called when /api/ocr finishes (or /api/verify fails): back to the last result, or ready if there is none yet
@@ -111,6 +116,7 @@ export function updateMatchState(matchStatus: MatchLight): void {
 
 //called when a physical button is pressed; trialIndex is the one the esp32 last received
 export async function recordHardwareDecision(trialIndex: number, decision: string): Promise<void> {
+  const receivedAt = new Date(); //t3, taken in node like t0 to t2, so all four times use the same clock and time zone
   if (current.participantId === null || current.trialIndex === null || current.condition === null || current.claimId === null) {
     throw new AppError("DEVICE_CONFLICT", "No active trial");
   }
@@ -127,8 +133,9 @@ export async function recordHardwareDecision(trialIndex: number, decision: strin
   //save first, and only mark the trial as answered if the save worked, so a failed save can be retried
   await pool.execute(
     `INSERT INTO hardware_events
-       (participant_id, trial_index, claim_id, study_condition, match_state, decision, trial_started_at, result_shown_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (participant_id, trial_index, claim_id, study_condition, match_state, decision,
+        trial_started_at, scan_started_at, result_shown_at, received_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       current.participantId,
       current.trialIndex,
@@ -137,7 +144,9 @@ export async function recordHardwareDecision(trialIndex: number, decision: strin
       current.state, //what the light showed when the button was pressed
       decision,
       current.startedAt,
+      current.scanStartedAt,
       current.resultShownAt,
+      receivedAt,
     ]
   );
 
