@@ -213,11 +213,56 @@ CREATE TABLE hardware_events (
   study_condition   ENUM('app','browser') NOT NULL,
   match_state       ENUM('ready','strong_match','weak_match','no_match') NOT NULL, -- what the light showed at the press
   decision          VARCHAR(16) NOT NULL,
-  trial_started_at  DATETIME(3) NULL,     -- when the app started the trial
-  result_shown_at   DATETIME(3) NULL,     -- when the match result reached the light (app condition only)
-  received_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), -- when the press arrived
+  trial_started_at  DATETIME(3) NULL,     -- t0: when the app started the trial
+  scan_started_at   DATETIME(3) NULL,     -- t1: when the first ocr or matching request started (app condition only)
+  result_shown_at   DATETIME(3) NULL,     -- t2: when the match result reached the light (app condition only)
+  received_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), -- t3: when the press arrived
   PRIMARY KEY (event_id),
   UNIQUE KEY uq_hw_participant_trial (participant_id, trial_index),
   KEY idx_hw_claim (claim_id),
   CONSTRAINT fk_hw_claim FOREIGN KEY (claim_id) REFERENCES claims (claim_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- one row per participant per condition: SUS and NASA-TLX, filled in after each block
+-- items are stored as answered; the scores are calculated by the backend when saving
+CREATE TABLE questionnaire_responses (
+  participant_id    VARCHAR(4)  NOT NULL,
+  study_condition   ENUM('app','browser') NOT NULL,
+  block_index       TINYINT UNSIGNED NOT NULL, -- 1 = first block, 2 = second block
+
+  -- SUS: 10 items, 1 = strongly disagree, 5 = strongly agree (odd items positive, even items negative)
+  sus_1  TINYINT UNSIGNED NOT NULL,
+  sus_2  TINYINT UNSIGNED NOT NULL,
+  sus_3  TINYINT UNSIGNED NOT NULL,
+  sus_4  TINYINT UNSIGNED NOT NULL,
+  sus_5  TINYINT UNSIGNED NOT NULL,
+  sus_6  TINYINT UNSIGNED NOT NULL,
+  sus_7  TINYINT UNSIGNED NOT NULL,
+  sus_8  TINYINT UNSIGNED NOT NULL,
+  sus_9  TINYINT UNSIGNED NOT NULL,
+  sus_10 TINYINT UNSIGNED NOT NULL,
+  sus_score         DECIMAL(5,2) NOT NULL, -- 0 to 100
+
+  -- NASA-TLX: 6 subscales, 0 to 100 in steps of 5 (performance: 0 = perfect, 100 = failure)
+  tlx_mental        TINYINT UNSIGNED NOT NULL,
+  tlx_physical      TINYINT UNSIGNED NOT NULL,
+  tlx_temporal      TINYINT UNSIGNED NOT NULL,
+  tlx_performance   TINYINT UNSIGNED NOT NULL,
+  tlx_effort        TINYINT UNSIGNED NOT NULL,
+  tlx_frustration   TINYINT UNSIGNED NOT NULL,
+  tlx_raw           DECIMAL(5,2) NOT NULL, -- raw TLX: mean of the 6 subscales, 0 to 100
+
+  submitted_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+  PRIMARY KEY (participant_id, study_condition),
+  -- no foreign key to study_sessions, same as decisions, so answers are never lost because a session row is missing
+  CONSTRAINT chk_questionnaire_participant CHECK (participant_id REGEXP '^P[0-9]{1,3}$'),
+  CONSTRAINT chk_questionnaire_block CHECK (block_index IN (1, 2)),
+  CONSTRAINT chk_questionnaire_sus CHECK (
+    sus_1 BETWEEN 1 AND 5 AND sus_2 BETWEEN 1 AND 5 AND sus_3 BETWEEN 1 AND 5 AND sus_4 BETWEEN 1 AND 5 AND
+    sus_5 BETWEEN 1 AND 5 AND sus_6 BETWEEN 1 AND 5 AND sus_7 BETWEEN 1 AND 5 AND sus_8 BETWEEN 1 AND 5 AND
+    sus_9 BETWEEN 1 AND 5 AND sus_10 BETWEEN 1 AND 5),
+  CONSTRAINT chk_questionnaire_tlx CHECK (
+    tlx_mental <= 100 AND tlx_physical <= 100 AND tlx_temporal <= 100 AND
+    tlx_performance <= 100 AND tlx_effort <= 100 AND tlx_frustration <= 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

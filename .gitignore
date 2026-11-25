@@ -28,5 +28,8 @@ credentials.json
 service-account*.json
 /backend/secrets
 
+# study data exports (participant data, never commit)
+/backend/exports/
+
 backend/samples/Screenshot 2026-10-26 114253.png
 *.csv

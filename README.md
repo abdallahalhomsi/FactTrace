@@ -605,9 +605,16 @@ docker exec -it facttrace-mysql mysql -u root -pfacttrace123 facttrace
 **Export the full dataset to CSV:**  
 
 ```bash
-cd backend  
-npx tsx src/scripts/export-csv.ts > decisions.csv  
+cd backend
+npm run export
 ```
+
+This writes four files to `backend/exports/` (gitignored, never commit them):
+
+- `trials.csv`: one row per decision, with the claim's answer and set, the participant's group, the light at the press and the device times (`processing_ms`, `evidence_ms`, `device_time_to_decision_ms`)
+- `sessions.csv`: the background questionnaire and counterbalanced group
+- `questionnaires.csv`: SUS and NASA-TLX items and scores per condition
+- `hardware_events.csv`: every button press with its timestamps
 
 # Verification States
 

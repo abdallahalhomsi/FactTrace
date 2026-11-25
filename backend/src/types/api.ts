@@ -310,3 +310,31 @@ export interface HealthResponse {
     cloudVisionKeyFound: boolean; //false means cloud vision is skipped and tesseract is used
   };
 }
+
+//NASA-TLX ratings, each 0 to 100 in steps of 5 (performance: 0 = perfect, 100 = failure)
+export interface TlxRatings {
+  mental: number;
+  physical: number;
+  temporal: number;
+  performance: number;
+  effort: number;
+  frustration: number;
+}
+
+//what the app sends to POST /questionnaires after each block
+export interface QuestionnaireRequest {
+  participantId: string; //P07 format
+  condition: "app" | "browser"; //the tool used in the block just finished
+  blockIndex: 1 | 2; //first or second block
+  sus: number[]; //10 answers, 1 to 5, in SUS item order
+  tlx: TlxRatings;
+}
+
+//what POST /questionnaires returns
+export interface QuestionnaireResponse {
+  participantId: string;
+  condition: "app" | "browser";
+  susScore: number; //0 to 100
+  tlxRaw: number; //0 to 100
+}
+

@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test:ocr": "tsx src/scripts/test-ocr.ts",
-    "test:ocr-cleanup": "tsx src/scripts/test-ocr-cleanup.ts"
+    "test:ocr-cleanup": "tsx src/scripts/test-ocr-cleanup.ts",
+    "export": "tsx src/scripts/export-csv.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^6.2.0",
