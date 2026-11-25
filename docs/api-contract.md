@@ -308,8 +308,8 @@ All 50 claims in `database/seed_claims.sql`. Use these ids for QR test codes. Th
 | `claim_28` | The white trails behind planes are chemicals sprayed in a secret government programme. | false |  |
 | `claim_29` | The MMR vaccine causes autism. | false |  |
 | `claim_30` | Drinking hot water protects you from the coronavirus. | false |  |
-| `claim_31` | A WhatsApp video called Martinelli will hack your phone if you open it. | false | B 5 |
-| `claim_32` | Marie Antoinette said "Let them eat cake" when told the people had no bread. | false |  |
+| `claim_31` | A WhatsApp video called Martinelli will hack your phone if you open it. | false | A 6 |
+| `claim_32` | Marie Antoinette said "Let them eat cake" when told the people had no bread. | misleading | B 5 |
 | `claim_33` | Albert Einstein said insanity is doing the same thing over and over and expecting different results. | false | A 5 |
 | `claim_34` | Lemmings commit mass suicide by jumping off cliffs. | false |  |
 | `claim_35` | Eating carrots improves your eyesight and helps you see in the dark. | misleading |  |
@@ -322,14 +322,13 @@ All 50 claims in `database/seed_claims.sql`. Use these ids for QR test codes. Th
 | `claim_42` | You need to drink eight glasses of water a day to stay healthy. | misleading |  |
 | `claim_43` | Working from home makes employees more productive. | misleading |  |
 | `claim_44` | A glass of red wine every day is good for your heart. | misleading |  |
-| `claim_45` | Pluto lost its planet status because it is too small. | misleading | A 6 |
+| `claim_45` | Pluto lost its planet status because it is too small. | misleading |  |
 | `claim_46` | MSG in food causes headaches. | misleading |  |
 | `claim_47` | Microwaving food destroys its nutrients. | misleading |  |
 | `claim_48` | Humans share 60 percent of their DNA with bananas. | misleading |  |
 | `claim_49` | Japan kept a remote train station open just for one high school student until she graduated. | misleading |  |
 | `claim_50` | A Dutch researcher predicted the February 2023 earthquake in Türkiye. | misleading |  |
-| `claim_51` | In 2019, the WHO officially recognised burnout as a medical condition. | misleading |  |
-| `claim_52` | A university study found that watching horror films can help you lose weight. | misleading | B 6 |
+| `claim_51` | In 2019, the WHO officially recognised burnout as a medical condition. | false | B 6 |
 
 Test inputs for each match status (send to `/api/verify` with `source: "manual"`):
 - strong: the full claim text, e.g. `Mount Everest is the tallest mountain on Earth.`

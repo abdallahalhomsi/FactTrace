@@ -121,7 +121,7 @@ export interface VerifyEvidence {
   provenance?: string; //where this record came from, ends with the curated dataset
   isPrimary: boolean; //true for the main or original source
   //extras the frontend may use or ignore
-  stance: EvidenceStance; //supports, contradicts or context
+  stance?: EvidenceStance; //supports, contradicts or context; not sent while SHOW_VERDICT_HINTS is off
   sourceType: SourceType; //raw source kind
   publishedAt: string | null; //raw date yyyy-mm-dd
 }
