@@ -317,17 +317,18 @@ All 50 claims in `database/seed_claims.sql`. Use these ids for QR test codes. Th
 | `claim_37` | Drinking coffee dehydrates you. | misleading |  |
 | `claim_38` | Taking vitamin C every day prevents colds. | misleading | B 3 |
 | `claim_39` | The WHO says processed meat is as dangerous as smoking. | misleading | A 3 |
-| `claim_40` | Mount Everest is the tallest mountain on Earth. | misleading | A 6 |
-| `claim_41` | Istanbul is the only city in the world located on two continents. | misleading | B 6 |
+| `claim_40` | Mount Everest is the tallest mountain on Earth. | misleading |  |
+| `claim_41` | Istanbul is the only city in the world located on two continents. | misleading |  |
 | `claim_42` | You need to drink eight glasses of water a day to stay healthy. | misleading |  |
 | `claim_43` | Working from home makes employees more productive. | misleading |  |
 | `claim_44` | A glass of red wine every day is good for your heart. | misleading |  |
-| `claim_45` | Pluto lost its planet status because it is too small. | misleading |  |
+| `claim_45` | Pluto lost its planet status because it is too small. | misleading | A 6 |
 | `claim_46` | MSG in food causes headaches. | misleading |  |
 | `claim_47` | Microwaving food destroys its nutrients. | misleading |  |
 | `claim_48` | Humans share 60 percent of their DNA with bananas. | misleading |  |
 | `claim_49` | Japan kept a remote train station open just for one high school student until she graduated. | misleading |  |
 | `claim_50` | A Dutch researcher predicted the February 2023 earthquake in Türkiye. | misleading |  |
+| `claim_51` | In 2019, the WHO officially recognised burnout as a medical condition. | misleading | B 6 |
 
 Test inputs for each match status (send to `/api/verify` with `source: "manual"`):
 - strong: the full claim text, e.g. `Mount Everest is the tallest mountain on Earth.`
