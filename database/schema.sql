@@ -92,17 +92,23 @@ CREATE TABLE study_sessions (
   participant_id          VARCHAR(4)   NOT NULL,
   condition_order         ENUM('app_first','browser_first') NOT NULL,
 
+  -- which claim set comes first; with condition_order this gives 4 counterbalanced groups
+  set_order               ENUM('a_first','b_first') NOT NULL DEFAULT 'a_first',
+
   age                     TINYINT UNSIGNED NOT NULL,
   gender                  ENUM(
                             'female',
                             'male',
+                            'another',
+                            'prefer_not_to_say'
                           ) NULL,
   education_level         ENUM(
                             'undergraduate',
                             'graduate',
                             'other'
                           ) NOT NULL,
-
+  faculty                 VARCHAR(100) NULL,
+  study_year              TINYINT UNSIGNED NULL,
   smartphone_use          ENUM(
                             'lt_1',
                             '1_3',
@@ -137,6 +143,9 @@ CREATE TABLE study_sessions (
 
   CONSTRAINT chk_sessions_age
     CHECK (age BETWEEN 18 AND 100),
+
+  CONSTRAINT chk_sessions_study_year
+    CHECK (study_year IS NULL OR study_year BETWEEN 1 AND 8),
 
   CONSTRAINT chk_sessions_fact_check_frequency
     CHECK (fact_check_frequency BETWEEN 1 AND 7),

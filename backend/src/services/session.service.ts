@@ -16,10 +16,13 @@ export async function recordSession(
     INSERT INTO study_sessions (
       participant_id,
       condition_order,
+      set_order,
 
       age,
       gender,
       education_level,
+      faculty,
+      study_year,
 
       smartphone_use,
       social_media_use,
@@ -35,12 +38,15 @@ export async function recordSession(
       notes
     )
     VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
 
     ON DUPLICATE KEY UPDATE
       condition_order =
         VALUES(condition_order),
+
+      set_order =
+        VALUES(set_order),
 
       age =
         VALUES(age),
@@ -50,6 +56,12 @@ export async function recordSession(
 
       education_level =
         VALUES(education_level),
+      
+      faculty =
+        VALUES(faculty),
+
+      study_year =
+        VALUES(study_year),
 
       smartphone_use =
         VALUES(smartphone_use),
@@ -81,10 +93,13 @@ export async function recordSession(
     [
       input.participantId,
       input.conditionOrder,
+      input.setOrder,
 
       input.age,
       input.gender ?? null,
       input.educationLevel,
+      input.faculty ?? null,
+      input.studyYear ?? null,
 
       input.smartphoneUse,
       input.socialMediaUse,

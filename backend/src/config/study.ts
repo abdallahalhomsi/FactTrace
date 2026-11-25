@@ -11,7 +11,24 @@
 
 import {
   ClaimAnswer,
+  ConditionOrder,
+  SetOrder,
 } from "../types/api";
+
+//four counterbalanced groups, cycling by participant number (P01 → group 1, P02 → group 2, …, P05 → group 1)
+//every tool is used with every claim set, and each set appears first and second equally often
+export const STUDY_GROUPS: { conditionOrder: ConditionOrder; setOrder: SetOrder }[] = [
+  { conditionOrder: "app_first", setOrder: "a_first" }, //group 1: FactTrace with Set A, then browser with Set B
+  { conditionOrder: "browser_first", setOrder: "a_first" }, //group 2: browser with Set A, then FactTrace with Set B
+  { conditionOrder: "app_first", setOrder: "b_first" }, //group 3: FactTrace with Set B, then browser with Set A
+  { conditionOrder: "browser_first", setOrder: "b_first" }, //group 4: browser with Set B, then FactTrace with Set A
+];
+
+//group (1 to 4) for a participant id such as P07
+export function groupFor(participantId: string): 1 | 2 | 3 | 4 {
+  const n = Number(participantId.replace(/^[pP]/, ""));
+  return ((((n - 1) % 4) + 4) % 4 + 1) as 1 | 2 | 3 | 4;
+}
 
 export interface VerdictOption {
   value: string;

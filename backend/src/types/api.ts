@@ -199,9 +199,14 @@ export interface DecisionResponse {
 //which condition the participant did first (for counterbalancing)
 export type ConditionOrder = "app_first" | "browser_first";
 
+//which claim set comes first (with ConditionOrder this gives 4 counterbalanced groups)
+export type SetOrder = "a_first" | "b_first";
+
 export type GenderOption =
   | "female"
-  | "male";
+  | "male"
+  | "another"
+  | "prefer_not_to_say";
 
 export type EducationLevel =
   | "undergraduate"
@@ -226,6 +231,7 @@ export type SocialMediaUseRange =
 export interface SessionRequest {
   participantId: string;
   conditionOrder: ConditionOrder;
+  setOrder: SetOrder; //filled from the participant number when the app leaves it out
 
   age: number;
 
@@ -233,6 +239,9 @@ export interface SessionRequest {
   gender?: GenderOption;
 
   educationLevel: EducationLevel;
+
+  faculty?: string; //e.g. FENS, FASS, SBS; optional
+  studyYear?: number; //1 to 8; optional
 
   smartphoneUse: SmartphoneUseRange;
   socialMediaUse: SocialMediaUseRange;
@@ -250,11 +259,12 @@ export interface SessionRequest {
   notes?: string;
 }
 
-//what the app sends to POST /sessions before a participant starts
-export interface SessionRequest {
-  participantId: string; //P07 format
-  conditionOrder: ConditionOrder; //app_first or browser_first
-  notes?: string; //optional, e.g. "phone died mid-session"
+//what GET /study/assignment returns: the counterbalanced group for one participant
+export interface StudyAssignment {
+  participantId: string;
+  group: 1 | 2 | 3 | 4;
+  conditionOrder: ConditionOrder;
+  setOrder: SetOrder;
 }
 
 //what POST /sessions returns
