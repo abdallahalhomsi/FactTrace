@@ -6,6 +6,10 @@ import { ClaimDetail, SourceType, VerifyEvidence, VerifyMatchStatus, VerifyRespo
 import { matchClaim } from "./match.service"; //finds the matching claim
 import { getClaimDetail } from "./claim.service"; //loads its evidence and sources
 
+//the app never shows a verdict in the study: no per-source supports/contradicts line, no curated summary of the answer,
+//no overall stance; participants see the sources, what each one reports, and factual provenance only
+const SHOW_VERDICT_HINTS = false;
+
 //shown with every result, because the prof asked that a database match is never presented as independent verification
 export const DATASET_NOTICE =
   "These results come from a curated set of claims prepared for this study. They are not an independent verification of the claim.";
@@ -64,7 +68,7 @@ function toEvidenceCards(claim: ClaimDetail): VerifyEvidence[] {
       originalUrl: s.url,
       provenance: `${s.outlet} → FactTrace curated dataset`,
       isPrimary: s.isPrimary,
-      stance: e.stance,
+      ...(SHOW_VERDICT_HINTS ? { stance: e.stance } : {}), //hidden in the study: a supports/contradicts line per source works as a verdict
       sourceType: s.type,
       publishedAt: s.publishedAt,
     });
@@ -103,10 +107,10 @@ export async function verifyClaim(req: MatchRequest): Promise<VerifyResponse> {
     ...base,
     originalClaim: req.claimText || claim.text, //qr scans send no text, so show the stored claim
     matchedClaim: claim.text,
-    explanation: claim.summary,
+    ...(SHOW_VERDICT_HINTS ? { explanation: claim.summary } : {}), //hidden in the study: the curated summary states the answer
     evidence: toEvidenceCards(claim),
     ...(match.reason ? { weakReason: match.reason } : {}), //only on weak matches
-    overallStance: claim.overallStance,
+    ...(SHOW_VERDICT_HINTS ? { overallStance: claim.overallStance } : {}),
     provenanceSignals: claim.provenanceSignals,
   };
 }

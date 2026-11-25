@@ -35,14 +35,14 @@ const REWORDED: Record<string, string> = {
   claim_39: "According to the WHO processed meat is just as bad as smoking",
   claim_03: "An octopus has three hearts",
   claim_33: "Einstein defined insanity as doing the same thing over and over and expecting a different result",
-  claim_45: "Pluto stopped being a planet because it is too small",
+  claim_31: "Opening a WhatsApp video called Martinelli will hack your phone",
   claim_09: "Gobekli Tepe in Turkey is over twice as old as Stonehenge",
   claim_16: "The UN says the ozone layer will recover within a few decades",
   claim_25: "NASA says the Earth will be dark for six days this December",
   claim_38: "Vitamin C every day stops you from catching colds",
   claim_15: "The unicorn is the national animal of Scotland",
-  claim_31: "Opening a WhatsApp video called Martinelli will hack your phone",
-  claim_52: "Scientists found that horror movies help you lose weight",
+  claim_32: "Marie Antoinette said let them eat cake",
+  claim_51: "The WHO made burnout an official medical condition in 2019",
   claim_05: "On Venus a day lasts longer than a year",
 };
 
