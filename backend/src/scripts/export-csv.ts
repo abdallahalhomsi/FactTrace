@@ -57,7 +57,8 @@ async function main() {
     const rows = result as Record<string, unknown>[];
     const columns = (fields as { name: string }[]).map((f) => f.name); //header even when the table is empty
     const lines = [columns.join(","), ...rows.map((row) => columns.map((col) => csvValue(row[col])).join(","))];
-    fs.writeFileSync(path.join(outDir, file.name), lines.join("\n") + "\n");
+    //utf-8 byte order mark first, so excel shows turkish letters and curly quotes correctly (r and python ignore it)
+    fs.writeFileSync(path.join(outDir, file.name), "\uFEFF" + lines.join("\n") + "\n");
     console.log(`${file.name}: ${rows.length} rows`);
   }
 

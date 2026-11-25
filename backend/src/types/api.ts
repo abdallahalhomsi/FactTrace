@@ -337,4 +337,3 @@ export interface QuestionnaireResponse {
   susScore: number; //0 to 100
   tlxRaw: number; //0 to 100
 }
-
