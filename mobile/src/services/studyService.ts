@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest } from './api';
 
 export type ConditionOrder =
@@ -121,7 +122,9 @@ type AssignmentApiResponse = {
 function getApiError(
   error:
     | StudyClaimsApiResponse['error']
-    | SessionApiResponse['error'],
+    | SessionApiResponse['error']
+    | QuestionnaireApiResponse['error']
+    | AssignmentApiResponse['error'],
   fallback: string,
 ): string {
   if (typeof error === 'string') {
@@ -221,4 +224,130 @@ export async function createStudySession(
       ),
     );
   }
+}
+
+/*
+ * SUS and NASA-TLX after each block.
+ * The server scores them and keeps one row per participant and condition,
+ * so sending the same block again (for example after a network error) is safe.
+ */
+export type StudyCondition =
+  | 'app'
+  | 'browser';
+
+export type TlxRatings = {
+  mental: number;
+  physical: number;
+  temporal: number;
+  performance: number;
+  effort: number;
+  frustration: number;
+};
+
+export type QuestionnaireSubmission = {
+  participantId: string;
+  condition: StudyCondition;
+  blockIndex: 1 | 2;
+  sus: number[];
+  tlx: TlxRatings;
+};
+
+type QuestionnaireApiResponse = {
+  success: boolean;
+
+  data?: {
+    participantId: string;
+    condition: StudyCondition;
+    susScore: number;
+    tlxRaw: number;
+  };
+
+  error?:
+    | string
+    | {
+        code: string;
+        message: string;
+      };
+};
+
+const QUESTIONNAIRE_KEY_PREFIX =
+  'facttrace.study.questionnaires.';
+
+export async function submitQuestionnaire(
+  submission: QuestionnaireSubmission,
+): Promise<void> {
+  const response =
+    await apiRequest<QuestionnaireApiResponse>(
+      '/api/questionnaires',
+      {
+        method: 'POST',
+        body: JSON.stringify(submission),
+      },
+    );
+
+  if (
+    !response.success ||
+    !response.data
+  ) {
+    throw new Error(
+      getApiError(
+        response.error,
+        'Could not save the questionnaire.',
+      ),
+    );
+  }
+
+  await markQuestionnaireDone(
+    submission.participantId,
+    submission.blockIndex,
+  );
+}
+
+//blocks (1, 2) whose questionnaire the server has confirmed for this participant, kept on the phone
+export async function getCompletedQuestionnaires(
+  participantId: string,
+): Promise<number[]> {
+  const stored =
+    await AsyncStorage.getItem(
+      QUESTIONNAIRE_KEY_PREFIX +
+        participantId.toUpperCase(),
+    );
+
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown =
+      JSON.parse(stored);
+
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (value): value is number =>
+            value === 1 || value === 2,
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function markQuestionnaireDone(
+  participantId: string,
+  blockIndex: 1 | 2,
+): Promise<void> {
+  const done =
+    await getCompletedQuestionnaires(
+      participantId,
+    );
+
+  if (!done.includes(blockIndex)) {
+    done.push(blockIndex);
+  }
+
+  await AsyncStorage.setItem(
+    QUESTIONNAIRE_KEY_PREFIX +
+      participantId.toUpperCase(),
+    JSON.stringify(done),
+  );
 }

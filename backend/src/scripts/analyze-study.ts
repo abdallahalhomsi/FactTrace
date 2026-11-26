@@ -49,6 +49,10 @@ interface DecisionRow {
   sources_opened_count:
     number;
 
+  browser_self_report_only:
+    number
+    | boolean;
+
   duration_ms:
     number;
 
@@ -688,24 +692,35 @@ async function main() {
     await pool.query(
       `
       SELECT
-        participant_id,
-        study_condition,
-        trial_index,
-        is_practice,
-        claim_familiarity,
-        claim_id,
-        claim_text,
-        decision,
-        sharing_intention,
-        sources_opened_count,
-        duration_ms,
-        correct_answer,
-        was_correct
-      FROM decisions
+        d.participant_id,
+        d.study_condition,
+        d.trial_index,
+        d.is_practice,
+        d.claim_familiarity,
+        d.claim_id,
+        d.claim_text,
+        d.decision,
+        d.sharing_intention,
+        -- browser source use comes from the screen-recording count agreed by the two coders;
+        -- the participant's self-report is only used while a trial has no final count yet
+        CASE
+          WHEN d.study_condition = 'browser' AND bc.source_count IS NOT NULL
+            THEN bc.source_count
+          ELSE d.sources_opened_count
+        END AS sources_opened_count,
+        (d.study_condition = 'browser' AND bc.source_count IS NULL) AS browser_self_report_only,
+        d.duration_ms,
+        d.correct_answer,
+        d.was_correct
+      FROM decisions d
+      LEFT JOIN browser_source_coding bc
+        ON bc.participant_id = d.participant_id
+        AND bc.trial_index = d.trial_index
+        AND bc.coder = 'final'
       ORDER BY
-        participant_id,
-        study_condition,
-        trial_index
+        d.participant_id,
+        d.study_condition,
+        d.trial_index
       `,
     );
 
@@ -1036,8 +1051,21 @@ async function main() {
   );
 
   console.log(
-    "Source use = mean distinct sources inspected per trial",
+    "Source use = mean distinct sources inspected per trial (browser: screen-recording count agreed by two coders)",
   );
+
+  const browserWithoutVideoCount =
+    rows.filter(
+      row =>
+        !Boolean(Number(row.is_practice)) &&
+        Boolean(Number(row.browser_self_report_only)),
+    ).length;
+
+  if (browserWithoutVideoCount > 0) {
+    console.log(
+      `WARNING: ${browserWithoutVideoCount} browser study trial(s) have no final video count yet, so their source use is the participant's self-report. Run "npm run coding -- agreement".`,
+    );
+  }
 
   console.log();
 

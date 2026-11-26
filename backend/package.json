@@ -10,7 +10,9 @@
     "test:ocr": "tsx src/scripts/test-ocr.ts",
     "test:ocr-cleanup": "tsx src/scripts/test-ocr-cleanup.ts",
     "test:questionnaire": "tsx src/scripts/test-questionnaire.ts",
-    "export": "tsx src/scripts/export-csv.ts"
+    "export": "tsx src/scripts/export-csv.ts",
+    "coding": "tsx src/scripts/source-coding.ts",
+    "check-participant": "tsx src/scripts/check-participant.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^6.2.0",

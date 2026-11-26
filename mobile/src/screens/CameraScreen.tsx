@@ -358,6 +358,10 @@ export default function CameraScreen({
             imageUri:
               croppedImage.uri,
             studyContext,
+            ocrRetakes:
+              route.params
+                ?.ocrRetakes ??
+              0,
           },
         );
       } catch (error) {

@@ -42,6 +42,7 @@ import {
   GenderOption,
   getStudyAssignment,
   getStudyClaims,
+  getCompletedQuestionnaires,
   createStudySession,
   ParticipantInformation,
   SetOrder,
@@ -59,6 +60,8 @@ import {
   buildPlan,
   describeOrder,
 } from '../utils/studyPlan';
+
+import BlockQuestionnaire from '../components/BlockQuestionnaire';
 
 import {
   endDeviceSession,
@@ -500,6 +503,43 @@ export default function StudyFlowScreen({
     completedTrialIndex,
   ]);
 
+  //blocks whose SUS and NASA-TLX the server has confirmed, null until read from the phone
+  const [
+    completedQuestionnaires,
+    setCompletedQuestionnaires,
+  ] =
+    useState<
+      number[] | null
+    >(null);
+
+  useEffect(() => {
+    if (!participantId) {
+      return;
+    }
+
+    let active = true;
+
+    void getCompletedQuestionnaires(
+      participantId,
+    )
+      .then(done => {
+        if (active) {
+          setCompletedQuestionnaires(done);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCompletedQuestionnaires([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    participantId,
+  ]);
+
   const plan =
     useMemo(() => {
       if (!claims) {
@@ -539,6 +579,66 @@ export default function StudyFlowScreen({
     plan.length > 0 &&
     completedTrialIndex >=
       plan.length;
+
+  /*
+   * SUS and NASA-TLX after each block, about the tool used in that block.
+   * A block ends at its last study trial in the plan (block 1 ends before
+   * the second tool's practice trial), so the questionnaire is shown
+   * before the next trial, or before "Study complete" after block 2.
+   */
+  const blockEnds =
+    useMemo(() => {
+      const ends: Array<{
+        blockIndex: 1 | 2;
+        lastTrialIndex: number;
+        condition: 'app' | 'browser';
+      }> = [];
+
+      const studyTrials =
+        plan.filter(
+          trial => !trial.isPractice,
+        );
+
+      for (const blockIndex of [1, 2] as const) {
+        const block =
+          studyTrials.filter(
+            trial =>
+              trial.phaseLabel.startsWith(
+                `Block ${blockIndex}`,
+              ),
+          );
+
+        const last =
+          block[block.length - 1];
+
+        if (last) {
+          ends.push({
+            blockIndex,
+            lastTrialIndex:
+              last.trialIndex,
+            condition:
+              last.condition,
+          });
+        }
+      }
+
+      return ends;
+    }, [
+      plan,
+    ]);
+
+  const pendingQuestionnaire =
+    sessionStarted &&
+    completedQuestionnaires !== null
+      ? blockEnds.find(
+          end =>
+            completedTrialIndex >=
+              end.lastTrialIndex &&
+            !completedQuestionnaires.includes(
+              end.blockIndex,
+            ),
+        ) ?? null
+      : null;
 
   //light off once every trial is done
   useEffect(() => {
@@ -2018,6 +2118,38 @@ export default function StudyFlowScreen({
               </View>
             </View>
           )
+        ) : sessionStarted &&
+          completedQuestionnaires === null ? (
+          <ActivityIndicator
+            size="large"
+            color={
+              COLORS.blue
+            }
+          />
+        ) : pendingQuestionnaire &&
+          participantId ? (
+          <BlockQuestionnaire
+            key={
+              pendingQuestionnaire.blockIndex
+            }
+            participantId={
+              participantId
+            }
+            condition={
+              pendingQuestionnaire.condition
+            }
+            blockIndex={
+              pendingQuestionnaire.blockIndex
+            }
+            onSubmitted={() =>
+              setCompletedQuestionnaires(
+                previous => [
+                  ...(previous ?? []),
+                  pendingQuestionnaire.blockIndex,
+                ],
+              )
+            }
+          />
         ) : studyComplete ? (
           <View
             style={

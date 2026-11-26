@@ -20,7 +20,7 @@ import DeviceDecisionPanel from '../components/DeviceDecisionPanel';
 import SharingIntentionModal, {
   SharingIntention,
 } from '../components/SharingIntentionModal';
-import { ThemeColors } from '../constants/app';
+import { APP_VERSION, ThemeColors } from '../constants/app';
 import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
 import { exportEvaluationRecords } from '../services/evaluationExport';
@@ -936,6 +936,9 @@ export default function BrowserComparisonScreen({
               startedAt,
 
               endedAt,
+
+              appVersion:
+                APP_VERSION,
 
               ...(studyContext
                 ? {

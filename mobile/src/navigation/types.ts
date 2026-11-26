@@ -67,6 +67,8 @@ export type RootStackParamList = {
   Camera:
     | {
         studyContext?: StudyTrialContext;
+        // retakes so far for this claim, carried through Camera and Review
+        ocrRetakes?: number;
       }
     | undefined;
 
@@ -74,6 +76,7 @@ export type RootStackParamList = {
     claimText?: string;
     imageUri?: string;
     studyContext?: StudyTrialContext;
+    ocrRetakes?: number;
     walkthrough?: boolean;
   };
 

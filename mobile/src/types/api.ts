@@ -82,6 +82,13 @@ export type DecisionRequest = {
   claimFamiliarity?: boolean | null;
   appVersion?: string;
 
+  // OCR quality and retries (FactTrace condition only)
+  ocrConfidence?: number | null;
+  ocrRetakes?: number | null;
+
+  // On a no match: whether the outside fact-check search found anything
+  factCheckFound?: boolean | null;
+
   startedAt: string;
   endedAt: string;
 };
@@ -98,5 +105,8 @@ export type VerificationEvaluationContext = {
   originalOcrText?: string;
   ocrEngine?: DecisionRequest['ocrEngine'];
   ocrError?: DecisionRequest['ocrError'];
+  ocrConfidence?: number | null;
+  // times the participant tapped Retake for this claim (0 = first photo was used)
+  ocrRetakes?: number;
   startedAt: string;
 };
