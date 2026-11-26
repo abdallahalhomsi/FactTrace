@@ -5,10 +5,7 @@ import { MatchRequest, MatchResult } from "../types/shared"; //types agreed with
 import { ClaimDetail, SourceType, VerifyEvidence, VerifyMatchStatus, VerifyResponse } from "../types/api"; //response shapes
 import { matchClaim } from "./match.service"; //finds the matching claim
 import { getClaimDetail } from "./claim.service"; //loads its evidence and sources
-
-//the app never shows a verdict in the study: no per-source supports/contradicts line, no curated summary of the answer,
-//no overall stance; participants see the sources, what each one reports, and factual provenance only
-const SHOW_VERDICT_HINTS = false;
+import { SHOW_VERDICT_HINTS } from "../config/study"; //no verdicts in the app, see config/study.ts
 
 //shown with every result, because the prof asked that a database match is never presented as independent verification
 export const DATASET_NOTICE =

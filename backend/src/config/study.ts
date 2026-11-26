@@ -131,3 +131,8 @@ export function scoreDecision(
     answer,
   );
 }
+
+//the app never shows a verdict: no per-source supports/contradicts line, no curated summary of the answer,
+//no overall stance; participants see the sources, what each one reports, and factual provenance only
+//used by /api/verify and /api/claims/:id; the fields stay in the database for analysis
+export const SHOW_VERDICT_HINTS = false;

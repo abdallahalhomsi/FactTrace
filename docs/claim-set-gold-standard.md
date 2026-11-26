@@ -71,7 +71,7 @@ Not used in the sets: claim_40 (Everest) and claim_41 (Istanbul), because no fac
 
 The app never gives a verdict. For a matched claim it shows the sources, a one-line summary of what each source reports (attributed to the source, without rating labels such as "Rated False"), and factual provenance signals: where the claim comes from, its date, how many independent organisations address it and what kind they are. All signals use the same neutral style, with no warning or positive colours.
 
-Three things the backend can send are switched off for the study (`SHOW_VERDICT_HINTS = false` in `verify.service.ts`): the per-source "supports / contradicts the claim" line, the curated claim summary (which states the answer), and the overall stance. They stay in the database for analysis.
+Three things the backend can send are switched off for the study (`SHOW_VERDICT_HINTS = false` in `backend/src/config/study.ts`, used by `/api/verify` and `/api/claims/:id`): the per-source "supports / contradicts the claim" line, the curated claim summary (which states the answer), and the overall stance. They stay in the database for analysis.
 
 The sources were also checked so that a quick skim is consistent with the gold standard: no source of a not-true claim reads as confirming it, and every true claim has a source that confirms it. The Göbekli Tepe signal gives both ages, since neither headline states the comparison.
 

@@ -4,6 +4,7 @@
 import { Request, Response } from "express"; //express types
 import { ClaimSource, MatchRequest } from "../types/shared"; //types agreed with manaal
 import { getClaimDetail } from "../services/claim.service"; //claim lookup
+import { SHOW_VERDICT_HINTS } from "../config/study"; //no verdicts in the app
 import { matchClaim } from "../services/match.service"; //claim matching
 import { sendSuccess } from "../utils/apiResponse"; //standard success response
 import { asObject, Validator } from "../utils/validate"; //input checks
@@ -52,5 +53,12 @@ export async function postMatch(req: Request, res: Response): Promise<void> {
 
 //get /api/claims/:id, returns the claim with its provenance signals, evidence and sources (never the answer)
 export function getClaim(req: Request<{ id: string }>, res: Response): void {
-  sendSuccess(res, getClaimDetail(req.params.id)); //throws a 404 if the id is unknown
+  const claim = getClaimDetail(req.params.id); //throws a 404 if the id is unknown
+  if (SHOW_VERDICT_HINTS) {
+    sendSuccess(res, claim);
+    return;
+  }
+  //same rule as /api/verify: leave out the curated summary, the overall stance and each source's stance
+  const { summary: _summary, overallStance: _overallStance, ...rest } = claim;
+  sendSuccess(res, { ...rest, evidence: claim.evidence.map(({ stance: _stance, ...e }) => e) });
 }
