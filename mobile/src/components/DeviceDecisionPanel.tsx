@@ -57,6 +57,11 @@ type Props = {
   //so the trial's end time is the press, not the end of the window
   onDecision: (decision: DeviceDecision, decidedAt: string) => void;
 
+  //optional: called as soon as a press is seen (before the undo window) and after an undo,
+  //so a screen can freeze what counts as "before the decision", such as the sources opened
+  onPressSeen?: () => void;
+  onUndone?: () => void;
+
   //researcher fallback when the device does not work: the screen shows its on-screen buttons instead
   onUseScreenButtons: () => void;
 };
@@ -71,6 +76,8 @@ export default function DeviceDecisionPanel({
   trial,
   decision,
   onDecision,
+  onPressSeen,
+  onUndone,
   onUseScreenButtons,
 }: Props) {
   const { colors: COLORS } = useAppTheme();
@@ -94,6 +101,8 @@ export default function DeviceDecisionPanel({
   const waiting = decision === null && pending === null;
   const onDecisionRef = useRef(onDecision);
   onDecisionRef.current = onDecision;
+  const onPressSeenRef = useRef(onPressSeen);
+  onPressSeenRef.current = onPressSeen;
 
   //while there is a problem, tick once a second so the researcher fallback appears on time
   useEffect(() => {
@@ -150,6 +159,7 @@ export default function DeviceDecisionPanel({
         ) {
           report('none');
           const decidedAt = new Date().toISOString();
+          onPressSeenRef.current?.();
           const undoLeft = Math.min(
             UNDO_WINDOW_MS,
             status.undoMsLeft - UNDO_GRACE_MS,
@@ -226,6 +236,7 @@ export default function DeviceDecisionPanel({
       });
       //the trial is open again: waiting for a new press restarts the polling
       setPending(null);
+      onUndone?.();
     } catch {
       //too late or not possible: the first press stands
       const { decision: kept, decidedAt } = pending;
