@@ -38,19 +38,17 @@ import {
 } from '../navigation/types';
 
 import {
-  ConditionOrder,
   EducationLevel,
   GenderOption,
+  getStudyAssignment,
   getStudyClaims,
   getCompletedQuestionnaires,
-  getStudyAssignment,
   createStudySession,
   ParticipantInformation,
   SetOrder,
+  StudyAssignment,
   SmartphoneUseRange,
   SocialMediaUseRange,
-  StudyAssignment,
-  StudyClaim,
   StudyClaims,
 } from '../services/studyService';
 
@@ -58,7 +56,17 @@ import {
   saveWalkthroughState,
 } from '../services/walkthroughService';
 
+import {
+  buildPlan,
+  describeOrder,
+} from '../utils/studyPlan';
+
 import BlockQuestionnaire from '../components/BlockQuestionnaire';
+
+import {
+  endDeviceSession,
+  startDeviceTrial,
+} from '../services/deviceService';
 
 type Props =
   NativeStackScreenProps<
@@ -66,13 +74,6 @@ type Props =
     'StudyFlow'
   >;
 
-type PlannedTrial = {
-  claim: StudyClaim;
-  trialIndex: number;
-  isPractice: boolean;
-  condition: 'app' | 'browser';
-  phaseLabel: string;
-};
 
 type YesNo =
   | 'yes'
@@ -94,6 +95,49 @@ const GENDER_OPTIONS: Array<{
     value: 'male',
     label: 'Male',
   },
+  {
+    value: 'another',
+    label: 'Another gender',
+  },
+  {
+    value: 'prefer_not_to_say',
+    label: 'Prefer not to say',
+  },
+];
+
+//asked only of current students (undergraduate or graduate)
+const FACULTY_OPTIONS: Array<{
+  value: string;
+  label: string;
+}> = [
+  {
+    value: 'FENS',
+    label: 'Engineering and Natural Sciences (FENS)',
+  },
+  {
+    value: 'FASS',
+    label: 'Arts and Social Sciences (FASS)',
+  },
+  {
+    value: 'SBS',
+    label: 'Sabancı Business School (SBS)',
+  },
+  {
+    value: 'Other',
+    label: 'Other',
+  },
+];
+
+//year of study; 5 means 5 or more (the database allows 1 to 8)
+const YEAR_OPTIONS: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+  { value: '5', label: '5 or more' },
 ];
 
 const EDUCATION_OPTIONS: Array<{
@@ -177,120 +221,6 @@ Record<number, string> = {
   7: 'Always',
 };
 
-function buildPlan(
-  claims: StudyClaims,
-  conditionOrder: ConditionOrder,
-  setOrder: SetOrder,
-): PlannedTrial[] {
-  const firstCondition:
-  'app' | 'browser' =
-    conditionOrder === 'app_first'
-      ? 'app'
-      : 'browser';
-
-  const secondCondition:
-  'app' | 'browser' =
-    firstCondition === 'app'
-      ? 'browser'
-      : 'app';
-
-  const practice =
-    claims.practice.map(
-      (claim, index) => ({
-        claim,
-
-        trialIndex:
-          index + 1,
-
-        isPractice: true,
-
-        condition:
-          index === 0
-            ? firstCondition
-            : secondCondition,
-
-        phaseLabel:
-          `Practice ${index + 1}`,
-      }),
-    );
-
-  //block 1 uses the first set with the first tool, block 2 the other set with the other tool
-  const firstSet =
-    setOrder === 'b_first'
-      ? { claims: claims.setB, label: 'Study Set B' }
-      : { claims: claims.setA, label: 'Study Set A' };
-
-  const secondSet =
-    setOrder === 'b_first'
-      ? { claims: claims.setA, label: 'Study Set A' }
-      : { claims: claims.setB, label: 'Study Set B' };
-
-  const block1 =
-    firstSet.claims.map(
-      (claim, index) => ({
-        claim,
-
-        trialIndex:
-          practice.length +
-          index +
-          1,
-
-        isPractice: false,
-
-        condition:
-          firstCondition,
-
-        phaseLabel:
-          `Block 1 · ${firstSet.label}`,
-      }),
-    );
-
-  const block2 =
-    secondSet.claims.map(
-      (claim, index) => ({
-        claim,
-
-        trialIndex:
-          practice.length +
-          block1.length +
-          index +
-          1,
-
-        isPractice: false,
-
-        condition:
-          secondCondition,
-
-        phaseLabel:
-          `Block 2 · ${secondSet.label}`,
-      }),
-    );
-
-  return [
-    ...practice,
-    ...block1,
-    ...block2,
-  ];
-}
-
-//"FactTrace with Set A, then Browser with Set B", shown to the researcher
-function describeOrder(
-  conditionOrder: ConditionOrder,
-  setOrder: SetOrder,
-): string {
-  const tools =
-    conditionOrder === 'app_first'
-      ? ['FactTrace', 'Browser']
-      : ['Browser', 'FactTrace'];
-
-  const sets =
-    setOrder === 'a_first'
-      ? ['Set A', 'Set B']
-      : ['Set B', 'Set A'];
-
-  return `${tools[0]} with ${sets[0]}, then ${tools[1]} with ${sets[1]}`;
-}
-
 export default function StudyFlowScreen({
   navigation,
   route,
@@ -323,7 +253,7 @@ export default function StudyFlowScreen({
   const resumedConditionOrder =
     route.params?.conditionOrder;
 
-  //sessions started before set order was passed along ran Set A first
+  //older resumes without a set order fall back to the participant's group default of Set A first
   const resumedSetOrder:
   SetOrder =
     route.params?.setOrder ??
@@ -341,16 +271,7 @@ export default function StudyFlowScreen({
     resumedParticipantId ?? '',
   );
 
-  const [
-    conditionOrder,
-    setConditionOrder,
-  ] =
-    useState<ConditionOrder>(
-      resumedConditionOrder ??
-        'app_first',
-    );
-
-  //the counterbalanced group from the backend, loaded when the researcher confirms the code
+  //the counterbalanced group, loaded from the participant number when setup is confirmed
   const [
     assignment,
     setAssignment,
@@ -362,6 +283,12 @@ export default function StudyFlowScreen({
   const [
     isAssigning,
     setIsAssigning,
+  ] =
+    useState(false);
+
+  const [
+    isLaunching,
+    setIsLaunching,
   ] =
     useState(false);
 
@@ -399,6 +326,28 @@ export default function StudyFlowScreen({
     useState<
       EducationLevel | null
     >(null);
+
+  const [
+    faculty,
+    setFaculty,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    studyYear,
+    setStudyYear,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const isStudent =
+    educationLevel ===
+      'undergraduate' ||
+    educationLevel ===
+      'graduate';
 
   const [
     smartphoneUse,
@@ -597,17 +546,24 @@ export default function StudyFlowScreen({
         return [];
       }
 
+      if (
+        !resumedConditionOrder ||
+        !resumedParticipantId
+      ) {
+        return [];
+      }
+
       return buildPlan(
         claims,
-        resumedConditionOrder ??
-          conditionOrder,
+        resumedConditionOrder,
         resumedSetOrder,
+        resumedParticipantId,
       );
     }, [
       claims,
-      conditionOrder,
       resumedConditionOrder,
       resumedSetOrder,
+      resumedParticipantId,
     ]);
 
   const nextTrial =
@@ -618,76 +574,82 @@ export default function StudyFlowScreen({
           1,
     );
 
-  /*
-   * A block ends after its last study trial: block 1 after set A,
-   * block 2 after set B. The questionnaire for that block is shown
-   * before the next trial (or before "Study complete").
-   */
-  const block1EndIndex =
-    claims
-      ? claims.practice.length +
-        (resumedSetOrder === 'b_first'
-          ? claims.setB.length
-          : claims.setA.length)
-      : 0;
-
-  const pendingQuestionnaire:
-    | {
-        blockIndex: 1 | 2;
-        condition: 'app' | 'browser';
-      }
-    | null =
-    (() => {
-      if (
-        !sessionStarted ||
-        !claims ||
-        plan.length === 0 ||
-        completedQuestionnaires === null
-      ) {
-        return null;
-      }
-
-      const firstCondition =
-        resumedConditionOrder ===
-        'app_first'
-          ? 'app'
-          : 'browser';
-
-      const secondCondition =
-        firstCondition === 'app'
-          ? 'browser'
-          : 'app';
-
-      if (
-        completedTrialIndex >=
-          block1EndIndex &&
-        !completedQuestionnaires.includes(1)
-      ) {
-        return {
-          blockIndex: 1,
-          condition: firstCondition,
-        };
-      }
-
-      if (
-        completedTrialIndex >=
-          plan.length &&
-        !completedQuestionnaires.includes(2)
-      ) {
-        return {
-          blockIndex: 2,
-          condition: secondCondition,
-        };
-      }
-
-      return null;
-    })();
-
   const studyComplete =
     sessionStarted &&
     plan.length > 0 &&
     completedTrialIndex >=
       plan.length;
+
+  /*
+   * SUS and NASA-TLX after each block, about the tool used in that block.
+   * A block ends at its last study trial in the plan (block 1 ends before
+   * the second tool's practice trial), so the questionnaire is shown
+   * before the next trial, or before "Study complete" after block 2.
+   */
+  const blockEnds =
+    useMemo(() => {
+      const ends: Array<{
+        blockIndex: 1 | 2;
+        lastTrialIndex: number;
+        condition: 'app' | 'browser';
+      }> = [];
+
+      const studyTrials =
+        plan.filter(
+          trial => !trial.isPractice,
+        );
+
+      for (const blockIndex of [1, 2] as const) {
+        const block =
+          studyTrials.filter(
+            trial =>
+              trial.phaseLabel.startsWith(
+                `Block ${blockIndex}`,
+              ),
+          );
+
+        const last =
+          block[block.length - 1];
+
+        if (last) {
+          ends.push({
+            blockIndex,
+            lastTrialIndex:
+              last.trialIndex,
+            condition:
+              last.condition,
+          });
+        }
+      }
+
+      return ends;
+    }, [
+      plan,
+    ]);
+
+  const pendingQuestionnaire =
+    sessionStarted &&
+    completedQuestionnaires !== null
+      ? blockEnds.find(
+          end =>
+            completedTrialIndex >=
+              end.lastTrialIndex &&
+            !completedQuestionnaires.includes(
+              end.blockIndex,
+            ),
+        ) ?? null
+      : null;
+
+  //light off once every trial is done
+  useEffect(() => {
+    if (studyComplete) {
+      void endDeviceSession().catch(
+        () => undefined,
+      );
+    }
+  }, [
+    studyComplete,
+  ]);
 
   const normalizedParticipantInput =
     participantInput
@@ -759,20 +721,18 @@ export default function StudyFlowScreen({
         return;
       }
 
-      setIsAssigning(true);
-
       setError(null);
 
+      setIsAssigning(true);
+
       try {
-        const group =
+        const nextAssignment =
           await getStudyAssignment(
             normalizedParticipantInput,
           );
 
-        setAssignment(group);
-
-        setConditionOrder(
-          group.conditionOrder,
+        setAssignment(
+          nextAssignment,
         );
 
         setSetupConfirmed(true);
@@ -783,7 +743,7 @@ export default function StudyFlowScreen({
           assignError instanceof
           Error
             ? assignError.message
-            : 'Could not load the participant group.',
+            : 'Could not load the study group.',
         );
       } finally {
         setIsAssigning(false);
@@ -820,6 +780,32 @@ export default function StudyFlowScreen({
           'Missing answer',
 
           'Select the participant’s education level.',
+        );
+
+        return null;
+      }
+
+      if (
+        isStudent &&
+        !faculty
+      ) {
+        Alert.alert(
+          'Missing answer',
+
+          'Select the participant’s faculty.',
+        );
+
+        return null;
+      }
+
+      if (
+        isStudent &&
+        !studyYear
+      ) {
+        Alert.alert(
+          'Missing answer',
+
+          'Select the participant’s year of study.',
         );
 
         return null;
@@ -921,6 +907,16 @@ export default function StudyFlowScreen({
 
         educationLevel,
 
+        ...(isStudent &&
+        faculty &&
+        studyYear
+          ? {
+              faculty,
+              studyYear:
+                Number(studyYear),
+            }
+          : {}),
+
         smartphoneUse,
 
         socialMediaUse,
@@ -976,7 +972,9 @@ export default function StudyFlowScreen({
         assignment.participantId !==
           normalizedParticipantInput
       ) {
-        setSetupConfirmed(false);
+        setSetupConfirmed(
+          false,
+        );
 
         return;
       }
@@ -1033,11 +1031,12 @@ export default function StudyFlowScreen({
     };
 
   const launchNextTrial =
-    () => {
+    async () => {
       if (
         !participantId ||
         !resumedConditionOrder ||
-        !nextTrial
+        !nextTrial ||
+        isLaunching
       ) {
         return;
       }
@@ -1099,6 +1098,40 @@ export default function StudyFlowScreen({
           new Date()
             .toISOString(),
       };
+
+      //the device light turns white and the press is linked to this trial, in both conditions
+      setIsLaunching(true);
+
+      try {
+        await startDeviceTrial({
+          participantId,
+          trialIndex:
+            nextTrial.trialIndex,
+          claimId:
+            nextTrial.claim.claimId,
+          condition:
+            nextTrial.condition,
+        });
+      } catch (
+        deviceError
+      ) {
+        Alert.alert(
+          'Could not start the trial',
+
+          deviceError instanceof
+          Error
+            ? deviceError.message
+            : 'Check the server connection and try again.',
+        );
+
+        return;
+      } finally {
+        setIsLaunching(false);
+      }
+
+      //the trial clock starts once the device is ready
+      studyContext.startedAt =
+        new Date().toISOString();
 
       if (
         nextTrial.condition ===
@@ -1496,11 +1529,18 @@ export default function StudyFlowScreen({
             styles.backButton
           }
 
-          onPress={() =>
+          onPress={() => {
+            //leaving a running session turns the light off, so the device never shows a stale trial
+            if (sessionStarted) {
+              void endDeviceSession().catch(
+                () => undefined,
+              );
+            }
+
             navigation.navigate(
               'Home',
-            )
-          }
+            );
+          }}
 
           accessibilityRole="button"
 
@@ -1593,9 +1633,15 @@ export default function StudyFlowScreen({
                   participantInput
                 }
 
-                onChangeText={
-                  setParticipantInput
-                }
+                onChangeText={text => {
+                  setParticipantInput(
+                    text,
+                  );
+
+                  setAssignment(
+                    null,
+                  );
+                }}
 
                 autoCapitalize="characters"
 
@@ -1621,16 +1667,19 @@ export default function StudyFlowScreen({
                   styles.note
                 }
               >
-                Enter the anonymous participant code. The counterbalanced group
-                (which tool and which claim set come first) is assigned
-                automatically from the code, so it always matches the saved
-                session. The participant information form appears next.
+                The researcher assigns the anonymous participant code. The tool
+                order and claim-set order come from the participant number (four
+                counterbalanced groups). The participant information form appears
+                on the next screen before any practice or measured trial.
               </Text>
 
               <TouchableOpacity
-                style={
-                  styles.primaryButton
-                }
+                style={[
+                  styles.primaryButton,
+
+                  isAssigning &&
+                    styles.disabledButton,
+                ]}
 
                 disabled={
                   isAssigning
@@ -1645,9 +1694,11 @@ export default function StudyFlowScreen({
                     styles.primaryButtonText
                   }
                 >
-                  {isAssigning
-                    ? 'Loading group…'
-                    : 'Continue to Information Form'}
+                  {
+                    isAssigning
+                      ? 'Loading group…'
+                      : 'Continue to Information Form'
+                  }
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1664,23 +1715,6 @@ export default function StudyFlowScreen({
               >
                 Before the study
               </Text>
-
-              {assignment ? (
-                <Text
-                  style={
-                    styles.formIntro
-                  }
-                >
-                  {assignment.participantId}
-                  {' · Group '}
-                  {assignment.group}
-                  {': '}
-                  {describeOrder(
-                    assignment.conditionOrder,
-                    assignment.setOrder,
-                  )}
-                </Text>
-              ) : null}
 
               <Text
                 style={
@@ -1799,6 +1833,42 @@ export default function StudyFlowScreen({
 
                 setEducationLevel,
               )}
+
+              {isStudent ? (
+                <>
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    Faculty *
+                  </Text>
+
+                  {renderChoiceButtons(
+                    FACULTY_OPTIONS,
+
+                    faculty,
+
+                    setFaculty,
+                  )}
+
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    Year of study *
+                  </Text>
+
+                  {renderChoiceButtons(
+                    YEAR_OPTIONS,
+
+                    studyYear,
+
+                    setStudyYear,
+                  )}
+                </>
+              ) : null}
 
               <Text
                 style={
@@ -2203,7 +2273,11 @@ export default function StudyFlowScreen({
                 </Text>
               </View>
 
-              <View>
+              <View
+                style={
+                  styles.progressOrder
+                }
+              >
                 <Text
                   style={
                     styles.progressLabel
@@ -2223,10 +2297,6 @@ export default function StudyFlowScreen({
                           resumedConditionOrder,
                           resumedSetOrder,
                         )
-                          .replace(' with ', ' ')
-                          .replace(', then ', ' → ')
-                          .replace(' with ', ' ')
-                          .replace(/Set /g, '')
                       : ''
                   }
                 </Text>
@@ -2431,12 +2501,19 @@ export default function StudyFlowScreen({
                 }
 
                 <TouchableOpacity
-                  style={
-                    styles.primaryButton
+                  style={[
+                    styles.primaryButton,
+
+                    isLaunching &&
+                      styles.disabledButton,
+                  ]}
+
+                  disabled={
+                    isLaunching
                   }
 
-                  onPress={
-                    launchNextTrial
+                  onPress={() =>
+                    void launchNextTrial()
                   }
                 >
                   <Text
@@ -2444,11 +2521,9 @@ export default function StudyFlowScreen({
                       styles.primaryButtonText
                     }
                   >
-                    Start Trial
-                    {' '}
-                    {
-                      nextTrial.trialIndex
-                    }
+                    {isLaunching
+                      ? 'Starting…'
+                      : `Start Trial ${nextTrial.trialIndex}`}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2604,46 +2679,6 @@ const createStyles = (
       backgroundColor:
         COLORS.surfaceElevated,
       fontSize: 16,
-    },
-
-    orderRow: {
-      flexDirection: 'row',
-      gap: 9,
-    },
-
-    orderButton: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor:
-        COLORS.border,
-      borderRadius: 13,
-      paddingVertical: 13,
-      paddingHorizontal: 10,
-      alignItems: 'center',
-      backgroundColor:
-        COLORS.surfaceElevated,
-    },
-
-    orderButtonSelected: {
-      borderColor:
-        COLORS.blue,
-
-      backgroundColor:
-        isDark
-          ? COLORS.surfaceElevated
-          : '#EDF4FF',
-    },
-
-    orderButtonText: {
-      color:
-        COLORS.textMuted,
-      fontWeight: '700',
-      textAlign: 'center',
-    },
-
-    orderButtonTextSelected: {
-      color:
-        COLORS.blue,
     },
 
     choiceWrap: {
@@ -2841,6 +2876,8 @@ const createStyles = (
 
     progressCard: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
+      rowGap: 12,
       justifyContent:
         'space-between',
 
@@ -2852,6 +2889,11 @@ const createStyles = (
       borderRadius: 16,
       padding: 15,
       marginBottom: 14,
+    },
+
+    //the order (tools and claim sets) is long, so it gets its own line
+    progressOrder: {
+      flexBasis: '100%',
     },
 
     progressLabel: {

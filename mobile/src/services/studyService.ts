@@ -5,7 +5,7 @@ export type ConditionOrder =
   | 'app_first'
   | 'browser_first';
 
-//which claim set comes first; with ConditionOrder this gives the 4 counterbalanced groups
+//tool order and claim-set order come from the participant number (GET /api/study/assignment)
 export type SetOrder =
   | 'a_first'
   | 'b_first';
@@ -17,22 +17,11 @@ export type StudyAssignment = {
   setOrder: SetOrder;
 };
 
-type StudyAssignmentApiResponse = {
-  success: boolean;
-
-  data?: StudyAssignment;
-
-  error?:
-    | string
-    | {
-        code: string;
-        message: string;
-      };
-};
-
 export type GenderOption =
   | 'female'
-  | 'male';
+  | 'male'
+  | 'another'
+  | 'prefer_not_to_say';
 
 export type EducationLevel =
   | 'undergraduate'
@@ -59,6 +48,10 @@ export type ParticipantInformation = {
   gender?: GenderOption;
 
   educationLevel: EducationLevel;
+
+  faculty?: string;
+
+  studyYear?: number;
 
   smartphoneUse: SmartphoneUseRange;
 
@@ -118,12 +111,20 @@ type SessionApiResponse = {
       };
 };
 
+type AssignmentApiResponse = {
+  success: boolean;
+
+  data?: StudyAssignment;
+
+  error?: SessionApiResponse['error'];
+};
+
 function getApiError(
   error:
     | StudyClaimsApiResponse['error']
     | SessionApiResponse['error']
     | QuestionnaireApiResponse['error']
-    | StudyAssignmentApiResponse['error'],
+    | AssignmentApiResponse['error'],
   fallback: string,
 ): string {
   if (typeof error === 'string') {
@@ -162,15 +163,12 @@ Promise<StudyClaims> {
   return response.data;
 }
 
-/*
- * The counterbalanced group comes from the backend (P01 → group 1, P02 → group 2, …),
- * so the researcher never picks the order by hand and the app and database always agree.
- */
+//the counterbalanced group for a participant, so the researcher never picks the order by hand
 export async function getStudyAssignment(
   participantId: string,
 ): Promise<StudyAssignment> {
   const response =
-    await apiRequest<StudyAssignmentApiResponse>(
+    await apiRequest<AssignmentApiResponse>(
       `/api/study/assignment?participantId=${encodeURIComponent(participantId)}`,
     );
 
@@ -181,7 +179,7 @@ export async function getStudyAssignment(
     throw new Error(
       getApiError(
         response.error,
-        'Could not load the participant group.',
+        'Could not load the study group.',
       ),
     );
   }

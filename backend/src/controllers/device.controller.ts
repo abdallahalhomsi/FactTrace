@@ -33,9 +33,40 @@ export function getState(req: Request, res: Response): void {
   sendSuccess(res, getDeviceState());
 }
 
-//get /api/device/status : the app polls this during a trial to see the press and whether the device is connected
-export function getStatus(_req: Request, res: Response): void {
-  sendSuccess(res, getDeviceStatus());
+const WAIT_MAX_MS = 8000; //longest a waiting status request is held (the app's request timeout is 20 s)
+const WAIT_STEP_MS = 100; //how often a held request re-checks the in-memory trial
+
+//get /api/device/status : the app reads the press and whether the device is connected
+//with ?waitForTrial=N&online=1|0 the request is held (long poll) until the press for trial N arrives,
+//the trial changes, the device connects or disconnects (compared with `online`), or 8 s pass;
+//so the app makes a few requests per trial instead of one every 300 ms (ngrok's free plan allows 20,000 a month)
+export async function getStatus(req: Request, res: Response): Promise<void> {
+  const waitFor = Number(req.query.waitForTrial);
+  if (!isTrialIndex(waitFor)) {
+    sendSuccess(res, getDeviceStatus());
+    return;
+  }
+
+  const knownOnline = req.query.online !== "0";
+  const deadline = Date.now() + WAIT_MAX_MS;
+  let closed = false;
+  res.on("close", () => {
+    closed = true; //the app gave up or left the screen: stop waiting
+  });
+
+  let status = getDeviceStatus();
+  while (
+    !closed &&
+    Date.now() < deadline &&
+    status.trialIndex === waitFor &&
+    !status.decisionRecorded &&
+    status.deviceOnline === knownOnline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, WAIT_STEP_MS));
+    status = getDeviceStatus();
+  }
+
+  if (!closed) sendSuccess(res, status);
 }
 
 //post /api/device/trial : the app calls this at the start of every trial, in both conditions

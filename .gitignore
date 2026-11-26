@@ -43,3 +43,6 @@ backend/samples/Screenshot 2026-10-26 114253.png
 *.m4v
 /recordings/
 /consent/
+
+# python cache
+__pycache__/

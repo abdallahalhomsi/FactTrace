@@ -674,6 +674,15 @@ npx tsx src/scripts/analyze-study.ts
 For browser trials, the analysis uses the final screen-recording count as source use.
 
 
+**Analyse the exported data:**
+
+```bash
+pip install -r analysis/requirements.txt
+python analysis/inferential.py
+```
+
+Paired tests (t-test or Wilcoxon after a Shapiro-Wilk check) with effect sizes, CIs and Holm correction, carry-over checks, a first-block analysis and mixed-effects models. See `analysis/README.md`.
+
 # Verification States
 
 FactTrace currently supports three matching states.

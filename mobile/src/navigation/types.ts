@@ -8,8 +8,8 @@ export type StudyTrialContext = {
     | 'app_first'
     | 'browser_first';
 
-  //which claim set the first block uses; older saved trials may not have it (treated as a_first)
-  setOrder?:
+  //claim-set order of the participant's group, needed to rebuild the trial plan after each trial
+  setOrder:
     | 'a_first'
     | 'b_first';
 
