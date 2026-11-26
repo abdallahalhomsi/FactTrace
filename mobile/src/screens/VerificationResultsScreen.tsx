@@ -135,6 +135,9 @@ export default function VerificationResultsScreen({
   // The trial ends when the verdict is tapped, as in the browser condition,
   // so the time to answer the sharing question is not counted in either condition.
   const verdictSelectedAt = useRef<string | null>(null);
+  //study trials: the sources opened when the device press was seen, so sources opened during
+  //the 5 s undo window are not counted (source use = distinct sources opened before the decision)
+  const sourcesAtDecision = useRef<Promise<string[]> | null>(null);
   const evaluation = route.params.evaluation;
   const studyContext = route.params.studyContext;
   const hasEvaluation = Boolean(evaluation) && !isWalkthrough;
@@ -468,8 +471,10 @@ export default function VerificationResultsScreen({
     });
   };
 
+  //decidedAt: when the device press was seen (study trials), otherwise now
   const handleDecision = async (
     value: Exclude<Decision, null>,
+    decidedAt?: string,
   ) => {
     if (isWalkthrough) {
       if (
@@ -508,7 +513,7 @@ export default function VerificationResultsScreen({
       return;
     }
 
-    verdictSelectedAt.current = new Date().toISOString();
+    verdictSelectedAt.current = decidedAt ?? new Date().toISOString();
     setDecision(value);
     setIsSharingModalVisible(true);
   };
@@ -588,11 +593,13 @@ export default function VerificationResultsScreen({
           sharingIntention: intention,
 
           // Backend expects evidence source IDs for FactTrace trials.
-          sourcesOpened: evidenceTrackingKey
-            ? await getOpenedEvidenceSourceIds(
-                evidenceTrackingKey,
-              )
-            : [],
+          sourcesOpened: sourcesAtDecision.current
+            ? await sourcesAtDecision.current
+            : evidenceTrackingKey
+              ? await getOpenedEvidenceSourceIds(
+                  evidenceTrackingKey,
+                )
+              : [],
 
           startedAt: evaluation.startedAt,
           endedAt:
@@ -1054,13 +1061,25 @@ export default function VerificationResultsScreen({
                     ? 'dont_trust'
                     : decision
                 }
-                onDecision={value =>
+                onDecision={(value, decidedAt) =>
                   void handleDecision(
                     value === 'dont_trust'
                       ? 'dont-trust'
                       : value,
+                    decidedAt,
                   )
                 }
+                onPressSeen={() => {
+                  sourcesAtDecision.current =
+                    evidenceTrackingKey
+                      ? getOpenedEvidenceSourceIds(
+                          evidenceTrackingKey,
+                        )
+                      : Promise.resolve([]);
+                }}
+                onUndone={() => {
+                  sourcesAtDecision.current = null;
+                }}
                 onUseScreenButtons={() =>
                   setUseScreenButtons(true)
                 }

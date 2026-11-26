@@ -13,7 +13,7 @@ import { imageUpload } from "../middleware/upload"; //reads the photo before the
 import { postSession } from "../controllers/sessions.controller";
 import { postQuestionnaire } from "../controllers/questionnaires.controller"; //SUS and NASA-TLX after each block
 import { getStudyAssignment, getStudyClaims } from "../controllers/study.controller"; //study claims and group assignment
-import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision } from "../controllers/device.controller"; //esp32 device
+import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision, postUndo } from "../controllers/device.controller"; //esp32 device
 
 export const router = Router();
 
@@ -37,3 +37,4 @@ router.get("/device/status", getStatus); //app checks the button press and wheth
 router.post("/device/trial", postTrial); //app starts a trial in either condition
 router.post("/device/end", postEnd); //app ends the session, light off
 router.post("/device/decision", postDeviceDecision); //esp32 sends a button press
+router.post("/device/undo", postUndo); //app undoes a press within 5 s (a slip such as the wrong button)

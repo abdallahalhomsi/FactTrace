@@ -22,4 +22,6 @@ What it does, in order:
 3. **First-block analysis**: block 1 only, between subjects. Report it if step 2 shows an order effect.
 4. **Linear mixed-effects models** on trial-level data: tool fixed, participant and claim as crossed random intercepts, order, block and claim set as covariates (treatment, sequence and period: the standard crossover model). In the trust model, `tool_app:is_true` is the change in truth discernment.
 
+Time to decision uses the device's server-clock time (trial start to the final press) when there was a press, and the app's time otherwise. The number of undone presses (slips) per condition is printed at the top. Browser source use is the count agreed by the two coders from the screen recordings (`browser_video_source_count`), as in `analyze-study.ts`; until a trial is coded the participant's own list is used, and the script prints a warning with the number of such trials.
+
 Tested on simulated data (24 participants): recovers a simulated effect and gives non-significant results when there is none.

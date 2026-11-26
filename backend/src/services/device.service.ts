@@ -11,6 +11,8 @@ export type DeviceLight = "idle" | "ready" | "processing" | "strong_match" | "we
 export type MatchLight = "strong_match" | "weak_match" | "no_match";
 
 const ONLINE_WINDOW_MS = 2000; //the device counts as connected if it polled within this time
+//how long after a press the app offers Undo (5 s), plus 1 s for the network, so a tap at 4.9 s still works
+export const UNDO_WINDOW_MS = 6000;
 
 interface DeviceTrial {
   participantId: string | null;
@@ -24,6 +26,9 @@ interface DeviceTrial {
   resultShownAt: Date | null; //when the last match result was sent (app condition only)
   buttonPressed: boolean;
   decision: string | null;
+  pressedAt: Date | null; //when the recorded press arrived, for the undo window
+  stateAtPress: DeviceLight | null; //what the light showed at the press, restored after an undo
+  undoCount: number; //presses undone in this trial
 }
 
 const IDLE: DeviceTrial = {
@@ -38,6 +43,9 @@ const IDLE: DeviceTrial = {
   resultShownAt: null,
   buttonPressed: false,
   decision: null,
+  pressedAt: null,
+  stateAtPress: null,
+  undoCount: 0,
 };
 
 let current: DeviceTrial = { ...IDLE }; //starts idle, so the light stays off until the app starts a trial
@@ -62,6 +70,7 @@ export function getDeviceStatus(): {
   decision: string | null;
   state: DeviceLight;
   deviceOnline: boolean;
+  undoMsLeft: number;
 } {
   return {
     trialIndex: current.trialIndex,
@@ -69,6 +78,8 @@ export function getDeviceStatus(): {
     decision: current.decision,
     state: current.state,
     deviceOnline: Date.now() - lastPollAt <= ONLINE_WINDOW_MS,
+    //how much of the undo window is left for the recorded press (0 if none), so the app never offers a late undo
+    undoMsLeft: current.pressedAt ? Math.max(0, UNDO_WINDOW_MS - (Date.now() - current.pressedAt.getTime())) : 0,
   };
 }
 
@@ -134,8 +145,8 @@ export async function recordHardwareDecision(trialIndex: number, decision: strin
   await pool.execute(
     `INSERT INTO hardware_events
        (participant_id, trial_index, claim_id, study_condition, match_state, decision,
-        trial_started_at, scan_started_at, result_shown_at, received_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        trial_started_at, scan_started_at, result_shown_at, received_at, undo_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       current.participantId,
       current.trialIndex,
@@ -147,10 +158,40 @@ export async function recordHardwareDecision(trialIndex: number, decision: strin
       current.scanStartedAt,
       current.resultShownAt,
       receivedAt,
+      current.undoCount,
     ]
   );
 
   current.buttonPressed = true;
   current.decision = decision;
+  current.pressedAt = receivedAt;
+  current.stateAtPress = current.state;
   current.state = "idle"; //light off once the decision is made
+}
+
+//called by the app when the participant taps Undo within the window after a press (a slip, such as the wrong button)
+//removes the press, so the trial is open again and the light goes back to what it showed before the press;
+//the next press is saved with undo_count + 1, and its time is the new t3
+export async function undoHardwareDecision(participantId: string, trialIndex: number): Promise<void> {
+  if (current.participantId !== participantId || current.trialIndex !== trialIndex) {
+    throw new AppError("DEVICE_CONFLICT", "This trial is not running");
+  }
+  if (!current.buttonPressed || current.pressedAt === null) {
+    throw new AppError("DEVICE_CONFLICT", "No press to undo");
+  }
+  if (Date.now() - current.pressedAt.getTime() > UNDO_WINDOW_MS) {
+    throw new AppError("DEVICE_CONFLICT", "Too late to undo");
+  }
+
+  await pool.execute(
+    "DELETE FROM hardware_events WHERE participant_id = ? AND trial_index = ?",
+    [participantId, trialIndex]
+  );
+
+  current.buttonPressed = false;
+  current.decision = null;
+  current.pressedAt = null;
+  current.state = current.stateAtPress ?? "ready";
+  current.stateAtPress = null;
+  current.undoCount += 1;
 }

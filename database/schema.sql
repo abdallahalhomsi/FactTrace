@@ -217,6 +217,7 @@ CREATE TABLE hardware_events (
   scan_started_at   DATETIME(3) NULL,     -- t1: when the first ocr or matching request started (app condition only)
   result_shown_at   DATETIME(3) NULL,     -- t2: when the match result reached the light (app condition only)
   received_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), -- t3: when the press arrived
+  undo_count        TINYINT UNSIGNED NOT NULL DEFAULT 0, -- presses undone in this trial before this one (slips corrected)
   PRIMARY KEY (event_id),
   UNIQUE KEY uq_hw_participant_trial (participant_id, trial_index),
   KEY idx_hw_claim (claim_id),

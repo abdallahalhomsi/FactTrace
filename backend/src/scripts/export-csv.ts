@@ -25,6 +25,7 @@ const TRIALS_SQL = `
     h.scan_started_at      AS t1_scan_started_at,
     h.result_shown_at      AS t2_result_shown_at,
     h.received_at          AS t3_press_received_at,
+    h.undo_count           AS undo_count,
     TIMESTAMPDIFF(MICROSECOND, h.scan_started_at, h.result_shown_at) DIV 1000  AS processing_ms,
     TIMESTAMPDIFF(MICROSECOND, h.result_shown_at, h.received_at) DIV 1000      AS evidence_ms,
     TIMESTAMPDIFF(MICROSECOND, h.trial_started_at, h.received_at) DIV 1000     AS device_time_to_decision_ms

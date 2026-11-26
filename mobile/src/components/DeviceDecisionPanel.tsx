@@ -23,13 +23,17 @@ import {
   DeviceDecision,
   getDeviceStatus,
   startDeviceTrial,
+  undoDevicePress,
+  UNDO_WINDOW_MS,
 } from '../services/deviceService';
 
 //in study trials the decision comes from the device buttons in both conditions, so the input is the same;
-//this panel replaces the on-screen buttons, waits for the press and shows a neutral confirmation (never right or wrong)
+//this panel replaces the on-screen buttons, waits for the press and shows a neutral confirmation (never right or wrong);
+//for 5 s after a press it offers Undo, so a slip (the wrong button) can be corrected before the decision is final
 
 const RETRY_MS = 1000; //pause before asking again after an error or a wrong trial (normal requests wait on the server)
 const OFFLINE_FALLBACK_MS = 5000; //offer the researcher fallback after this long without a connected device
+const UNDO_GRACE_MS = 1000; //the backend keeps the window 1 s longer than the app shows it, for the network
 
 export const DEVICE_DECISION_LABELS: Record<DeviceDecision, string> = {
   trust: 'Trust',
@@ -49,7 +53,14 @@ type Props = {
   //the press is kept by the backend either way; this only stops the panel from handing it on twice
   decision: DeviceDecision | null;
 
-  onDecision: (decision: DeviceDecision) => void;
+  //called once the press is final (after the undo window), with the time the app saw the press,
+  //so the trial's end time is the press, not the end of the window
+  onDecision: (decision: DeviceDecision, decidedAt: string) => void;
+
+  //optional: called as soon as a press is seen (before the undo window) and after an undo,
+  //so a screen can freeze what counts as "before the decision", such as the sources opened
+  onPressSeen?: () => void;
+  onUndone?: () => void;
 
   //researcher fallback when the device does not work: the screen shows its on-screen buttons instead
   onUseScreenButtons: () => void;
@@ -65,6 +76,8 @@ export default function DeviceDecisionPanel({
   trial,
   decision,
   onDecision,
+  onPressSeen,
+  onUndone,
   onUseScreenButtons,
 }: Props) {
   const { colors: COLORS } = useAppTheme();
@@ -77,9 +90,19 @@ export default function DeviceDecisionPanel({
   const [isRestarting, setIsRestarting] = useState(false);
   const trialIndex = trial.trialIndex;
 
-  const waiting = decision === null;
+  //a press inside its undo window: shown with an Undo button, handed on to the screen when the window ends
+  const [pending, setPending] = useState<{
+    decision: DeviceDecision;
+    decidedAt: string;
+    until: number;
+  } | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
+
+  const waiting = decision === null && pending === null;
   const onDecisionRef = useRef(onDecision);
   onDecisionRef.current = onDecision;
+  const onPressSeenRef = useRef(onPressSeen);
+  onPressSeenRef.current = onPressSeen;
 
   //while there is a problem, tick once a second so the researcher fallback appears on time
   useEffect(() => {
@@ -135,7 +158,23 @@ export default function DeviceDecisionPanel({
           status.decision
         ) {
           report('none');
-          onDecisionRef.current(status.decision);
+          const decidedAt = new Date().toISOString();
+          onPressSeenRef.current?.();
+          const undoLeft = Math.min(
+            UNDO_WINDOW_MS,
+            status.undoMsLeft - UNDO_GRACE_MS,
+          );
+
+          if (undoLeft >= 1000) {
+            setPending({
+              decision: status.decision,
+              decidedAt,
+              until: Date.now() + undoLeft,
+            });
+          } else {
+            //an older press (for example picked up again after a failed save): final straight away
+            onDecisionRef.current(status.decision, decidedAt);
+          }
           return;
         } else {
           report(status.deviceOnline ? 'none' : 'offline');
@@ -162,6 +201,51 @@ export default function DeviceDecisionPanel({
       }
     };
   }, [trialIndex, waiting, restartCount]);
+
+  //during the undo window: count down, then hand the decision on
+  useEffect(() => {
+    if (!pending || isUndoing) {
+      return;
+    }
+
+    const tick = setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+
+      if (current >= pending.until) {
+        clearInterval(tick);
+        setPending(null);
+        onDecisionRef.current(pending.decision, pending.decidedAt);
+      }
+    }, 250);
+
+    return () => clearInterval(tick);
+  }, [pending, isUndoing]);
+
+  const undoPress = async () => {
+    if (!pending) {
+      return;
+    }
+
+    setIsUndoing(true);
+
+    try {
+      await undoDevicePress({
+        participantId: trial.participantId,
+        trialIndex,
+      });
+      //the trial is open again: waiting for a new press restarts the polling
+      setPending(null);
+      onUndone?.();
+    } catch {
+      //too late or not possible: the first press stands
+      const { decision: kept, decidedAt } = pending;
+      setPending(null);
+      onDecisionRef.current(kept, decidedAt);
+    } finally {
+      setIsUndoing(false);
+    }
+  };
 
   //the server lost this trial (for example after a restart): start it again so the light and the press match it
   const restartTrial = async () => {
@@ -197,6 +281,44 @@ export default function DeviceDecisionPanel({
       { text: 'Use on-screen buttons', onPress: onUseScreenButtons },
     ]);
   };
+
+  if (pending) {
+    const secondsLeft = Math.max(
+      1,
+      Math.ceil((pending.until - now) / 1000),
+    );
+
+    return (
+      <View style={styles.card}>
+        <View
+          style={styles.row}
+          accessibilityLiveRegion="polite"
+          accessible
+          accessibilityLabel={`You chose ${DEVICE_DECISION_LABELS[pending.decision]}. Recorded. You can undo it for ${secondsLeft} seconds.`}
+        >
+          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.blue} />
+          <Text style={styles.title}>
+            You chose {DEVICE_DECISION_LABELS[pending.decision]}. Recorded.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Wrong button? Undo, ${secondsLeft} seconds left`}
+          style={styles.undoButton}
+          disabled={isUndoing}
+          onPress={() => void undoPress()}
+        >
+          <Ionicons name="arrow-undo-outline" size={20} color={COLORS.textPrimary} />
+          <Text style={styles.undoText}>
+            {isUndoing
+              ? 'Undoing…'
+              : `Wrong button? Undo (${secondsLeft})`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (decision) {
     return (
@@ -308,6 +430,24 @@ const createStyles = (COLORS: ThemeColors) =>
       padding: 12,
       fontSize: 15,
       lineHeight: 21,
+    },
+    undoButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 8,
+      minHeight: 48,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.lightButton,
+    },
+    undoText: {
+      color: COLORS.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
     },
     fallbackButton: {
       alignSelf: 'flex-start',
