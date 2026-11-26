@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "author": "FactTrace",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-s2-devkitm-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-rgb-led", "id": "led", "top": -80, "left": 220, "attrs": { "common": "cathode" } },
+    { "type": "wokwi-resistor", "id": "rr", "top": 20, "left": 180, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rg", "top": 20, "left": 210, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rb", "top": 20, "left": 240, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-pushbutton", "id": "btnTrust", "top": 150, "left": 220, "attrs": { "color": "black", "label": "Trust" } },
+    { "type": "wokwi-pushbutton", "id": "btnUnsure", "top": 210, "left": 220, "attrs": { "color": "black", "label": "Unsure" } },
+    { "type": "wokwi-pushbutton", "id": "btnDont", "top": 270, "left": 220, "attrs": { "color": "black", "label": "Don't trust" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": 150, "left": 380, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:4", "rr:1", "red", [] ],
+    [ "rr:2", "led:R", "red", [] ],
+    [ "esp:5", "rg:1", "green", [] ],
+    [ "rg:2", "led:G", "green", [] ],
+    [ "esp:6", "rb:1", "blue", [] ],
+    [ "rb:2", "led:B", "blue", [] ],
+    [ "led:COM", "esp:GND.1", "black", [] ],
+    [ "esp:10", "btnTrust:1.l", "orange", [] ],
+    [ "btnTrust:2.l", "esp:GND.1", "black", [] ],
+    [ "esp:11", "btnUnsure:1.l", "orange", [] ],
+    [ "btnUnsure:2.l", "esp:GND.1", "black", [] ],
+    [ "esp:12", "btnDont:1.l", "orange", [] ],
+    [ "btnDont:2.l", "esp:GND.1", "black", [] ],
+    [ "esp:13", "buzzer:2", "purple", [] ],
+    [ "buzzer:1", "esp:GND.1", "black", [] ]
+  ],
+  "dependencies": {}
+}
