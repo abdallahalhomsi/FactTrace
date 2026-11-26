@@ -117,7 +117,8 @@ async function checkParticipant(participantId: string): Promise<number> {
     else if (Number(d.duration_ms) > 10 * 60 * 1000) warn(`${label}: very slow (${Math.round(Number(d.duration_ms) / 60000)} min)`);
     if (!d.app_version) warn(`${label}: app_version not saved (old app build?)`);
     if (p.condition === "app" && !d.match_status) fail(`${label}: FactTrace trial without a match result`);
-    if (!p.isPractice && Number(d.sources_opened_count) === 0) warn(`${label}: no sources opened`);
+    //browser trials: sources are counted from the screen recording, not in the app, so only FactTrace trials are checked here
+    if (!p.isPractice && p.condition === "app" && Number(d.sources_opened_count) === 0) warn(`${label}: no sources opened`);
     if (fails + warns > before) trialProblems++;
   }
   if (decisions.length > 0 && trialProblems === 0) ok("every saved trial has the right claim, condition, timing, decision and scoring");

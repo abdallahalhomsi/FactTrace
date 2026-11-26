@@ -277,6 +277,16 @@ The participant's counterbalanced group, so the researcher never picks the order
 
 Groups come from a block-randomised list made in advance (`backend/src/config/allocation.ts`, seed 4492026, made by `src/scripts/make-allocation.ts`): every block of 4 participants (P01 to P04, P05 to P08, ...) has each group once, in random order. Past P60 the groups rotate 1, 2, 3, 4. Do not regenerate the list once real participants have been run.
 
+### `GET /study/debrief?participantId=P07`
+The debrief after the session: for every claim the participant saw, in their trial order, the right answer, a one-line reason and the main source. Answers are never sent during the trials, so this only works once every study claim (both sets) has a decision; before that it answers 409 `SESSION_NOT_FINISHED` with `details.missingDecisions`.
+```json
+{ "participantId": "P07", "claims": [{ "trialIndex": 1, "isPractice": true, "claimId": "claim_01",
+  "text": "Light from the Sun takes about 8 minutes to reach Earth.", "answer": "true",
+  "rationale": "Physics: distance divided by the speed of light gives about 8 minutes 20 seconds.",
+  "source": { "outlet": "Smithsonian National Air and Space Museum", "title": "...", "url": "https://..." } }, ...] }
+```
+The app shows only the answers, reasons and sources, not the participant's own choices or score.
+
 ### `GET /study/claims`
 The claims participants see, without answers. Use this to run the participant flow, and send each `claimId` to `/decisions` in **both** conditions (so the browser condition no longer has to guess the claim from typed text).
 ```json

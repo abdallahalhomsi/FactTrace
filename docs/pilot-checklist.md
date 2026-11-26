@@ -34,10 +34,10 @@ Codes already used for testing: P90, P93–P96, P99.
 3. **Start the screen recording.**
 4. The participant does all 16 trials (each tool: one practice trial, then 7 claims), deciding on the ESP32 buttons:
    - FactTrace trials: scan the printed card, check the text, open sources, decide, answer the sharing question.
-   - Browser trials: **Start Task**, search in the phone's browser, list the sources used, decide, answer the sharing question.
+   - Browser trials: search in the phone's browser, decide, answer the sharing question. Sources are counted from the screen recording, so nothing is typed in.
    - After each press the app shows the choice for 5 s with **Wrong button? Undo**. Tell participants in the practice trials that a wrong press can be undone there; the sharing question appears after the 5 s.
 5. After the first tool's block (trial 8): SUS + NASA-TLX about that tool. After trial 16: about the second tool.
-6. **Study complete** → **stop the screen recording.**
+6. **Study complete** → **stop the screen recording** → tap **Show the answers** and go through the debrief with the participant (right answers, reasons and sources; their own choices and score are not shown).
 7. Copy the recording to the laptop by cable, name it `P81_browser.mp4`, and delete it from the phone (including Recently Deleted).
 
 Write down anything that goes wrong or confuses the participant, with the trial number.
@@ -68,8 +68,6 @@ After all pilot sessions: `npm run export` and look at `exports/trials.csv` to c
 | Issue | What happens | Status |
 |---|---|---|
 | ESP32 offline or a press not recorded | The app shows the device as offline; the researcher can switch that trial to the on-screen buttons; `check-participant` warns about missing presses | Check the device's Wi-Fi and server address before the session |
-| Retake | Each Retake adds another camera screen behind the current one | Small fix, not done yet |
-| Browser has an extra "Start Task" tap | One more step than FactTrace; timing is not affected | Note it, decide if it should go |
 | Expo shows old code | Changes don't appear on the phone | Restart with `npx expo start --clear` |
 | OCR in a web browser | Text extraction fails on the web version | Web only; use the phone |
 

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 
 import {
+  BarcodeScanningResult,
   CameraView,
   useCameraPermissions,
 } from 'expo-camera';
@@ -36,6 +37,8 @@ import {
 
 import { ThemeColors } from '../constants/app';
 import { RootStackParamList } from '../navigation/types';
+import { verifyClaim } from '../services/verificationService';
+import { createHistoryEntryId } from '../services/historyService';
 import { useAppTheme } from '../theme/AppTheme';
 
 type Props =
@@ -43,6 +46,15 @@ type Props =
     RootStackParamList,
     'Camera'
   >;
+
+//a FactTrace QR marker holds a claim id, as "claim_11" or "facttrace:claim_11"
+const QR_CLAIM_PATTERN = /^(?:facttrace:)?(claim_\d{1,4})$/i;
+
+//study trials measure the camera and OCR path, so QR markers are only offered outside the study:
+//a QR code always gives an exact match and would change the FactTrace condition between participants
+const QR_IN_STUDY_TRIALS = false;
+
+type CameraMode = 'photo' | 'qr';
 
 type ScanFrame = {
   x: number;
@@ -201,6 +213,122 @@ export default function CameraScreen({
 
   const studyContext =
     route.params?.studyContext;
+
+  const qrAvailable =
+    !studyContext || QR_IN_STUDY_TRIALS;
+
+  const [
+    cameraMode,
+    setCameraMode,
+  ] =
+    useState<CameraMode>('photo');
+
+  const [
+    isCheckingQr,
+    setIsCheckingQr,
+  ] =
+    useState(false);
+
+  //the camera reports the same code many times a second: handle one at a time
+  const qrLock = useRef(false);
+
+  //shown on the camera screen (an alert box does not work on every platform)
+  const [
+    qrMessage,
+    setQrMessage,
+  ] =
+    useState<string | null>(null);
+
+  const handleQrScanned =
+    async (
+      scan: BarcodeScanningResult,
+    ) => {
+      if (
+        qrLock.current ||
+        cameraMode !== 'qr'
+      ) {
+        return;
+      }
+
+      qrLock.current = true;
+
+      const match =
+        QR_CLAIM_PATTERN.exec(
+          scan.data.trim(),
+        );
+
+      if (!match) {
+        setQrMessage(
+          'This QR code does not contain a FactTrace claim. Scan the code printed on a claim card, or switch to Photo.',
+        );
+        //try again after a short pause, so the same wrong code is not reported many times a second
+        setTimeout(() => {
+          qrLock.current = false;
+        }, 2000);
+
+        return;
+      }
+
+      setQrMessage(null);
+
+      const claimId =
+        match[1].toLowerCase();
+      const startedAt =
+        studyContext?.startedAt ??
+        new Date().toISOString();
+
+      setIsCheckingQr(true);
+
+      try {
+        const response =
+          await verifyClaim('', {
+            source: 'qr',
+            claimId,
+          });
+
+        if (
+          !response.success ||
+          !response.data
+        ) {
+          throw new Error(
+            typeof response.error ===
+              'string'
+              ? response.error
+              : 'FactTrace could not check this QR code.',
+          );
+        }
+
+        navigation.navigate(
+          'VerificationResults',
+          {
+            result:
+              response.data,
+            historyEntryId:
+              createHistoryEntryId(),
+            evaluation: {
+              inputSource: 'qr',
+              startedAt,
+            },
+            ...(studyContext
+              ? { studyContext }
+              : {}),
+          },
+        );
+      } catch (error) {
+        Alert.alert(
+          'Could not check the QR code',
+          error instanceof Error
+            ? error.message
+            : 'Please try again.',
+        );
+      } finally {
+        setIsCheckingQr(false);
+        //short pause, so returning to the camera does not scan the same code again at once
+        setTimeout(() => {
+          qrLock.current = false;
+        }, 1500);
+      }
+    };
 
   useEffect(() => {
     if (!permission) {
@@ -527,6 +655,18 @@ export default function CameraScreen({
         onCameraReady={() =>
           setIsCameraReady(true)
         }
+        barcodeScannerSettings={{
+          barcodeTypes: ['qr'],
+        }}
+        onBarcodeScanned={
+          qrAvailable &&
+          cameraMode === 'qr'
+            ? scan =>
+                void handleQrScanned(
+                  scan,
+                )
+            : undefined
+        }
       />
 
       <SafeAreaView
@@ -636,7 +776,9 @@ export default function CameraScreen({
               styles.outsideGuideNote
             }
           >
-            Only content inside this frame will be scanned.
+            {cameraMode === 'qr'
+              ? 'Point the camera at the QR code on a claim card.'
+              : 'Only content inside this frame will be scanned.'}
           </Text>
         </View>
 
@@ -645,14 +787,85 @@ export default function CameraScreen({
             styles.bottomArea
           }
         >
+          {qrAvailable ? (
+            <View
+              style={
+                styles.modeRow
+              }
+              accessibilityRole="radiogroup"
+            >
+              {(
+                [
+                  ['photo', 'Photo', 'camera-outline'],
+                  ['qr', 'QR code', 'qr-code-outline'],
+                ] as const
+              ).map(
+                ([mode, label, icon]) => (
+                  <TouchableOpacity
+                    key={mode}
+                    accessibilityRole="radio"
+                    accessibilityState={{
+                      selected:
+                        cameraMode === mode,
+                    }}
+                    style={[
+                      styles.modeButton,
+                      cameraMode === mode &&
+                        styles.modeButtonSelected,
+                    ]}
+                    onPress={() =>
+                      setCameraMode(mode)
+                    }
+                  >
+                    <Ionicons
+                      name={icon}
+                      size={18}
+                      color={
+                        cameraMode === mode
+                          ? '#0B1B2B'
+                          : '#FFFFFF'
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.modeText,
+                        cameraMode === mode &&
+                          styles.modeTextSelected,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </View>
+          ) : null}
+
+          {cameraMode === 'qr' &&
+          qrMessage ? (
+            <Text
+              style={
+                styles.qrMessage
+              }
+              accessibilityRole="alert"
+            >
+              {qrMessage}
+            </Text>
+          ) : null}
+
           <Text
             style={
               styles.captureHint
             }
           >
-            Capture one factual claim at a time.
+            {cameraMode === 'qr'
+              ? isCheckingQr
+                ? 'Checking the QR code…'
+                : 'The claim is checked as soon as the code is read.'
+              : 'Capture one factual claim at a time.'}
           </Text>
 
+          {cameraMode === 'photo' ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Capture claim"
@@ -685,6 +898,12 @@ export default function CameraScreen({
               ) : null}
             </View>
           </TouchableOpacity>
+          ) : isCheckingQr ? (
+            <ActivityIndicator
+              color="#FFFFFF"
+              size="large"
+            />
+          ) : null}
         </View>
       </SafeAreaView>
     </View>
@@ -827,6 +1046,51 @@ const createStyles = (
       alignItems: 'center',
       paddingHorizontal: 24,
       paddingBottom: 26,
+    },
+
+    qrMessage: {
+      marginBottom: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      overflow: 'hidden',
+      color: '#FFFFFF',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      fontSize: 14,
+      textAlign: 'center',
+    },
+
+    modeRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 14,
+    },
+
+    modeButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 44,
+      paddingHorizontal: 16,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    },
+
+    modeButtonSelected: {
+      backgroundColor: '#FFFFFF',
+      borderColor: '#FFFFFF',
+    },
+
+    modeText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    modeTextSelected: {
+      color: '#0B1B2B',
     },
 
     captureHint: {

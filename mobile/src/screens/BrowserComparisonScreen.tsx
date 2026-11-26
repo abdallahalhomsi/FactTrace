@@ -656,6 +656,28 @@ export default function BrowserComparisonScreen({
     );
   };
 
+  //study trials start by themselves: the trial clock already started at "Start Trial", so a second
+  //"Start Task" button only added a step and a question about when the task begins (system test #11)
+  useEffect(() => {
+    if (
+      studyContext &&
+      !isWalkthrough &&
+      !isRestoring &&
+      !startedAt &&
+      !hasSubmitted &&
+      !recordIdToRetry
+    ) {
+      startTask();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    studyContext,
+    isRestoring,
+    startedAt,
+    hasSubmitted,
+    recordIdToRetry,
+  ]);
+
   const openSource =
     async () => {
       if (isWalkthrough) {
@@ -1288,8 +1310,9 @@ export default function BrowserComparisonScreen({
                 styles.subtitle
               }
             >
-              Record only the sources
-              you actually consult.
+              {studyContext
+                ? 'Check the claim with ordinary web search.'
+                : 'Record only the sources you actually consult.'}
             </Text>
           </View>
         </View>
@@ -1354,24 +1377,7 @@ export default function BrowserComparisonScreen({
           </View>
         ) : null}
 
-        <View
-          style={styles.notice}
-        >
-          <Text
-            style={
-              styles.noticeText
-            }
-          >
-            This screen does not
-            search the web for you.
-            Opened links and websites
-            you report are saved
-            locally. Server submission
-            requires a valid
-            participant code.
-          </Text>
-        </View>
-
+        {/* study trials show participant wording only: no claim ids, codes or saving details (system test #12) */}
         {studyContext ? (
           <View
             style={styles.notice}
@@ -1381,21 +1387,31 @@ export default function BrowserComparisonScreen({
                 styles.noticeText
               }
             >
-              Assigned{' '}
               {studyContext.isPractice
-                ? 'practice '
+                ? 'Practice trial. '
                 : ''}
-              trial{' '}
-              {
-                studyContext.trialIndex
-              }
-              {' · '}Claim{' '}
-              {
-                studyContext.claimId
-              }
+              Search for this claim in the phone’s browser, as you normally would. When you have decided, press a button on the device.
             </Text>
           </View>
-        ) : null}
+        ) : (
+          <View
+            style={styles.notice}
+          >
+            <Text
+              style={
+                styles.noticeText
+              }
+            >
+              This screen does not
+              search the web for you.
+              Opened links and websites
+              you report are saved
+              locally. Server submission
+              requires a valid
+              participant code.
+            </Text>
+          </View>
+        )}
 
         <View
           style={styles.card}
@@ -1501,6 +1517,9 @@ export default function BrowserComparisonScreen({
         !hasSubmitted &&
         !recordIdToRetry ? (
           <>
+            {/* study trials: sources are counted from the screen recording (docs/source-use-metric.md),
+                so participants do not type them in; typing them made browser trials look slower */}
+            {!studyContext ? (
             <View
               style={styles.card}
             >
@@ -1679,6 +1698,7 @@ export default function BrowserComparisonScreen({
                 empty.
               </Text>
             </View>
+            ) : null}
 
             <View
               style={styles.card}
@@ -1978,6 +1998,8 @@ export default function BrowserComparisonScreen({
           </View>
         ) : null}
 
+        {/* researcher tool, hidden from participants in study trials (system test #12) */}
+        {!studyContext ? (
         <TouchableOpacity
           accessibilityRole="button"
           style={
@@ -2007,6 +2029,7 @@ export default function BrowserComparisonScreen({
             JSON
           </Text>
         </TouchableOpacity>
+        ) : null}
       </ScrollView>
 
       <SharingIntentionModal

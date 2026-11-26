@@ -62,6 +62,7 @@ import {
 } from '../utils/studyPlan';
 
 import BlockQuestionnaire from '../components/BlockQuestionnaire';
+import StudyDebrief from '../components/StudyDebrief';
 
 import {
   endDeviceSession,
@@ -2197,9 +2198,16 @@ export default function StudyFlowScreen({
                 styles.note
               }
             >
-              The participant can now be thanked and dismissed. Verify the saved
-              rows in MySQL before starting the next participant.
+              Thank you for taking part. Your answers have been saved.
             </Text>
+
+            {participantId ? (
+              <StudyDebrief
+                participantId={
+                  participantId
+                }
+              />
+            ) : null}
 
             <TouchableOpacity
               style={
@@ -2482,9 +2490,8 @@ export default function StudyFlowScreen({
                           styles.note
                         }
                       >
-                        Show this claim to the participant on the prepared printed
-                        or on-screen study material. They should capture it using
-                        the phone camera.
+                        Scan the printed claim card with the camera, look at the
+                        evidence, then press a button on the device.
                       </Text>
                     )
                     : (
@@ -2493,9 +2500,8 @@ export default function StudyFlowScreen({
                           styles.note
                         }
                       >
-                        The browser screen will show this assigned claim. The
-                        participant should research it using ordinary browser search
-                        and record the sources they consulted.
+                        Search for this claim in the phone’s browser, as you
+                        normally would, then press a button on the device.
                       </Text>
                     )
                 }

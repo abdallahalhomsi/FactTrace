@@ -351,3 +351,56 @@ async function markQuestionnaireDone(
     JSON.stringify(done),
   );
 }
+
+/*
+ * Debrief after the session: the right answer, a one-line reason and the main source
+ * for every claim the participant saw. The server only answers once every study claim
+ * has a decision, so answers can never be seen during the trials.
+ */
+export type DebriefClaim = {
+  trialIndex: number;
+  isPractice: boolean;
+  claimId: string;
+  text: string;
+  answer: 'true' | 'false' | 'misleading';
+  rationale: string | null;
+  source: {
+    outlet: string;
+    title: string;
+    url: string;
+  } | null;
+};
+
+type DebriefApiResponse = {
+  success: boolean;
+
+  data?: {
+    participantId: string;
+    claims: DebriefClaim[];
+  };
+
+  error?: SessionApiResponse['error'];
+};
+
+export async function getDebrief(
+  participantId: string,
+): Promise<DebriefClaim[]> {
+  const response =
+    await apiRequest<DebriefApiResponse>(
+      `/api/study/debrief?participantId=${encodeURIComponent(participantId)}`,
+    );
+
+  if (
+    !response.success ||
+    !response.data
+  ) {
+    throw new Error(
+      getApiError(
+        response.error,
+        'Could not load the answers.',
+      ),
+    );
+  }
+
+  return response.data.claims;
+}

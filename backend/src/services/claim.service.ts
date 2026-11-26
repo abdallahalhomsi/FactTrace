@@ -10,7 +10,8 @@ import { AppError } from "../utils/AppError"; //used when a claim does not exist
 
 //one stored claim, including the answer that is never sent to the app
 interface StoredClaim extends ClaimDetail {
-  correctAnswer: ClaimAnswer; //for scoring accuracy only, never sent to the app
+  correctAnswer: ClaimAnswer; //for scoring accuracy only, never sent to the app during the trials
+  answerRationale: string | null; //one line on why, shown only in the debrief after the session
   studySet: "practice" | "A" | "B" | null; //which study list the claim belongs to, null if it is only in the database
   studyPosition: number | null; //order inside that list, starting at 1
 }
@@ -30,7 +31,7 @@ const byId = new Map<string, StoredClaim>(); //same claims by id, for quick look
 export async function loadClaims(): Promise<number> {
   //dates are formatted in sql so they arrive as yyyy-mm-dd text, never shifted by the laptop's time zone
   const [claimRows] = await pool.query<RowDataPacket[]>(
-    `SELECT claim_id, claim_text, correct_answer, overall_stance, summary, origin_outlet, origin_author,
+    `SELECT claim_id, claim_text, correct_answer, answer_rationale, overall_stance, summary, origin_outlet, origin_author,
             DATE_FORMAT(origin_first_seen_at, '%Y-%m-%d') AS origin_first_seen_at, origin_url, study_set, study_position
        FROM claims WHERE is_active ORDER BY claim_id`
   );
@@ -52,6 +53,7 @@ export async function loadClaims(): Promise<number> {
     claimId: r.claim_id,
     text: r.claim_text,
     correctAnswer: r.correct_answer as ClaimAnswer,
+    answerRationale: r.answer_rationale ?? null,
     origin: { outlet: r.origin_outlet, author: r.origin_author, firstSeenAt: r.origin_first_seen_at, url: r.origin_url },
     overallStance: r.overall_stance as OverallStance,
     summary: r.summary,
@@ -123,6 +125,24 @@ export function getClaimDetail(claimId: string): ClaimDetail {
     evidence: claim.evidence,
     sources: claim.sources,
   }); //structuredclone gives a copy, so nothing outside can change the stored data
+}
+
+//the answer, the reason and the main source of one claim, for the debrief only (after a finished session)
+export function getDebriefClaim(claimId: string): {
+  text: string;
+  answer: ClaimAnswer;
+  rationale: string | null;
+  source: { outlet: string; title: string; url: string } | null;
+} | null {
+  const claim = byId.get(claimId);
+  if (!claim) return null;
+  const main = claim.sources.find((s) => s.isPrimary) ?? claim.sources[0];
+  return {
+    text: claim.text,
+    answer: claim.correctAnswer,
+    rationale: claim.answerRationale,
+    source: main ? { outlet: main.outlet, title: main.title, url: main.url } : null,
+  };
 }
 
 //returns the claims participants see, in order, without answers: practice first, then set a and set b

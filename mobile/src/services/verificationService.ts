@@ -106,8 +106,9 @@ export async function verifyClaim(
   },
 ): Promise<VerifyClaimResponse> {
   try {
+    //qr scans send only the claim id, so an empty text is left out
     const requestBody: VerifyClaimRequest = {
-      claimText,
+      ...(claimText ? { claimText } : {}),
       ...requestOptions,
     };
 
