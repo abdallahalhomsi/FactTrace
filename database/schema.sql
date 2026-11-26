@@ -266,3 +266,19 @@ CREATE TABLE questionnaire_responses (
     tlx_mental <= 100 AND tlx_physical <= 100 AND tlx_temporal <= 100 AND
     tlx_performance <= 100 AND tlx_effort <= 100 AND tlx_frustration <= 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- browser condition only: sources counted from the screen recording, by two coders working separately
+-- one row per trial per coder; "final" is the agreed count used in the analysis (see docs/source-use-metric.md)
+-- no foreign key to decisions, same as the other study tables, so a count is never lost
+CREATE TABLE browser_source_coding (
+  participant_id  VARCHAR(4)        NOT NULL,
+  trial_index     SMALLINT UNSIGNED NOT NULL,
+  coder           ENUM('coder1','coder2','final') NOT NULL,
+  claim_id        VARCHAR(20)       NULL,
+  source_count    TINYINT UNSIGNED  NOT NULL, -- distinct evidence sources inspected before the decision
+  notes           VARCHAR(500)      NULL,
+  coded_at        DATETIME(3)       NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (participant_id, trial_index, coder),
+  CONSTRAINT chk_coding_participant CHECK (participant_id REGEXP '^P[0-9]{1,3}$'),
+  CONSTRAINT chk_coding_count CHECK (source_count <= 50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

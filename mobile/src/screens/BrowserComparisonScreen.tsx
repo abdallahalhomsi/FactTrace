@@ -19,7 +19,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import SharingIntentionModal, {
   SharingIntention,
 } from '../components/SharingIntentionModal';
-import { ThemeColors } from '../constants/app';
+import { APP_VERSION, ThemeColors } from '../constants/app';
 import { useAppTheme } from '../theme/AppTheme';
 import { RootStackParamList } from '../navigation/types';
 import { exportEvaluationRecords } from '../services/evaluationExport';
@@ -65,6 +65,7 @@ const VERDICTS: {
 type BrowserStudyContext = {
   participantId: string;
   conditionOrder: 'app_first' | 'browser_first';
+  setOrder?: 'a_first' | 'b_first';
   claimId: string;
   claimText: string;
   trialIndex: number;
@@ -927,6 +928,9 @@ export default function BrowserComparisonScreen({
               startedAt,
 
               endedAt,
+
+              appVersion:
+                APP_VERSION,
 
               ...(studyContext
                 ? {
@@ -1920,6 +1924,9 @@ export default function BrowserComparisonScreen({
 
                         conditionOrder:
                           studyContext.conditionOrder,
+
+                        setOrder:
+                          studyContext.setOrder,
 
                         completedTrialIndex:
                           studyContext.trialIndex,

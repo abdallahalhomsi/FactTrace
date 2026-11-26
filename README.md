@@ -48,7 +48,7 @@ Current working functionality includes:
 - Strong-match handling
 - Weak-match handling
 - No-match handling
-- Weak-match confirmation
+- Weak-match warning ("Possible match")
 - Evidence display
 - Source details
 - Backend integration
@@ -61,6 +61,18 @@ Current working functionality includes:
 - TypeScript compilation checks
 
 The main application flow has been tested successfully on a physical iPhone.
+
+Study features (FactTrace vs. browser search):
+
+- Guided participant flow: anonymous participant code, information form, 2 practice trials and two blocks of 7 claims
+- Browser comparison screen for the baseline condition
+- Counterbalancing in 4 groups (tool order × claim-set order), assigned automatically from the participant code
+- SUS and NASA-TLX after each block, saved and scored by the backend
+- Logging of every trial: start, end and duration, claim, decision, sharing intention, sources opened, correctness, match result, OCR errors and retakes, app version
+- Source-use measurement: counted by the app in the FactTrace condition, counted from screen recordings by two coders in the browser condition
+- ESP32 decision device: firmware, signal specification and backend endpoints (the app does not start device trials yet, see Known Limitations)
+
+The complete study session (16 trials and both questionnaires) has also been tested end to end on the web version of the app.
 
 ---
 
@@ -137,6 +149,19 @@ FactTrace/
 ├── docs/
 │   ├── api-contract.md
 │   └── architecture.md
+│
+├── docs/ (other study documents)
+│   ├── claim-set-gold-standard.md
+│   ├── device-signal-spec.md
+│   ├── hci-accessibility-review.md
+│   ├── source-use-metric.md
+│   ├── pilot-checklist.md
+│   ├── system-test-pp2.md
+│   └── data-privacy.md
+│
+├── firmware/
+│   ├── facttrace_device/
+│   └── test/
 │
 ├── docker-compose.yml
 ├── README.md
@@ -615,6 +640,39 @@ This writes four files to `backend/exports/` (gitignored, never commit them):
 - `sessions.csv`: the background questionnaire and counterbalanced group
 - `questionnaires.csv`: SUS and NASA-TLX items and scores per condition
 - `hardware_events.csv`: every button press with its timestamps
+- `browser_source_coding.csv`: source counts from the browser screen recordings (coder 1, coder 2 and final)
+
+`trials.csv` also includes `browser_video_source_count`, the final screen-recording source count for browser trials.
+
+**Check one participant after a session:**
+
+```bash
+cd backend
+npm run check-participant -- P07
+```
+
+This checks that the session, all 16 trials (claim, condition, timing, decision and scoring), both questionnaires and the device presses are saved. FAIL means something is missing or wrong; WARN means something to look at.
+
+**Code the browser screen recordings** (after data collection, see `docs/source-use-metric.md`):
+
+```bash
+cd backend
+npm run coding -- sheet                       # one blank sheet per coder
+npm run coding -- import coder1 sheet1.csv    # then the same for coder2
+npm run coding -- agreement                   # agreement, ICC and the trials to discuss
+npm run coding -- finalize                    # agreed counts become final
+npm run coding -- import final agreed.csv     # counts agreed after discussion
+```
+
+**Analyse the results:**
+
+```bash
+cd backend
+npx tsx src/scripts/analyze-study.ts
+```
+
+For browser trials, the analysis uses the final screen-recording count as source use.
+
 
 # Verification States
 
@@ -638,13 +696,13 @@ weak_match
 
 The application shows that the match is uncertain.
 
-The user is asked:
+The result is labelled:
 
 ```text
-Is this the claim you saw?
+POSSIBLE MATCH
 ```
 
-before continuing.
+with the message "FactTrace found evidence that may be related to your claim. Review the sources carefully." The user can then review the sources and make a decision.
 
 ---
 
@@ -698,12 +756,22 @@ POST /api/verify
 POST /api/decisions
 POST /api/sessions
 GET  /api/study/claims
+GET  /api/study/assignment?participantId=P07
+POST /api/questionnaires
+
+GET  /api/device/state?deviceId=dev1
+GET  /api/device/status
+POST /api/device/trial
+POST /api/device/end
+POST /api/device/decision
 
 POST /api/claims/match
 GET  /api/claims/:id
 ```
 
 `GET /api/study/claims` returns the practice claims and the two study sets (A and B) in order, without answers. The app uses it for the participant flow and sends each `claimId` to `/api/decisions` in both conditions.
+
+`GET /api/study/assignment` returns a participant's counterbalanced group (tool order and claim-set order); the app uses it so the order is never chosen by hand. `POST /api/questionnaires` saves the SUS and NASA-TLX answers after each block. The `/api/device/...` endpoints are used by the ESP32 device and the app (see `docs/device-signal-spec.md`).
 
 ---
 
@@ -834,6 +902,52 @@ docker compose up -d
 
 This also deletes saved test decisions and sessions, so export them first if you need them.
 
+To add a new table to an existing database without deleting anything (for example `browser_source_coding`), run only that table's `CREATE TABLE` statement from `database/schema.sql`.
+
+---
+
+## Code Changes Not Showing in the App
+
+Stop Expo and start it again with a cleared cache:
+
+```bash
+cd mobile
+npx expo start --tunnel -c
+```
+
+---
+
+## Try the App in a Laptop Browser
+
+```bash
+cd mobile
+npx expo start --web
+```
+
+The camera and OCR do not work in the browser; type the claim on the review screen instead.
+
+---
+
+## Port 3306 Already in Use (Windows)
+
+If `docker compose up -d` says port 3306 is not available, another MySQL installed on the computer is running. Stop it in an administrator terminal (for example `net stop MySQL91`), then start Docker again. Start it again later with `net start MySQL91`.
+
+---
+
+## Data Checks
+
+```bash
+cd backend
+npm run test:questionnaire          # SUS and NASA-TLX scoring
+npm run check-participant -- P07    # one participant's saved data
+```
+
+ESP32 light patterns (no device needed), from the repository root:
+
+```bash
+g++ -std=gnu++17 -o test_signals firmware/test/test_signals.cpp && ./test_signals
+```
+
 ---
 
 # Team
@@ -862,6 +976,7 @@ This also deletes saved test decisions and sessions, so export them first if you
 - Evidence interface
 - API integration support
 - Browser-search comparison interface
+- Study readiness: SUS and NASA-TLX in the app, counterbalanced claim-set order, logging checks, source-use metric and screen-recording coding, ESP32 check, pilot checklist, system test and data privacy procedure
 
 ## Manal and Ayesha
 
@@ -890,6 +1005,69 @@ Evaluation measures include:
 - Verification time
 - Source use
 
+## Study Design
+
+- Within-subjects: every participant uses both tools.
+- Independent variable: tool (FactTrace, browser search).
+- Counterbalancing: 4 groups crossing tool order (FactTrace first / browser first) with claim-set order (Set A first / Set B first). The group follows from the participant code (P01 → group 1, P02 → group 2, …, P05 → group 1).
+- One H0 / H1 pair per dependent variable: H0 says the tools do not differ on that measure, H1 says they do.
+
+## Dependent Variables
+
+| Measure | How it is measured |
+|---|---|
+| Truth discernment | Trust rate for true claims minus trust rate for false and misleading claims; accuracy and Unsure rate are also reported |
+| Verification time | From Start Trial to the decision tap (`duration_ms`), the same in both conditions |
+| Source use | Distinct evidence sources inspected before the decision (`docs/source-use-metric.md`); in the browser condition, counted from screen recordings by two coders |
+| Sharing intention | 1–7 rating of how likely the participant would share the claim |
+| Usability | SUS after each block |
+| Workload | Raw NASA-TLX after each block |
+
+## Materials
+
+- 16 claims from the curated dataset: 2 practice claims, Set A (7) and Set B (7). Each set has 3 true and 4 false or misleading claims, with matched topics (`docs/claim-set-gold-standard.md`).
+- FactTrace on the study iPhone (Expo Go), connected to the backend on the study laptop.
+- Printed claim cards for the FactTrace condition.
+- ESP32 decision device with three buttons and a status light (`docs/device-signal-spec.md`).
+
+## Trial Procedure
+
+| Step | FactTrace | Browser |
+|---|---|---|
+| 1 | "Had you seen or heard this claim before?" (study trials only) | same |
+| 2 | Start Trial | Start Trial, then Start Task |
+| 3 | Scan the claim card and check the text | Search in the phone's browser |
+| 4 | Open sources (View source) | Open pages and list each source used |
+| 5 | Decide: Trust, Unsure or Don't Trust | same |
+| 6 | Sharing question (1–7) | same |
+
+## Session Procedure
+
+1. Consent form, stored separately from the study data.
+2. The researcher enters the participant code; the app loads the group.
+3. Participant information form.
+4. Screen recording starts.
+5. Two practice trials, one with each tool.
+6. Block 1: 7 claims with the first tool, then SUS and NASA-TLX.
+7. Block 2: 7 claims with the other tool and the other claim set, then SUS and NASA-TLX.
+8. Screen recording stops; the researcher runs `npm run check-participant`.
+
+The step-by-step version for researchers is in `docs/pilot-checklist.md`.
+
+## Participants and Privacy
+
+- Sabancı University students aged 18 or over, with normal or corrected vision.
+- Participants are identified only by codes (P01, P02, …). Consent forms are kept separately from the data, and screen recordings are deleted after coding (`docs/data-privacy.md`).
+
+## Known Limitations
+
+- The app does not start ESP32 device trials yet, so device presses are not recorded during a session. The team still has to decide whether the device or the on-screen buttons are the official decision input.
+- Browser verification time includes typing in the sources used.
+- Browser trials have one more step (Start Task) than FactTrace trials.
+- Phone camera scanning, the physical ESP32 and the screen recording have not yet been tested with the complete study flow; the pilot covers them.
+
+The full list of tested and open issues is in `docs/system-test-pp2.md`.
+
 ---
 
 # Current Milestone
@@ -907,3 +1085,9 @@ Claim Input
 ```
 
 The project is ready for continued interface refinement, dataset development, evaluation preparation, and final project development.
+
+Next steps:
+
+- Connect the ESP32 device to the app's study flow
+- Run the 1–3 person pilot (`docs/pilot-checklist.md`)
+- Remove test data before the real study (`docs/data-privacy.md`)

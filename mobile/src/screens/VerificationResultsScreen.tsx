@@ -23,7 +23,7 @@ import {
   saveWalkthroughState,
   type WalkthroughStep,
 } from '../services/walkthroughService';
-import { ThemeColors } from '../constants/app';
+import { APP_VERSION, ThemeColors } from '../constants/app';
 import { useAppTheme } from '../theme/AppTheme';
 import { MatchStatus } from '../types/verification';
 import { useAuth } from '../hooks/useAuth';
@@ -128,6 +128,9 @@ export default function VerificationResultsScreen({
     useState<string | null>(null);
 
   const evaluationSubmissionAttempted = useRef(false);
+  // The trial ends when the verdict is tapped, as in the browser condition,
+  // so the time to answer the sharing question is not counted in either condition.
+  const verdictSelectedAt = useRef<string | null>(null);
   const evaluation = route.params.evaluation;
   const studyContext = route.params.studyContext;
   const hasEvaluation = Boolean(evaluation) && !isWalkthrough;
@@ -187,6 +190,10 @@ export default function VerificationResultsScreen({
 
     if (!authenticatedUser) return;
 
+    // Study trials are never added to an account's history: the study phone is shared, so a
+    // logged-in account would collect every participant's checks and the next participant could see them.
+    if (studyContext) return;
+
     attemptedHistoryEntryIds.current.add(historyEntryId);
 
     void saveVerificationHistory(
@@ -196,7 +203,7 @@ export default function VerificationResultsScreen({
     ).catch(error => {
       console.warn('Could not save verification history.', error);
     });
-  }, [authenticatedUser, historyEntryId, result]);
+  }, [authenticatedUser, historyEntryId, result, studyContext]);
 
   // All walkthrough steps stay inside local AsyncStorage. No real evidence,
   // evaluation, history, or backend submission uses this route.
@@ -494,6 +501,7 @@ export default function VerificationResultsScreen({
       return;
     }
 
+    verdictSelectedAt.current = new Date().toISOString();
     setDecision(value);
     setIsSharingModalVisible(true);
   };
@@ -559,6 +567,13 @@ export default function VerificationResultsScreen({
           weakReason: result.weakReason ?? null,
           ocrEngine: evaluation.ocrEngine ?? null,
           ocrError: evaluation.ocrError ?? null,
+          ocrConfidence: evaluation.ocrConfidence ?? null,
+          ocrRetakes: evaluation.ocrRetakes ?? null,
+          factCheckFound:
+            result.matchStatus === 'no_match'
+              ? result.factCheck?.found ?? null
+              : null,
+          appVersion: APP_VERSION,
           decision:
             decision === 'dont-trust'
               ? 'dont_trust'
@@ -573,7 +588,9 @@ export default function VerificationResultsScreen({
             : [],
 
           startedAt: evaluation.startedAt,
-          endedAt: new Date().toISOString(),
+          endedAt:
+            verdictSelectedAt.current ??
+            new Date().toISOString(),
 
           ...(studyContext
             ? {
@@ -1142,8 +1159,11 @@ export default function VerificationResultsScreen({
           </View>
         )}
 
-        {/* FULL EVIDENCE */}
-        {hasEvidence && (
+        {/* FULL EVIDENCE
+            Hidden in study trials: it shows every source in full without counting any,
+            so participants open each source with "View source", which is what the
+            source-use metric counts (like opening each page in the browser condition). */}
+        {hasEvidence && !studyContext && (
           <TouchableOpacity
             activeOpacity={0.88}
             style={styles.evidenceButtonWrapper}
@@ -1270,6 +1290,7 @@ export default function VerificationResultsScreen({
                           params: {
                             participantId: studyContext.participantId,
                             conditionOrder: studyContext.conditionOrder,
+                            setOrder: studyContext.setOrder,
                             completedTrialIndex: studyContext.trialIndex,
                           },
                         },

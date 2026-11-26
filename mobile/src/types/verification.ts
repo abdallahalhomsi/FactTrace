@@ -28,6 +28,11 @@ export type VerificationResult = {
 
   datasetNotice?: string;
 
+  // only sent by /api/verify on a no match, once the fact-check search runs
+  factCheck?: {
+    found: boolean;
+  };
+
   provenanceSignals?: {
     key: string;
     label: string;

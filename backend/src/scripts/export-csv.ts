@@ -18,6 +18,7 @@ const TRIALS_SQL = `
     c.study_set            AS claim_set,
     s.condition_order,
     s.set_order,
+    bc.source_count        AS browser_video_source_count,
     h.match_state          AS light_at_press,
     h.decision             AS device_decision,
     h.trial_started_at     AS t0_trial_started_at,
@@ -31,6 +32,9 @@ const TRIALS_SQL = `
   LEFT JOIN claims c          ON c.claim_id = d.claim_id
   LEFT JOIN study_sessions s  ON s.participant_id = d.participant_id
   LEFT JOIN hardware_events h ON h.participant_id = d.participant_id AND h.trial_index = d.trial_index
+  LEFT JOIN browser_source_coding bc
+    ON bc.participant_id = d.participant_id AND bc.trial_index = d.trial_index AND bc.coder = 'final'
+    AND d.study_condition = 'browser'
   ORDER BY d.participant_id, d.trial_index, d.started_at`;
 
 const FILES: { name: string; sql: string }[] = [
@@ -38,6 +42,7 @@ const FILES: { name: string; sql: string }[] = [
   { name: "sessions.csv", sql: "SELECT * FROM study_sessions ORDER BY participant_id" },
   { name: "questionnaires.csv", sql: "SELECT * FROM questionnaire_responses ORDER BY participant_id, block_index" },
   { name: "hardware_events.csv", sql: "SELECT * FROM hardware_events ORDER BY participant_id, trial_index" },
+  { name: "browser_source_coding.csv", sql: "SELECT * FROM browser_source_coding ORDER BY participant_id, trial_index, coder" },
 ];
 
 //one value as CSV text: dates in ISO format, objects as JSON, quoted when needed

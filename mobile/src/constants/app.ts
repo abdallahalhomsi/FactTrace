@@ -1,3 +1,5 @@
+import appConfig from '../../app.json';
+
 export type ThemeColors = {
   background: string;
   surface: string;
@@ -96,3 +98,7 @@ export const RADIUS = {
   medium: 12,
   large: 18,
 };
+
+// App version from app.json, saved with every decision so rows can be traced to a build
+export const APP_VERSION: string =
+  appConfig.expo.version;

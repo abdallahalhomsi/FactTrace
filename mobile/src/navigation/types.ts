@@ -8,6 +8,11 @@ export type StudyTrialContext = {
     | 'app_first'
     | 'browser_first';
 
+  //which claim set the first block uses; older saved trials may not have it (treated as a_first)
+  setOrder?:
+    | 'a_first'
+    | 'b_first';
+
   condition:
     | 'app'
     | 'browser';
@@ -43,6 +48,9 @@ export type RootStackParamList = {
         conditionOrder?:
           | 'app_first'
           | 'browser_first';
+        setOrder?:
+          | 'a_first'
+          | 'b_first';
         completedTrialIndex?: number;
         walkthrough?: boolean;
       }
@@ -59,6 +67,8 @@ export type RootStackParamList = {
   Camera:
     | {
         studyContext?: StudyTrialContext;
+        // retakes so far for this claim, carried through Camera and Review
+        ocrRetakes?: number;
       }
     | undefined;
 
@@ -66,6 +76,7 @@ export type RootStackParamList = {
     claimText?: string;
     imageUri?: string;
     studyContext?: StudyTrialContext;
+    ocrRetakes?: number;
     walkthrough?: boolean;
   };
 

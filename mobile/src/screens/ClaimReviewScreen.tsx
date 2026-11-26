@@ -80,6 +80,10 @@ type Props =
 
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
+/*
+ * The user only sees what happened and what to do next.
+ * Server addresses and setup steps are for the team, so they go to the log.
+ */
 function getVerificationErrorMessage(
   message: string,
 ): string {
@@ -96,17 +100,27 @@ function getVerificationErrorMessage(
           : null
       );
 
-    return `FactTrace could not reach ${
-      apiBaseUrl ??
-      'the configured backend'
-    }${
-      apiBaseUrl
-        ? '/api/verify'
-        : ''
-    }. Start the backend with “npm run dev” in the backend folder, check EXPO_PUBLIC_API_BASE_URL, then try again.`;
+    console.warn(
+      `Could not reach ${apiBaseUrl ?? 'the configured backend'}/api/verify. Start the backend with "npm run dev" and check EXPO_PUBLIC_API_BASE_URL.`,
+    );
+
+    return 'FactTrace could not connect. Check the internet connection and try again.';
   }
 
-  return message;
+  if (
+    /timed out/i.test(
+      message,
+    )
+  ) {
+    return 'FactTrace took too long to answer. Please try again.';
+  }
+
+  console.warn(
+    'Claim check failed:',
+    message,
+  );
+
+  return 'FactTrace could not check this claim. Please try again.';
 }
 
 function getApiErrorMessage(
@@ -994,12 +1008,18 @@ export default function ClaimReviewScreen({
         return;
       }
 
-      setOcrError(
-        getApiErrorMessage(
-          response.error,
+      // The technical reason stays in the log for the team; the user only sees what to do next.
+      console.warn(
+        'OCR failed:',
+        response.error,
+      );
 
-          'No readable text was detected. You can enter the claim manually.',
-        ),
+      setOcrError(
+        response.data
+          ?.ocrError ===
+          'NO_TEXT'
+          ? 'No readable text was found in the photo. You can retake the photo or type the claim yourself.'
+          : 'FactTrace could not read the text in this photo. You can retry, retake the photo, or type the claim yourself.',
       );
     };
 
@@ -1127,15 +1147,26 @@ export default function ClaimReviewScreen({
 
   const handleRetake =
     () => {
-      navigation.replace(
+      // Back to the camera already in the stack (not a new one on top), so Back keeps working as expected
+      navigation.popTo(
         'Camera',
+        {
+          ...(
+            activeStudyContext
+              ? {
+                  studyContext:
+                    activeStudyContext,
+                }
+              : {}
+          ),
 
-        activeStudyContext
-          ? {
-              studyContext:
-                activeStudyContext,
-            }
-          : undefined,
+          // counted so the decision row shows how often the photo was retaken
+          ocrRetakes:
+            (route.params
+              ?.ocrRetakes ??
+              0) +
+            1,
+        },
       );
     };
 
@@ -1309,13 +1340,35 @@ export default function ClaimReviewScreen({
                 hasOcrText
                   ? {
                       originalOcrText,
+                    }
+                  : {}
+              ),
 
+              /*
+               * Logged for every photo, also when OCR found no text or failed,
+               * so failed scans are not stored as if nothing went wrong.
+               */
+              ...(
+                isFromCamera
+                  ? {
                       ocrEngine:
                         ocrMetadata
-                          ?.engine,
+                          ?.engine ??
+                        null,
 
                       ocrError:
-                        ocrErrorCode,
+                        ocrErrorCode ??
+                        null,
+
+                      ocrConfidence:
+                        ocrMetadata
+                          ?.confidence ??
+                        null,
+
+                      ocrRetakes:
+                        route.params
+                          ?.ocrRetakes ??
+                        0,
                     }
                   : {}
               ),

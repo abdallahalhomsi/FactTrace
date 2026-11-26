@@ -5,7 +5,8 @@ MySQL 8.0.16 or newer (approved by Dr. Göktaş: curated database, no LLM or ML 
 - `schema.sql` creates all tables. `seed_claims.sql` loads the 50 study claims. Docker runs both on first start (`docker compose up -d`), or by hand:
   `mysql -u root -p facttrace < database/schema.sql` then `mysql -u root -p facttrace < database/seed_claims.sql`
 - Content tables (what the app shows): `claims`, `sources`, `claim_sources`, `evidence`, `provenance_signals`
-- Study tables (what the study measures): `study_sessions`, `decisions`
+- Study tables (what the study measures): `study_sessions`, `decisions`, `questionnaire_responses`, `hardware_events`, `browser_source_coding` (browser source counts from the screen recordings, see `docs/source-use-metric.md`)
+- To add `browser_source_coding` to a database created before it existed, without deleting anything: run only its `CREATE TABLE` statement from `schema.sql`
 - All times are stored in UTC. Connect with the timezone set to UTC (for mysql2: `timezone: "Z"`), otherwise times shift by the laptop's offset.
 
 ## The claims
