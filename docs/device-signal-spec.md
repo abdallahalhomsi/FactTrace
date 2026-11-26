@@ -1,6 +1,8 @@
 # FactTrace device: purpose and signal specification
 
-Draft by Ayesha for review with Manaal (26 Nov 2026). The firmware implements exactly this table.
+Written by Ayesha, reviewed and agreed by Manaal (26 Nov 2026). The firmware (`firmware/facttrace_device/`) implements exactly this table.
+
+**Decisions agreed on 26 Nov:** blue for match results and white for system states; no buzzer in the first build (`BUZZER_ON = false`, one short beep can be added later if the buttons feel too "dead" without it); the consent form asks people with photosensitive epilepsy not to take part.
 
 ## Purpose of the device
 
@@ -36,9 +38,9 @@ In the browser condition the light stays on `ready` for the whole trial, because
 
 | Event | Light | Pattern (ms) | App shows |
 |---|---|---|---|
-| Press recorded (server answers 201) | White | One flash: on 300, then off (`idle`) | "Recorded: Trust / Unsure / Don't trust" (the choice, never right or wrong) |
+| Press recorded (server answers 201) | White | One flash: on 300, then off (`idle`) | "You chose Trust / Unsure / Don't trust. Recorded." (the choice, never right or wrong) |
 | Press not recorded (server answers 409: no trial, result not ready, already answered, wrong trial) | White, dim | Three short blinks: on 100, off 233, three times (3 per second), then back to the previous state | Nothing; the experimenter sees it in the app status |
-| Optional buzzer (group decision) | — | One short beep (100) on a recorded press, the same for all three buttons | — |
+| Buzzer (not used in the first build, decided 26 Nov) | — | If added later: one short beep (100) on a recorded press, the same for all three buttons | — |
 
 The same feedback follows every button, so the feedback cannot hint at the answer. The correct answers are revealed only at the debrief.
 
@@ -61,7 +63,7 @@ The same feedback follows every button, so the feedback cannot hint at the answe
 | Retry | Retry on network error only, never on 409 | A 409 means the press cannot be used |
 | Timestamps | t0–t3 taken by the server clock | All four times on one clock |
 
-Known timing error: the light can change up to one poll interval (about 0.3 s) after t2 is stored. Evidence time (t3 − t2) can therefore be up to about 0.3 s longer than the time the participant actually saw the result; this is the same for every trial and is reported as a limitation.
+Known timing error: the light changes 0 to 0.3 s (one poll interval, about 0.15 s on average) after the server state changes. The delay varies from trial to trial, so it adds a little random noise, not a fixed offset, but it cannot favour either condition. It does not affect the recorded times: a press is sent straight away (at most after a request already in progress), not on the next poll, so t3 is stamped when it reaches the server, and in the FactTrace condition the phone shows the result at t2 regardless of the light. It is reported as a limitation.
 
 ## Linked metrics
 
@@ -83,7 +85,7 @@ Known timing error: the light can change up to one poll interval (about 0.3 s) a
 
 ## Target population
 
-Sabancı University students (18+), with normal or corrected vision. Colour vision deficiencies are covered because no state relies on colour alone. Participants with photosensitive epilepsy are protected by the 3-flashes rule and moderate brightness; we recommend the consent form asks people with photosensitive epilepsy not to take part (group decision).
+Sabancı University students (18+), with normal or corrected vision. Colour vision deficiencies are covered because no state relies on colour alone. Participants with photosensitive epilepsy are protected by the 3-flashes rule and moderate brightness, and the consent form asks people with photosensitive epilepsy not to take part (agreed 26 Nov).
 
 ## "What if" answers
 
