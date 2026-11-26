@@ -6,7 +6,7 @@
 
 ## 1. Overview
 
-This document summarizes the UI/UX, accessibility, and usability review completed for FactTrace. It covers dark-mode designs for the ten main mobile screens, a code inspection of accessibility details in the React Native frontend, an HCI checklist based on course lecture principles, and findings from an initial usability pilot session with an external participant.
+This document summarizes the UI/UX, accessibility, and usability review completed for FactTrace. It covers dark-mode designs for the ten main mobile screens, a code inspection of accessibility details in the React Native frontend, an HCI checklist based on course lecture principles, and two observations from an informal early walkthrough of the prototype.
 
 The accessibility findings are based on code and design inspection, **not a complete accessibility test**. The design improvements proposed in this document have not been implemented in the application code on this branch.
 
@@ -86,32 +86,34 @@ A consistent palette was used across the screens, and layout details were refine
 
 These colors provide a **design reference** for a possible `DARK_COLORS` theme in `mobile/src/constants/app.ts`. The Figma designs are complete, but this branch **does not implement dark-mode switching** in React Native. Frontend integration would need to be discussed with Rand and the rest of the team.
 
-## 6. Usability pilot findings
+## 6. Informal early walkthrough (4 Nov, before the study sequence)
 
-A pilot session was conducted with one participant outside the FactTrace team using the test claim *“Drinking eight glasses of water a day is required for good health”* (`claim_01`). The participant walked through the core verification flow: scanning the printed claim, reviewing the text, inspecting the matched result and evidence, and selecting a decision.
+This was an informal check of an early prototype, **not part of the study protocol**. It took place before the needs interviews, the expert evaluation, the formative usability test and ethics approval. It is **not** the formative usability test or the pilot study; both follow the planned order (interviews, expert evaluation, formative test, design iteration, pilot, main study). No personal data, recordings or measurements were collected, only the two design observations below, and the person must not take part in any later session (exclusion list).
 
-No task completion times or formal measurements were recorded. Findings were limited to what was directly observed during the session:
+One person outside the team went through the core flow of the 4 Nov prototype: scanning a printed claim, reviewing the text, looking at the match and evidence, and choosing a decision. The claim used was *“Drinking eight glasses of water a day is required for good health”*, which was `claim_01` in the dataset at the time; it has since been removed, and `claim_01` is now a practice claim. The prototype has also changed since (no verdict is shown, and study decisions come from the ESP32 buttons), so these observations describe the earlier version.
 
-1. **Home screen crowding:** The participant noted that the Home screen felt crowded, with too much information competing for attention.
-2. **Unresponsive source URL:** On the Evidence Details screen, the participant tapped the blue URL text displayed above the “Open Original Source” button expecting it to open the source, but nothing happened.
-3. **General experience:** The participant reported that the rest of the verification experience was good and easy to follow.
+No task completion times or formal measurements were recorded. Observations:
 
-## 7. Evidence-based design iteration
+1. **Home screen crowding:** The person said the Home screen felt crowded, with too much information competing for attention.
+2. **Unresponsive source URL:** On the Evidence Details screen, the person tapped the blue URL text displayed above the “Open Original Source” button expecting it to open the source, but nothing happened.
+3. **General experience:** The person said the rest of the verification experience was good and easy to follow.
 
-Based on the participant's direct feedback and principles from the course lecture slides, two interface improvements are proposed. These have not yet been implemented in the application code.
+## 7. Issues to check in the formative usability test
+
+One informal session is not enough evidence for a design iteration. The two issues below are therefore treated as **candidates**: they go into the expert evaluation and the formative usability test, and are changed only if those confirm them. The documented design iteration will be based on the formative test. Both issues were still present in the app on 27 Nov.
 
 ### 1. Home screen decluttering (Aesthetic and Minimalist Design)
-- **Observed issue:** The participant noted that the Home screen felt crowded and had too much information competing for attention. The screen currently contains seven separate vertical blocks, including decorative diagrams and marketing cards.
+- **Observed in the walkthrough:** The person said the Home screen felt crowded and had too much information competing for attention. The screen currently contains seven separate vertical blocks, including decorative diagrams and marketing cards.
 - **Course principles:** Nielsen’s Heuristic #8 (*Aesthetic and minimalist design*, Week 2 Notes, Slide 10) and Visual Search complexity / Hick's Law (Week 5 Notes, Slides 40–46). Extra units of information diminish the visibility of primary actions.
-- **Proposed improvements:** Simplify the hero card by removing decorative elements, and remove the redundant “Why FactTrace?” marketing cards. All existing navigation (Scan a Claim, Enter Claim Manually, Verification History, Browser Comparison, and Account Login) is preserved while giving the primary scan action clear visual prominence.
+- **Possible change, if confirmed:** Simplify the hero card by removing decorative elements, and remove the redundant “Why FactTrace?” marketing cards. All existing navigation (Scan a Claim, Enter Claim Manually, Verification History, Browser Comparison, and Account Login) is preserved while giving the primary scan action clear visual prominence.
 
 ### 2. Source URL touch interaction (Affordance and Gulf of Execution)
-- **Observed issue:** The participant tapped the blue source URL expecting it to open, but only the button below was interactive.
+- **Observed in the walkthrough:** The person tapped the blue source URL expecting it to open, but only the button below was interactive.
 - **Course principles:** Affordance and Signifiers (Supplementary Materials, Slides 26–27) and Norman’s Gulf of Execution (Week 5 Notes, Slides 79–84). Blue URL text carries an established perceived affordance of clickability. When tapping produces no result, the user's intention fails to map to an executable action.
-- **Proposed improvements:** Make the blue URL text tappable by wrapping it in a touchable component that calls the existing `openSource()` handler. For demonstration records (such as mock `example.org` links), show a brief notice explaining that the source is a demonstration record for evaluation purposes.
+- **Possible change, if confirmed:** Make the blue URL text tappable by wrapping it in a touchable component that calls the existing `openSource()` handler. For demonstration records (such as mock `example.org` links), show a brief notice explaining that the source is a demonstration record for evaluation purposes.
 
 ## 8. Next steps
 
-**Completed:** Ten dark-mode screens in Figma, the accessibility review, the course-slide HCI checklist, the usability pilot with one external participant, and documented proposed improvements based on real feedback. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
+**Completed:** Ten dark-mode screens in Figma, the accessibility review, the course-slide HCI checklist, and an informal early walkthrough whose two observations are carried into the formative usability test. The GitHub branch contains documentation only; no frontend or backend application code was changed as part of this review.
 
 **For team review:** Proposed improvements to light-mode text contrast, small font sizes, developer-facing error messages, Home screen decluttering, source URL tap interaction, match-status icons, explanations of database match scores, and the proposed dark-mode palette.
