@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
+import DeviceDecisionPanel from '../components/DeviceDecisionPanel';
 import SharingIntentionModal, {
   SharingIntention,
 } from '../components/SharingIntentionModal';
@@ -65,6 +66,7 @@ const VERDICTS: {
 type BrowserStudyContext = {
   participantId: string;
   conditionOrder: 'app_first' | 'browser_first';
+  setOrder: 'a_first' | 'b_first';
   claimId: string;
   claimText: string;
   trialIndex: number;
@@ -227,6 +229,13 @@ export default function BrowserComparisonScreen({
   ] = useState<Verdict | null>(
     null,
   );
+
+  //study trials take the decision from the device buttons, the same input as the FactTrace condition;
+  //the researcher can switch to the on-screen buttons if the device fails
+  const [
+    useScreenButtons,
+    setUseScreenButtons,
+  ] = useState(false);
 
   const [
     isSharingModalVisible,
@@ -1687,6 +1696,26 @@ export default function BrowserComparisonScreen({
                 researching the claim.
               </Text>
 
+              {studyContext &&
+              !useScreenButtons ? (
+                <DeviceDecisionPanel
+                  trial={{
+                    ...studyContext,
+                    condition: 'browser',
+                  }}
+                  decision={
+                    decision
+                  }
+                  onDecision={
+                    chooseVerdict
+                  }
+                  onUseScreenButtons={() =>
+                    setUseScreenButtons(
+                      true,
+                    )
+                  }
+                />
+              ) : (
               <View
                 style={
                   styles.verdicts
@@ -1727,6 +1756,7 @@ export default function BrowserComparisonScreen({
                   ),
                 )}
               </View>
+              )}
             </View>
           </>
         ) : null}
@@ -1920,6 +1950,9 @@ export default function BrowserComparisonScreen({
 
                         conditionOrder:
                           studyContext.conditionOrder,
+
+                        setOrder:
+                          studyContext.setOrder,
 
                         completedTrialIndex:
                           studyContext.trialIndex,

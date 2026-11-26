@@ -28,6 +28,7 @@ import { useAppTheme } from '../theme/AppTheme';
 import { MatchStatus } from '../types/verification';
 import { useAuth } from '../hooks/useAuth';
 import { saveVerificationHistory } from '../services/historyService';
+import DeviceDecisionPanel from '../components/DeviceDecisionPanel';
 import SharingIntentionModal, {
   SharingIntention,
 } from '../components/SharingIntentionModal';
@@ -126,11 +127,17 @@ export default function VerificationResultsScreen({
     useState<SharingIntention | null>(null);
   const [retryRecordId, setRetryRecordId] =
     useState<string | null>(null);
+  //researcher fallback when the device fails: show the on-screen buttons for this trial
+  const [useScreenButtons, setUseScreenButtons] =
+    useState(false);
 
   const evaluationSubmissionAttempted = useRef(false);
   const evaluation = route.params.evaluation;
   const studyContext = route.params.studyContext;
   const hasEvaluation = Boolean(evaluation) && !isWalkthrough;
+  //study trials take the decision from the device buttons, the same input as the browser condition
+  const useDevice =
+    Boolean(studyContext) && hasEvaluation && !useScreenButtons;
 
   const [tourStep, setTourStep] =
     useState<WalkthroughStep>('result_match');
@@ -1022,6 +1029,26 @@ export default function VerificationResultsScreen({
               </Text>
             </View>
 
+            {useDevice && studyContext ? (
+              <DeviceDecisionPanel
+                trial={studyContext}
+                decision={
+                  decision === 'dont-trust'
+                    ? 'dont_trust'
+                    : decision
+                }
+                onDecision={value =>
+                  void handleDecision(
+                    value === 'dont_trust'
+                      ? 'dont-trust'
+                      : value,
+                  )
+                }
+                onUseScreenButtons={() =>
+                  setUseScreenButtons(true)
+                }
+              />
+            ) : (
             <View style={styles.decisionButtons}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -1139,6 +1166,7 @@ export default function VerificationResultsScreen({
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
           </View>
         )}
 
@@ -1270,6 +1298,7 @@ export default function VerificationResultsScreen({
                           params: {
                             participantId: studyContext.participantId,
                             conditionOrder: studyContext.conditionOrder,
+                            setOrder: studyContext.setOrder,
                             completedTrialIndex: studyContext.trialIndex,
                           },
                         },
