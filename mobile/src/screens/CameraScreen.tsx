@@ -655,9 +655,13 @@ export default function CameraScreen({
         onCameraReady={() =>
           setIsCameraReady(true)
         }
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
+        //the scanner only runs in QR mode, so photo mode (and every study trial) does no barcode work
+        barcodeScannerSettings={
+          qrAvailable &&
+          cameraMode === 'qr'
+            ? { barcodeTypes: ['qr'] }
+            : undefined
+        }
         onBarcodeScanned={
           qrAvailable &&
           cameraMode === 'qr'

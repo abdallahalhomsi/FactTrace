@@ -53,17 +53,23 @@ ORDER BY participant_id;
 --    The main comparison for the study.
 -- ============================================================
 
+--    Browser sources come from the screen-recording count (coder = final);
+--    uncoded browser trials are left out of the average (AVG ignores NULL).
 SELECT
-  study_condition,
+  d.study_condition,
   COUNT(*) AS n,
-  SUM(was_correct) AS correct,
-  ROUND(SUM(was_correct) / COUNT(*) * 100, 1) AS accuracy_pct,
-  ROUND(AVG(duration_ms)) AS avg_ms,
-  ROUND(AVG(sources_opened_count), 1) AS avg_sources_opened
-FROM decisions
-WHERE is_practice = FALSE
-GROUP BY study_condition
-ORDER BY study_condition;
+  SUM(d.was_correct) AS correct,
+  ROUND(SUM(d.was_correct) / COUNT(*) * 100, 1) AS accuracy_pct,
+  ROUND(AVG(d.duration_ms)) AS avg_ms,
+  ROUND(AVG(CASE WHEN d.study_condition = 'browser' THEN bc.source_count
+                 ELSE d.sources_opened_count END), 1) AS avg_sources_opened,
+  SUM(d.study_condition = 'browser' AND bc.source_count IS NULL) AS browser_trials_not_coded
+FROM decisions d
+LEFT JOIN browser_source_coding bc
+  ON bc.participant_id = d.participant_id AND bc.trial_index = d.trial_index AND bc.coder = 'final'
+WHERE d.is_practice = FALSE
+GROUP BY d.study_condition
+ORDER BY d.study_condition;
 
 -- ============================================================
 -- 5. FULL TRIAL DETAIL FOR ONE PARTICIPANT

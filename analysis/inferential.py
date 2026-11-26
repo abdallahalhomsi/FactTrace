@@ -35,20 +35,23 @@ ALPHA = 0.05
 
 # dependent variables, in the order they are tested and reported
 # name: (column in the participant table, label, primary?)
+# the hypotheses (H1a to H1f in the README and the study design document): H1a is the primary outcome,
+# H1b to H1f are corrected together with Holm; accuracy and Unsure rate are supporting measures,
+# reported with uncorrected p values and labelled as exploratory
 DVS = {
-    "truth_discernment": ("Truth discernment (trust rate true - trust rate false/misleading)", True),
-    "accuracy": ("Accuracy (proportion correct, Unsure counts as wrong)", False),
-    "unsure_rate": ("Unsure rate", False),
-    "sharing_discernment": ("Sharing discernment (mean sharing true - mean sharing false/misleading)", False),
-    "time_s": ("Verification time per claim (s)", False),
-    "sources": ("Sources inspected per claim (browser: screen-recording count by two coders)", False),
-    "sus": ("SUS score (0 to 100)", False),
-    "tlx": ("Raw NASA-TLX (0 to 100)", False),
+    "truth_discernment": ("H1a  Truth discernment (trust rate true - trust rate false/misleading)", True),
+    "time_s": ("H1b  Verification time per claim (s)", False),
+    "sources": ("H1c  Sources inspected per claim (browser: screen-recording count by two coders)", False),
+    "sharing_discernment": ("H1d  Sharing discernment (mean sharing true - mean sharing false/misleading)", False),
+    "sus": ("H1e  SUS score (0 to 100)", False),
+    "tlx": ("H1f  Raw NASA-TLX (0 to 100)", False),
+    "accuracy": ("Supporting: accuracy (proportion correct, Unsure counts as wrong)", False),
+    "unsure_rate": ("Supporting: Unsure rate", False),
 }
 
-# the Holm family: every secondary DV is corrected together; the primary DV is tested on its own at ALPHA.
-# change this list if the written hypotheses (H1a to H1f) name a different family
-HOLM_FAMILY = [name for name, (_, primary) in DVS.items() if not primary]
+# the Holm family: H1b to H1f; the primary H1a is tested on its own at ALPHA
+HOLM_FAMILY = ["time_s", "sources", "sharing_discernment", "sus", "tlx"]
+EXPLORATORY = ["accuracy", "unsure_rate"]
 
 
 # ---------------------------------------------------------------- loading
@@ -257,7 +260,8 @@ def section_paired(table: pd.DataFrame) -> None:
               f"difference {fmt(r['mean_diff'])} [95% CI {fmt(r.get('ci_low'))}, {fmt(r.get('ci_high'))}]")
         print(f"  Shapiro-Wilk on differences p {fmt_p(r.get('shapiro_p', np.nan))} -> {r['test']}, "
               f"p {fmt_p(r['p'])}" + (f", Holm p {fmt_p(r['p_holm'])}" if "p_holm" in r else
-                                        " (primary, no correction)" if primary else ""))
+                                        " (primary, no correction)" if primary else
+                                        " (exploratory, no correction)" if dv in EXPLORATORY else ""))
         if "effect" in r:
             print(f"  {r['effect_name']} = {fmt(r['effect'], 2)}")
         print()
