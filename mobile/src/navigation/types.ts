@@ -8,6 +8,11 @@ export type StudyTrialContext = {
     | 'app_first'
     | 'browser_first';
 
+  //claim-set order of the participant's group, needed to rebuild the trial plan after each trial
+  setOrder:
+    | 'a_first'
+    | 'b_first';
+
   condition:
     | 'app'
     | 'browser';
@@ -43,6 +48,9 @@ export type RootStackParamList = {
         conditionOrder?:
           | 'app_first'
           | 'browser_first';
+        setOrder?:
+          | 'a_first'
+          | 'b_first';
         completedTrialIndex?: number;
         walkthrough?: boolean;
       }

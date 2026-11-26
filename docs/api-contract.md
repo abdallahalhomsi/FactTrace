@@ -254,14 +254,31 @@ Unknown extra fields are ignored, not stored.
 `201`, `data: { decisionId, durationMs }`
 
 ### `POST /sessions`
-Creates one row per participant before they start, so the condition order is recorded.
+Creates one row per participant before they start, with the participant information form.
 ```json
-{ "participantId": "P07", "conditionOrder": "app_first", "notes": "optional, up to 500 characters" }
+{ "participantId": "P07", "conditionOrder": "app_first", "setOrder": "b_first", "age": 21, "gender": "female",
+  "educationLevel": "undergraduate", "faculty": "FENS", "studyYear": 3, "smartphoneUse": "3_5", "socialMediaUse": "2_4",
+  "factCheckFrequency": 3, "sourceCheckFrequency": 4, "multiSourceFrequency": 3, "usedFactCheckTool": false,
+  "usedFactTraceBefore": false, "notes": "optional, up to 500 characters" }
 ```
-`conditionOrder`: `app_first` \| `browser_first`. Decisions are still saved if no session exists.
+`conditionOrder`: `app_first` \| `browser_first`. `setOrder`: `a_first` \| `b_first` (optional; left out, it follows the participant's group). `gender`: `female` \| `male` \| `another` \| `prefer_not_to_say` (optional). `faculty` and `studyYear` (1 to 8) are optional; the app asks them only of current students. Decisions are still saved if no session exists.
+
+### `GET /study/assignment?participantId=P07`
+The participant's counterbalanced group, so the researcher never picks the order by hand.
+```json
+{ "participantId": "P07", "group": 3, "conditionOrder": "app_first", "setOrder": "b_first" }
+```
+| group | first block | second block |
+|---|---|---|
+| 1 | FactTrace, Set A | Browser, Set B |
+| 2 | Browser, Set A | FactTrace, Set B |
+| 3 | FactTrace, Set B | Browser, Set A |
+| 4 | Browser, Set B | FactTrace, Set A |
+
+Groups come from a block-randomised list made in advance (`backend/src/config/allocation.ts`, seed 4492026, made by `src/scripts/make-allocation.ts`): every block of 4 participants (P01 to P04, P05 to P08, ...) has each group once, in random order. Past P60 the groups rotate 1, 2, 3, 4. Do not regenerate the list once real participants have been run.
 
 ### `GET /study/claims`
-The claims participants see, in a fixed order, without answers. Use this to run the participant flow, and send each `claimId` to `/decisions` in **both** conditions (so the browser condition no longer has to guess the claim from typed text).
+The claims participants see, without answers. Use this to run the participant flow, and send each `claimId` to `/decisions` in **both** conditions (so the browser condition no longer has to guess the claim from typed text).
 ```json
 {
   "practice": [{ "claimId": "claim_01", "text": "Light from the Sun takes about 8 minutes to reach Earth.", "position": 1 }, ...],
@@ -270,8 +287,8 @@ The claims participants see, in a fixed order, without answers. Use this to run 
 }
 ```
 - 2 practice claims (send `isPractice: true`), then 7 claims per set, each set 3 true / 2 false / 2 misleading.
-- Counterbalancing: participants with `conditionOrder: "app_first"` do set A in the app, then set B in the browser. `browser_first` participants do set A in the browser, then set B in the app. So set A is always first and the tool alternates.
-- `trialIndex` in `/decisions` counts across both conditions: practice 1 and 2, then 3 to 16.
+- Trial order in the app (`mobile/src/utils/studyPlan.ts`): practice 1 with the first tool, block 1 (7 claims), practice 2 with the second tool, block 2 (7 claims). Each tool is practised right before its own block. The set used in each block follows the group's `setOrder`, and the claims inside each set are shuffled per participant (seeded from the participant id, so the order is reproducible; the order actually used is in `trialIndex`).
+- `trialIndex` in `/decisions` counts across both conditions: 1 to 16, with practice at 1 and 9.
 
 ## Claim ids
 All 50 claims in `database/seed_claims.sql`. Use these ids for QR test codes. The answer column is for the team only; the API never sends it.

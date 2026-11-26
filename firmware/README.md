@@ -60,3 +60,5 @@ The light turns steady blue (strong match). Press a button: one white flash, lig
 Invoke-RestMethod http://localhost:3000/api/device/status
 ```
 shows `decisionRecorded: True` with the button you pressed. A second press shows three short blinks (already answered). Reset with `docker compose down -v` and `docker compose up -d` before real sessions, because P99 is now in `hardware_events`.
+
+**4. With the app:** in the study flow the app does all of the above itself: `/device/trial` when the researcher taps Start Trial, `/device/status?waitForTrial=N&online=1` while it waits for the press (the backend holds each request up to 8 s, so the app sends a few requests per trial, not one every 300 ms), and `/device/end` when the session ends or is left. The ESP32 should reach the backend directly on the hotspot (`http://<laptop ip>:3000/api`), not through ngrok: it polls about 200 times a minute, and ngrok's free plan allows 20,000 requests a month.

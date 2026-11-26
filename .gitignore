@@ -36,3 +36,6 @@ backend/samples/Screenshot 2026-10-26 114253.png
 
 # esp32 wifi password and server address (repo is public)
 /firmware/facttrace_device/secrets.h
+
+# python cache
+__pycache__/

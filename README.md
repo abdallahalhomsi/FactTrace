@@ -616,6 +616,15 @@ This writes four files to `backend/exports/` (gitignored, never commit them):
 - `questionnaires.csv`: SUS and NASA-TLX items and scores per condition
 - `hardware_events.csv`: every button press with its timestamps
 
+**Analyse the exported data:**
+
+```bash
+pip install -r analysis/requirements.txt
+python analysis/inferential.py
+```
+
+Paired tests (t-test or Wilcoxon after a Shapiro-Wilk check) with effect sizes, CIs and Holm correction, carry-over checks, a first-block analysis and mixed-effects models. See `analysis/README.md`.
+
 # Verification States
 
 FactTrace currently supports three matching states.

@@ -4,9 +4,23 @@ export type ConditionOrder =
   | 'app_first'
   | 'browser_first';
 
+//tool order and claim-set order come from the participant number (GET /api/study/assignment)
+export type SetOrder =
+  | 'a_first'
+  | 'b_first';
+
+export type StudyAssignment = {
+  participantId: string;
+  group: 1 | 2 | 3 | 4;
+  conditionOrder: ConditionOrder;
+  setOrder: SetOrder;
+};
+
 export type GenderOption =
   | 'female'
-  | 'male';
+  | 'male'
+  | 'another'
+  | 'prefer_not_to_say';
 
 export type EducationLevel =
   | 'undergraduate'
@@ -33,6 +47,10 @@ export type ParticipantInformation = {
   gender?: GenderOption;
 
   educationLevel: EducationLevel;
+
+  faculty?: string;
+
+  studyYear?: number;
 
   smartphoneUse: SmartphoneUseRange;
 
@@ -92,6 +110,14 @@ type SessionApiResponse = {
       };
 };
 
+type AssignmentApiResponse = {
+  success: boolean;
+
+  data?: StudyAssignment;
+
+  error?: SessionApiResponse['error'];
+};
+
 function getApiError(
   error:
     | StudyClaimsApiResponse['error']
@@ -134,9 +160,34 @@ Promise<StudyClaims> {
   return response.data;
 }
 
+//the counterbalanced group for a participant, so the researcher never picks the order by hand
+export async function getStudyAssignment(
+  participantId: string,
+): Promise<StudyAssignment> {
+  const response =
+    await apiRequest<AssignmentApiResponse>(
+      `/api/study/assignment?participantId=${encodeURIComponent(participantId)}`,
+    );
+
+  if (
+    !response.success ||
+    !response.data
+  ) {
+    throw new Error(
+      getApiError(
+        response.error,
+        'Could not load the study group.',
+      ),
+    );
+  }
+
+  return response.data;
+}
+
 export async function createStudySession(
   participantId: string,
   conditionOrder: ConditionOrder,
+  setOrder: SetOrder,
   participantInformation:
     ParticipantInformation,
 ): Promise<void> {
@@ -149,6 +200,7 @@ export async function createStudySession(
         body: JSON.stringify({
           participantId,
           conditionOrder,
+          setOrder,
 
           ...participantInformation,
 

@@ -9,13 +9,14 @@
 //   1 = extremely unlikely
 //   7 = extremely likely
 
+import { ALLOCATION } from "./allocation";
 import {
   ClaimAnswer,
   ConditionOrder,
   SetOrder,
 } from "../types/api";
 
-//four counterbalanced groups, cycling by participant number (P01 → group 1, P02 → group 2, …, P05 → group 1)
+//four counterbalanced groups; which group a participant gets comes from the block-randomised list in allocation.ts
 //every tool is used with every claim set, and each set appears first and second equally often
 export const STUDY_GROUPS: { conditionOrder: ConditionOrder; setOrder: SetOrder }[] = [
   { conditionOrder: "app_first", setOrder: "a_first" }, //group 1: FactTrace with Set A, then browser with Set B
@@ -24,9 +25,10 @@ export const STUDY_GROUPS: { conditionOrder: ConditionOrder; setOrder: SetOrder 
   { conditionOrder: "browser_first", setOrder: "b_first" }, //group 4: browser with Set B, then FactTrace with Set A
 ];
 
-//group (1 to 4) for a participant id such as P07
+//group (1 to 4) for a participant id such as P07: from the randomised list, or a plain rotation past its end
 export function groupFor(participantId: string): 1 | 2 | 3 | 4 {
   const n = Number(participantId.replace(/^[pP]/, ""));
+  if (n >= 1 && n <= ALLOCATION.length) return ALLOCATION[n - 1];
   return ((((n - 1) % 4) + 4) % 4 + 1) as 1 | 2 | 3 | 4;
 }
 
