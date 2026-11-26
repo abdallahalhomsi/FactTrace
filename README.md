@@ -64,13 +64,13 @@ The main application flow has been tested successfully on a physical iPhone.
 
 Study features (FactTrace vs. browser search):
 
-- Guided participant flow: anonymous participant code, information form, 2 practice trials and two blocks of 7 claims
+- Guided participant flow: anonymous participant code, information form, then for each tool one practice trial and a block of 7 claims
 - Browser comparison screen for the baseline condition
 - Counterbalancing in 4 groups (tool order × claim-set order), assigned automatically from the participant code
 - SUS and NASA-TLX after each block, saved and scored by the backend
 - Logging of every trial: start, end and duration, claim, decision, sharing intention, sources opened, correctness, match result, OCR errors and retakes, app version
 - Source-use measurement: counted by the app in the FactTrace condition, counted from screen recordings by two coders in the browser condition
-- ESP32 decision device: firmware, signal specification and backend endpoints (the app does not start device trials yet, see Known Limitations)
+- ESP32 decision device: Trust / Unsure / Don't Trust buttons in both conditions, with an on-screen fallback for the researcher
 
 The complete study session (16 trials and both questionnaires) has also been tested end to end on the web version of the app.
 
@@ -1018,7 +1018,7 @@ Evaluation measures include:
 
 - Within-subjects: every participant uses both tools.
 - Independent variable: tool (FactTrace, browser search).
-- Counterbalancing: 4 groups crossing tool order (FactTrace first / browser first) with claim-set order (Set A first / Set B first). The group follows from the participant code (P01 → group 1, P02 → group 2, …, P05 → group 1).
+- Counterbalancing: 4 groups crossing tool order (FactTrace first / browser first) with claim-set order (Set A first / Set B first). The group follows from the participant code, using the block-randomised list in `backend/src/config/allocation.ts` (balanced after every 4 participants).
 - One H0 / H1 pair per dependent variable: H0 says the tools do not differ on that measure, H1 says they do.
 
 ## Dependent Variables
@@ -1026,11 +1026,24 @@ Evaluation measures include:
 | Measure | How it is measured |
 |---|---|
 | Truth discernment | Trust rate for true claims minus trust rate for false and misleading claims; accuracy and Unsure rate are also reported |
-| Verification time | From Start Trial to the decision tap (`duration_ms`), the same in both conditions |
+| Verification time | From Start Trial to the decision on the ESP32 buttons (`duration_ms`), the same in both conditions; the exact press time is also stored in `hardware_events` |
 | Source use | Distinct evidence sources inspected before the decision (`docs/source-use-metric.md`); in the browser condition, counted from screen recordings by two coders |
 | Sharing intention | 1–7 rating of how likely the participant would share the claim |
 | Usability | SUS after each block |
 | Workload | Raw NASA-TLX after each block |
+
+## Hypotheses
+
+One H0 / H1 pair per dependent variable, comparing the two tools within participants:
+
+| DV | H0 | H1 |
+|---|---|---|
+| Truth discernment | Discernment does not differ between FactTrace and browser search | Discernment differs between FactTrace and browser search |
+| Verification time | Time to decision does not differ between the tools | Time to decision differs between the tools |
+| Source use | The number of distinct sources inspected does not differ between the tools | The number of distinct sources inspected differs between the tools |
+| Sharing intention | Sharing discernment does not differ between the tools | Sharing discernment differs between the tools |
+| Usability (SUS) | SUS scores do not differ between the tools | SUS scores differ between the tools |
+| Workload (NASA-TLX) | Raw TLX scores do not differ between the tools | Raw TLX scores differ between the tools |
 
 ## Materials
 
@@ -1047,7 +1060,7 @@ Evaluation measures include:
 | 2 | Start Trial | Start Trial, then Start Task |
 | 3 | Scan the claim card and check the text | Search in the phone's browser |
 | 4 | Open sources (View source) | Open pages and list each source used |
-| 5 | Decide: Trust, Unsure or Don't Trust | same |
+| 5 | Decide on the ESP32 buttons: Trust, Unsure or Don't Trust | same |
 | 6 | Sharing question (1–7) | same |
 
 ## Session Procedure
@@ -1056,9 +1069,9 @@ Evaluation measures include:
 2. The researcher enters the participant code; the app loads the group.
 3. Participant information form.
 4. Screen recording starts.
-5. Two practice trials, one with each tool.
-6. Block 1: 7 claims with the first tool, then SUS and NASA-TLX.
-7. Block 2: 7 claims with the other tool and the other claim set, then SUS and NASA-TLX.
+5. Practice trial with the first tool, then block 1: 7 claims with that tool, then SUS and NASA-TLX.
+6. Practice trial with the second tool, then block 2: 7 claims with that tool and the other claim set, then SUS and NASA-TLX.
+7. The claims within each set are in a random order for each participant.
 8. Screen recording stops; the researcher runs `npm run check-participant`.
 
 The step-by-step version for researchers is in `docs/pilot-checklist.md`.
@@ -1070,7 +1083,6 @@ The step-by-step version for researchers is in `docs/pilot-checklist.md`.
 
 ## Known Limitations
 
-- The app does not start ESP32 device trials yet, so device presses are not recorded during a session. The team still has to decide whether the device or the on-screen buttons are the official decision input.
 - Browser verification time includes typing in the sources used.
 - Browser trials have one more step (Start Task) than FactTrace trials.
 - Phone camera scanning, the physical ESP32 and the screen recording have not yet been tested with the complete study flow; the pilot covers them.
@@ -1097,6 +1109,6 @@ The project is ready for continued interface refinement, dataset development, ev
 
 Next steps:
 
-- Connect the ESP32 device to the app's study flow
+- Test the physical ESP32 with the complete study flow
 - Run the 1–3 person pilot (`docs/pilot-checklist.md`)
 - Remove test data before the real study (`docs/data-privacy.md`)

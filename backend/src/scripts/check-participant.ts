@@ -11,18 +11,49 @@ import { listStudyClaims, loadClaims } from "../services/claim.service";
 type Condition = "app" | "browser";
 interface PlannedTrial { trialIndex: number; claimId: string; condition: Condition; isPractice: boolean }
 
-//the same plan the app builds (mobile/src/screens/StudyFlowScreen.tsx buildPlan):
-//practice 1 with the first tool, practice 2 with the second, then block 1 (first set, first tool), block 2 (other set, other tool)
-function buildPlan(conditionOrder: string, setOrder: string): PlannedTrial[] {
+//seeded random numbers and shuffle: copied from mobile/src/utils/studyPlan.ts, keep both the same
+function seededRandom(text: string): () => number {
+  let seed = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    seed = Math.imul(seed ^ text.charCodeAt(i), 16777619) >>> 0;
+  }
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffled<T>(items: T[], random: () => number): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+//the same plan the app builds (mobile/src/utils/studyPlan.ts buildPlan):
+//practice with the first tool, block 1, practice with the second tool, block 2;
+//claims shuffled within each set with the participant id as seed
+function buildPlan(conditionOrder: string, setOrder: string, participantId: string): PlannedTrial[] {
   const claims = listStudyClaims();
   const first: Condition = conditionOrder === "app_first" ? "app" : "browser";
   const second: Condition = first === "app" ? "browser" : "app";
-  const firstSet = setOrder === "b_first" ? claims.setB : claims.setA;
-  const secondSet = setOrder === "b_first" ? claims.setA : claims.setB;
+  const random = seededRandom(participantId.toUpperCase());
+  const setA = shuffled(claims.setA, random);
+  const setB = shuffled(claims.setB, random);
+  const [firstSet, secondSet] = setOrder === "a_first" ? [setA, setB] : [setB, setA];
   const plan: PlannedTrial[] = [];
-  claims.practice.forEach((c, i) => plan.push({ trialIndex: plan.length + 1, claimId: c.claimId, condition: i === 0 ? first : second, isPractice: true }));
-  firstSet.forEach((c) => plan.push({ trialIndex: plan.length + 1, claimId: c.claimId, condition: first, isPractice: false }));
-  secondSet.forEach((c) => plan.push({ trialIndex: plan.length + 1, claimId: c.claimId, condition: second, isPractice: false }));
+  const add = (claimId: string, condition: Condition, isPractice: boolean) =>
+    plan.push({ trialIndex: plan.length + 1, claimId, condition, isPractice });
+  if (claims.practice[0]) add(claims.practice[0].claimId, first, true);
+  firstSet.forEach((c) => add(c.claimId, first, false));
+  if (claims.practice[1]) add(claims.practice[1].claimId, second, true);
+  secondSet.forEach((c) => add(c.claimId, second, false));
   return plan;
 }
 
@@ -51,7 +82,7 @@ async function checkParticipant(participantId: string): Promise<number> {
   }
 
   //decisions: one per planned trial, matching the plan
-  const plan = buildPlan(session.condition_order, session.set_order);
+  const plan = buildPlan(session.condition_order, session.set_order, participantId);
   const [decisions] = await pool.query<RowDataPacket[]>(
     "SELECT * FROM decisions WHERE participant_id = ? ORDER BY trial_index, started_at", [participantId]
   );

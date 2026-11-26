@@ -12,6 +12,8 @@ Test participant **P84** (group 4: Browser with Set B, then FactTrace with Set A
 
 Earlier tests (P93–P96) also covered all four counterbalanced groups, the questionnaires, the logging fields and the source counting.
 
+**Note:** these tests ran before Ayesha's PR #24 was merged. That PR changed the trial order (each tool's practice trial now comes right before its block, and claims are shuffled per participant), the group allocation (block-randomised list) and connected the ESP32 decision buttons to the app. The questionnaire timing and `check-participant` were updated to the new order; the complete session should be run once more with the merged app and the ESP32.
+
 ## Usability and study problems
 
 ### Fixed
@@ -31,7 +33,7 @@ Earlier tests (P93–P96) also covered all four counterbalanced groups, the ques
 
 | # | Problem | Why it matters | Suggestion |
 |---|---|---|---|
-| 9 | **The ESP32 is not connected to the app** | The light stays off and every button press is rejected, so no device data is saved | Decide whether the device buttons or the on-screen buttons are the official decision input, then connect the app (see the task 6 note) |
+| 9 | ~~The ESP32 is not connected to the app~~ **Resolved by PR #24** | The app now starts a device trial for every study trial, and the ESP32 buttons are the decision input in both conditions | Test with the physical device in the pilot |
 | 10 | **Browser time includes typing in the sources** (name and URL for each source) | Typing a URL takes 10–20 s, so the browser condition looks slower for a reason that is not about the tool | Since the browser source count now comes from the screen recording, let participants skip the source list, or list sources after the decision (the timer already stops at the decision) |
 | 11 | Browser trials need **Start Trial** and then **Start Task** | Two "start" buttons in a row; participants may wonder whether the task has started | Remove Start Task in study trials (the timer already starts at Start Trial) |
 | 12 | Researcher text is shown to the participant | The study screen says "Show this claim to the participant…" and "Verify the saved rows in MySQL"; the browser screen shows "Server submission requires a valid participant code" and an **Export Local Evaluation JSON** button | Hide researcher notes and the export button during study trials, or keep the phone with the researcher between trials |

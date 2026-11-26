@@ -22,7 +22,7 @@ Codes already used for testing: P90, P93–P96, P99.
 - [ ] Expo: `cd mobile` then `npx expo start --clear` (`--clear` makes sure the phone gets the latest code)
 - [ ] Study phone: FactTrace open in Expo Go, Do Not Disturb on, Screen Recording in Control Center, enough storage
 - [ ] Printed claim cards for the FactTrace trials (the participant scans these with the camera)
-- [ ] ESP32: only if the app has been connected to the device (see the task 6 note). Otherwise skip it in this pilot.
+- [ ] ESP32: powered on and connected to the laptop's network; the app shows it as connected before the first trial
 - [ ] Consent form ready, stored separately from the study data
 - [ ] Someone taking notes on problems (see the log at the end)
 
@@ -32,10 +32,10 @@ Codes already used for testing: P90, P93–P96, P99.
    - [ ] Check the group line at the top of the form matches the table above.
 2. The participant fills in the information form → **Save & Start Study**.
 3. **Start the screen recording.**
-4. The participant does all 16 trials:
+4. The participant does all 16 trials (each tool: one practice trial, then 7 claims), deciding on the ESP32 buttons:
    - FactTrace trials: scan the printed card, check the text, open sources, decide, answer the sharing question.
    - Browser trials: **Start Task**, search in the phone's browser, list the sources used, decide, answer the sharing question.
-5. After trial 9: SUS + NASA-TLX about the first tool. After trial 16: about the second tool.
+5. After the first tool's block (trial 8): SUS + NASA-TLX about that tool. After trial 16: about the second tool.
 6. **Study complete** → **stop the screen recording.**
 7. Copy the recording to the laptop by cable, name it `P81_browser.mp4`, and delete it from the phone (including Recently Deleted).
 
@@ -66,7 +66,7 @@ After all pilot sessions: `npm run export` and look at `exports/trials.csv` to c
 
 | Issue | What happens | Status |
 |---|---|---|
-| ESP32 not connected to the app | The light stays off and presses are rejected; `check-participant` warns "no ESP32 button presses" | Needs a decision and an app change (task 6) |
+| ESP32 offline or a press not recorded | The app shows the device as offline; the researcher can switch that trial to the on-screen buttons; `check-participant` warns about missing presses | Check the device's Wi-Fi and server address before the session |
 | Retake | Each Retake adds another camera screen behind the current one | Small fix, not done yet |
 | Browser has an extra "Start Task" tap | One more step than FactTrace; timing is not affected | Note it, decide if it should go |
 | Expo shows old code | Changes don't appear on the phone | Restart with `npx expo start --clear` |
