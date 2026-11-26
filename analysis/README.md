@@ -17,7 +17,7 @@ python analysis/inferential.py        # or: python analysis/inferential.py path/
 
 What it does, in order:
 
-1. **FactTrace vs browser** for each DV (truth discernment is the primary outcome; accuracy, Unsure rate, sharing discernment, time, sources, SUS, raw TLX). Shapiro-Wilk on the paired differences decides the test: paired t-test (Cohen's dz) if normal, else Wilcoxon signed-rank (rank-biserial r). Mean difference with a 95% CI. The primary DV is tested at alpha .05; the secondary DVs are Holm-corrected as one family (edit `HOLM_FAMILY` if the written hypotheses define it differently).
+1. **FactTrace vs browser** for each hypothesis: H1a truth discernment (primary), H1b time, H1c source use, H1d sharing discernment, H1e SUS, H1f raw TLX; accuracy and Unsure rate are reported as supporting measures. Shapiro-Wilk on the paired differences decides the test: paired t-test (Cohen's dz) if normal, else Wilcoxon signed-rank (rank-biserial r). Mean difference with a 95% CI. All tests are two-sided at alpha .05. H1a is tested on its own; H1b to H1f are Holm-corrected as one family (`HOLM_FAMILY`); the supporting measures are labelled exploratory.
 2. **Carry-over checks**: the FactTrace-minus-browser difference compared between order groups (order x tool) and between the set used with FactTrace (set x tool). Welch t or Mann-Whitney U.
 3. **First-block analysis**: block 1 only, between subjects. Report it if step 2 shows an order effect.
 4. **Linear mixed-effects models** on trial-level data: tool fixed, participant and claim as crossed random intercepts, order, block and claim set as covariates (treatment, sequence and period: the standard crossover model). In the trust model, `tool_app:is_true` is the change in truth discernment.

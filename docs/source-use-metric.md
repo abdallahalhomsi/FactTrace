@@ -100,7 +100,7 @@ On Android: pull down Quick Settings → **Screen record** (add the tile if it i
 
 Run from the `backend` folder while MySQL is running:
 
-1. `npm run coding -- sheet` creates `exports/coding/browser_coding_coder1.csv` and `..._coder2.csv`. They list every browser study trial with its claim and the clock times of trial start and decision, so the coder can find it in the video. The participant's self-reported count is not shown, so it cannot influence the coder.
+1. `npm run coding -- sheet` creates `exports/coding/browser_coding_coder1.csv` and `..._coder2.csv`. They list every browser study trial with its claim and the clock times of trial start and decision, so the coder can find it in the video. They show no answers and no participant decisions, so nothing can influence the count.
 2. Each coder fills in `source_count` (and `notes` when unsure) in their own sheet, using the rules below, without talking to the other coder.
 3. `npm run coding -- import coder1 path/to/sheet.csv`, then the same for `coder2`.
 4. `npm run coding -- agreement` shows exact agreement, mean difference, ICC(2,1) and the list of trials where the coders disagree.

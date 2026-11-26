@@ -70,7 +70,10 @@ Study features (FactTrace vs. browser search):
 - SUS and NASA-TLX after each block, saved and scored by the backend
 - Logging of every trial: start, end and duration, claim, decision, sharing intention, sources opened, correctness, match result, OCR errors and retakes, app version
 - Source-use measurement: counted by the app in the FactTrace condition, counted from screen recordings by two coders in the browser condition
-- ESP32 decision device: Trust / Unsure / Don't Trust buttons in both conditions, with an on-screen fallback for the researcher
+- ESP32 decision device: Trust / Unsure / Don't Trust buttons in both conditions, Undo within 5 s of a press, and an on-screen fallback for the researcher
+- No verdict anywhere in the app: match strength is shown as text similarity ("not a truth rating") in one neutral colour, every result carries the dataset notice, and a published Fact Check on a no match is shown as a source without its rating during the study
+- Debrief at the end of the session: the right answers, with a reason and a source for each claim
+- QR markers on claim cards can be scanned outside study trials (Camera → QR code)
 
 The complete study session (16 trials and both questionnaires) has also been tested end to end on the web version of the app.
 
@@ -147,21 +150,24 @@ FactTrace/
 │   └── seed_claims.sql
 │
 ├── docs/
-│   ├── api-contract.md
-│   └── architecture.md
-│
-├── docs/ (other study documents)
-│   ├── claim-set-gold-standard.md
-│   ├── device-signal-spec.md
-│   ├── hci-accessibility-review.md
-│   ├── source-use-metric.md
-│   ├── pilot-checklist.md
-│   ├── system-test-pp2.md
-│   └── data-privacy.md
+│   ├── api-contract.md            endpoints and data formats
+│   ├── architecture.md            hardware → software → interface
+│   ├── device-signal-spec.md      ESP32 light and button behaviour
+│   ├── claim-set-gold-standard.md how the study claims were chosen and labelled
+│   ├── source-use-metric.md       source-use definition and video coding
+│   ├── data-privacy.md            data handling
+│   ├── pilot-checklist.md         running a session
+│   ├── system-test-pp2.md         system test and open issues
+│   └── hci-accessibility-review.md
 │
 ├── firmware/
-│   ├── facttrace_device/
-│   └── test/
+│   ├── facttrace_device/          ESP32 sketch (secrets.h is gitignored)
+│   ├── test/                      light-pattern tests
+│   └── wokwi/                     simulator wiring
+│
+├── analysis/
+│   ├── inferential.py             tests for the report
+│   └── requirements.txt
 │
 ├── docker-compose.yml
 ├── README.md
@@ -711,7 +717,7 @@ The result is labelled:
 POSSIBLE MATCH
 ```
 
-with the message "FactTrace found evidence that may be related to your claim. Review the sources carefully." The user can then review the sources and make a decision.
+with the message "FactTrace found evidence that may be related to your claim. Check that it is the claim you saw, and review the sources carefully." The user can then review the sources and make a decision.
 
 ---
 
@@ -1010,11 +1016,7 @@ vs.
 Standard Browser Search
 ```
 
-Evaluation measures include:
-
-- Verification accuracy
-- Verification time
-- Source use
+Evaluation measures: truth discernment (with accuracy and Unsure rate), verification time, source use, sharing discernment, SUS and raw NASA-TLX (see the tables below).
 
 ## Study Design
 
@@ -1028,7 +1030,7 @@ Evaluation measures include:
 | Measure | How it is measured |
 |---|---|
 | Truth discernment | Trust rate for true claims minus trust rate for false and misleading claims; accuracy and Unsure rate are also reported |
-| Verification time | From Start Trial to the decision on the ESP32 buttons (`duration_ms`), the same in both conditions; the exact press time is also stored in `hardware_events` |
+| Verification time | From Start Trial to the final press on the ESP32 buttons, on the server clock (`hardware_events`, t3 − t0), the same in both conditions; `duration_ms` (the app's own time) is used only for a trial without a press |
 | Source use | Distinct evidence sources inspected before the decision (`docs/source-use-metric.md`); in the browser condition, counted from screen recordings by two coders |
 | Sharing intention | 1–7 rating of how likely the participant would share the claim |
 | Usability | SUS after each block |
@@ -1036,16 +1038,16 @@ Evaluation measures include:
 
 ## Hypotheses
 
-One H0 / H1 pair per dependent variable, comparing the two tools within participants:
+One H0 / H1 pair per dependent variable, comparing the two tools within participants. H1 states the expected direction; every test is two-sided at α = .05 (more conservative), truth discernment is the primary outcome, and the other five are Holm-corrected as one family (`analysis/inferential.py`).
 
-| DV | H0 | H1 |
-|---|---|---|
-| Truth discernment | Discernment does not differ between FactTrace and browser search | Discernment differs between FactTrace and browser search |
-| Verification time | Time to decision does not differ between the tools | Time to decision differs between the tools |
-| Source use | The number of distinct sources inspected does not differ between the tools | The number of distinct sources inspected differs between the tools |
-| Sharing intention | Sharing discernment does not differ between the tools | Sharing discernment differs between the tools |
-| Usability (SUS) | SUS scores do not differ between the tools | SUS scores differ between the tools |
-| Workload (NASA-TLX) | Raw TLX scores do not differ between the tools | Raw TLX scores differ between the tools |
+| | DV | H0 | H1 (expected direction) |
+|---|---|---|---|
+| H1a | Truth discernment | Discernment does not differ between the tools | FactTrace gives higher truth discernment |
+| H1b | Verification time | Time to decision does not differ | FactTrace reduces time to decision |
+| H1c | Source use | Distinct sources inspected do not differ | Source use differs (no direction expected) |
+| H1d | Sharing discernment | Sharing discernment does not differ | FactTrace gives higher sharing discernment |
+| H1e | Usability (SUS) | SUS does not differ | FactTrace has higher SUS |
+| H1f | Workload (NASA-TLX) | Raw TLX does not differ | FactTrace has lower raw TLX |
 
 ## Materials
 

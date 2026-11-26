@@ -712,10 +712,18 @@ async function main() {
           ELSE d.sources_opened_count
         END AS sources_opened_count,
         (d.study_condition = 'browser' AND bc.source_count IS NULL) AS browser_self_report_only,
-        d.duration_ms,
+        -- time to decision: the device's server-clock time (trial start to the final press) when there
+        -- was a press, else the app's own time; the same rule as analysis/inferential.py
+        COALESCE(
+          TIMESTAMPDIFF(MICROSECOND, h.trial_started_at, h.received_at) DIV 1000,
+          d.duration_ms
+        ) AS duration_ms,
         d.correct_answer,
         d.was_correct
       FROM decisions d
+      LEFT JOIN hardware_events h
+        ON h.participant_id = d.participant_id
+        AND h.trial_index = d.trial_index
       LEFT JOIN browser_source_coding bc
         ON bc.participant_id = d.participant_id
         AND bc.trial_index = d.trial_index
@@ -1050,7 +1058,7 @@ async function main() {
   );
 
   console.log(
-    "Verification time = mean duration_ms converted to seconds",
+    "Verification time = mean time from trial start to the final press, in seconds (device clock; app time if no press)",
   );
 
   console.log(
