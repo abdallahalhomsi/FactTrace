@@ -422,8 +422,9 @@ export default function EvidenceDetailsScreen({
                   : '—'}
               </Text>
 
+              {/* text similarity to a dataset claim, not a truth rating */}
               <Text style={styles.heroStatLabel}>
-                Match
+                Similarity
               </Text>
             </View>
 

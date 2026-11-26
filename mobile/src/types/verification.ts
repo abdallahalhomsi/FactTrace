@@ -31,6 +31,10 @@ export type VerificationResult = {
   // only sent by /api/verify on a no match, once the fact-check search runs
   factCheck?: {
     found: boolean;
+    rating?: string; //the fact-checker's own rating, shown only outside study trials
+    publisher?: string;
+    url?: string;
+    reviewDate?: string;
   };
 
   provenanceSignals?: {

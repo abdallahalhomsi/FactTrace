@@ -47,7 +47,8 @@ interface DecisionRow {
     string;
 
   sources_opened_count:
-    number;
+    number
+    | null; //null: browser trial without a final screen-recording count yet
 
   browser_self_report_only:
     number
@@ -455,9 +456,11 @@ function calculateMetrics(
     trials
       .map(
         row =>
-          Number(
-            row.sources_opened_count,
-          ),
+          row.sources_opened_count === null
+            ? Number.NaN //browser trial not coded yet
+            : Number(
+                row.sources_opened_count,
+              ),
       )
       .filter(
         value =>
@@ -702,10 +705,10 @@ async function main() {
         d.decision,
         d.sharing_intention,
         -- browser source use comes from the screen-recording count agreed by the two coders;
-        -- the participant's self-report is only used while a trial has no final count yet
+        -- study browser trials no longer ask participants to type their sources, so an uncoded
+        -- browser trial has no count yet (NULL) and is left out of source use until it is coded
         CASE
-          WHEN d.study_condition = 'browser' AND bc.source_count IS NOT NULL
-            THEN bc.source_count
+          WHEN d.study_condition = 'browser' THEN bc.source_count
           ELSE d.sources_opened_count
         END AS sources_opened_count,
         (d.study_condition = 'browser' AND bc.source_count IS NULL) AS browser_self_report_only,
@@ -1063,7 +1066,7 @@ async function main() {
 
   if (browserWithoutVideoCount > 0) {
     console.log(
-      `WARNING: ${browserWithoutVideoCount} browser study trial(s) have no final video count yet, so their source use is the participant's self-report. Run "npm run coding -- agreement".`,
+      `WARNING: ${browserWithoutVideoCount} browser study trial(s) have no final video count yet, so they are left out of source use. Run "npm run coding -- agreement".`,
     );
   }
 

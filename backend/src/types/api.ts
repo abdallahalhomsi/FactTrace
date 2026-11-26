@@ -38,6 +38,7 @@ export type ErrorCode =
   | "CLAIM_NOT_FOUND" //404: no claim with that id
   | "NOT_FOUND" //404: the url does not exist
   | "DEVICE_CONFLICT" //409: button press that cannot be accepted for the current trial
+  | "SESSION_NOT_FINISHED" //409: the debrief was asked for before every study claim had a decision
   | "INTERNAL_ERROR"; //500: something unexpected broke on the server
 
 //---------- claims, sources and evidence ----------

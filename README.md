@@ -766,6 +766,7 @@ POST /api/decisions
 POST /api/sessions
 GET  /api/study/claims
 GET  /api/study/assignment?participantId=P07
+GET  /api/study/debrief?participantId=P07
 POST /api/questionnaires
 
 GET  /api/device/state?deviceId=dev1
@@ -773,6 +774,7 @@ GET  /api/device/status
 POST /api/device/trial
 POST /api/device/end
 POST /api/device/decision
+POST /api/device/undo
 
 POST /api/claims/match
 GET  /api/claims/:id
@@ -780,7 +782,7 @@ GET  /api/claims/:id
 
 `GET /api/study/claims` returns the practice claims and the two study sets (A and B) in order, without answers. The app uses it for the participant flow and sends each `claimId` to `/api/decisions` in both conditions.
 
-`GET /api/study/assignment` returns a participant's counterbalanced group (tool order and claim-set order); the app uses it so the order is never chosen by hand. `POST /api/questionnaires` saves the SUS and NASA-TLX answers after each block. The `/api/device/...` endpoints are used by the ESP32 device and the app (see `docs/device-signal-spec.md`).
+`GET /api/study/assignment` returns a participant's counterbalanced group (tool order and claim-set order); the app uses it so the order is never chosen by hand. `POST /api/questionnaires` saves the SUS and NASA-TLX answers after each block. `GET /api/study/debrief` returns the right answer, a one-line reason and the main source for every claim the participant saw, and only once every study claim has a decision (409 `SESSION_NOT_FINISHED` before that); the app shows it on the Study complete screen. The `/api/device/...` endpoints are used by the ESP32 device and the app (see `docs/device-signal-spec.md`).
 
 ---
 
@@ -1057,9 +1059,9 @@ One H0 / H1 pair per dependent variable, comparing the two tools within particip
 | Step | FactTrace | Browser |
 |---|---|---|
 | 1 | "Had you seen or heard this claim before?" (study trials only) | same |
-| 2 | Start Trial | Start Trial, then Start Task |
+| 2 | Start Trial | same |
 | 3 | Scan the claim card and check the text | Search in the phone's browser |
-| 4 | Open sources (View source) | Open pages and list each source used |
+| 4 | Open sources (View source) | Open pages (counted from the screen recording) |
 | 5 | Decide on the ESP32 buttons: Trust, Unsure or Don't Trust | same |
 | 6 | Sharing question (1–7) | same |
 
@@ -1083,8 +1085,6 @@ The step-by-step version for researchers is in `docs/pilot-checklist.md`.
 
 ## Known Limitations
 
-- Browser verification time includes typing in the sources used.
-- Browser trials have one more step (Start Task) than FactTrace trials.
 - Phone camera scanning, the physical ESP32 and the screen recording have not yet been tested with the complete study flow; the pilot covers them.
 
 The full list of tested and open issues is in `docs/system-test-pp2.md`.

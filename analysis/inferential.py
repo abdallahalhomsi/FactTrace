@@ -87,13 +87,13 @@ def load(folder: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                             if "undo_count" in trials else 0)
     # source use: FactTrace counts the sources opened in the app; the browser condition uses the count agreed by
     # two coders from the screen recording (docs/source-use-metric.md), the same rule as analyze-study.ts;
-    # the participant's own list is used only while a browser trial has no final count yet (reported below)
+    # study browser trials no longer ask participants to list sources, so an uncoded trial is left out (reported below)
     app_sources = pd.to_numeric(trials["sources_opened_count"], errors="coerce")
     video_sources = (pd.to_numeric(trials["browser_video_source_count"], errors="coerce")
                      if "browser_video_source_count" in trials else pd.Series(np.nan, index=trials.index))
     is_browser = trials["study_condition"] == "browser"
     trials["browser_self_report_only"] = is_browser & video_sources.isna()
-    trials["sources"] = np.where(is_browser & video_sources.notna(), video_sources, app_sources)
+    trials["sources"] = np.where(is_browser, video_sources, app_sources)
 
     # block 1 is the tool the participant used first
     first_tool = np.where(trials["condition_order"] == "app_first", "app", "browser")
@@ -369,8 +369,8 @@ def main() -> None:
           f"({int((complete == 2).sum())} with both conditions). Study trials: {len(trials)}. Practice excluded.")
     missing_coding = int(trials["browser_self_report_only"].sum())
     if missing_coding:
-        print(f"WARNING: {missing_coding} browser trials have no final screen-recording source count yet; their "
-              "self-reported count is used. Code all recordings (npm run coding) before the final analysis.")
+        print(f"WARNING: {missing_coding} browser trials have no final screen-recording source count yet, so they are "
+              "left out of source use. Code all recordings (npm run coding) before the final analysis.")
     undos = trials.groupby("tool")["undo_count"].sum()
     print("Undone presses (slips corrected with Undo): " +
           ", ".join(f"{'FactTrace' if tool == 'app' else 'browser'} {int(n)}" for tool, n in undos.items()))

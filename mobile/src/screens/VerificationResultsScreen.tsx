@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -53,50 +54,68 @@ type MatchTheme = {
   label: string;
   title: string;
   description: string;
+  icon: 'ellipse' | 'contrast' | 'ellipse-outline';
   dotColor: string;
   badgeBackground: string;
   badgeBorder: string;
   badgeText: string;
 };
 
+//match states use one neutral blue, like the device light (blue for match results, never green or red),
+//and differ by shape and label, so colour never carries the meaning alone (WCAG 1.4.1);
+//the shapes follow the light patterns: filled = steady (strong), half = slow blink (possible), ring = double blink (none)
 function getMatchTheme(status: MatchStatus): MatchTheme {
+  const neutral = {
+    dotColor: '#9CCBFF',
+    badgeBackground: 'rgba(156, 203, 255, 0.14)',
+    badgeBorder: 'rgba(156, 203, 255, 0.32)',
+    badgeText: '#DCEBFF',
+  };
+
   switch (status) {
     case 'strong_match':
       return {
         label: 'STRONG MATCH',
+        icon: 'ellipse',
         title: 'Relevant evidence found',
         description:
           'FactTrace found a closely matching claim and relevant evidence for you to review.',
-        dotColor: '#57D394',
-        badgeBackground: 'rgba(55, 201, 129, 0.13)',
-        badgeBorder: 'rgba(102, 230, 166, 0.24)',
-        badgeText: '#B9F3D5',
+        ...neutral,
       };
 
     case 'weak_match':
       return {
         label: 'POSSIBLE MATCH',
+        icon: 'contrast',
         title: 'Possible evidence found',
         description:
-          'FactTrace found evidence that may be related to your claim. Review the sources carefully.',
-        dotColor: '#F7B955',
-        badgeBackground: 'rgba(247, 185, 85, 0.13)',
-        badgeBorder: 'rgba(247, 185, 85, 0.28)',
-        badgeText: '#FFE1A6',
+          'FactTrace found evidence that may be related to your claim. Check that it is the claim you saw, and review the sources carefully.',
+        ...neutral,
       };
 
     case 'no_match':
       return {
         label: 'NO MATCH',
+        icon: 'ellipse-outline',
         title: 'No close match found',
         description:
           'FactTrace could not find a closely matching claim. Try changing the wording or scanning another claim.',
-        dotColor: '#AAB8C7',
-        badgeBackground: 'rgba(170, 184, 199, 0.13)',
-        badgeBorder: 'rgba(170, 184, 199, 0.25)',
-        badgeText: '#DCE5EE',
+        ...neutral,
       };
   }
+}
+
+//"2024-03-05T00:00:00Z" → "5 Mar 2024"; anything unreadable is shown as sent
+function formatFactCheckDate(value: string): string {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
 }
 
 export default function VerificationResultsScreen({
@@ -456,6 +475,26 @@ export default function VerificationResultsScreen({
         ? { evidenceTrackingKey }
         : {}),
     });
+  };
+
+  //opens the fact-check article and counts it as an opened source, like opening an evidence source
+  const openFactCheck = async () => {
+    const url = result.factCheck?.url;
+
+    if (!url || isWalkthrough) return;
+
+    if (evidenceTrackingKey) {
+      recordEvidenceSourceOpened(
+        evidenceTrackingKey,
+        `factcheck:${url}`,
+      );
+    }
+
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn('Could not open the fact-check link.', error);
+    }
   };
 
   const handleViewFullEvidence = () => {
@@ -840,14 +879,11 @@ export default function VerificationResultsScreen({
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.matchDot,
-                    {
-                      backgroundColor:
-                        matchTheme.dotColor,
-                    },
-                  ]}
+                <Ionicons
+                  name={matchTheme.icon}
+                  size={12}
+                  color={matchTheme.dotColor}
+                  style={styles.matchDot}
                 />
                 <Text
                   style={[
@@ -859,12 +895,16 @@ export default function VerificationResultsScreen({
                 </Text>
               </View>
 
-              <View style={styles.matchScore}>
+              <View
+                style={styles.matchScore}
+                accessible
+                accessibilityLabel={`${matchScore} text similarity, not a truth rating`}
+              >
                 <Text style={styles.matchScoreNumber}>
                   {matchScore}
                 </Text>
                 <Text style={styles.matchScoreLabel}>
-                  match
+                  text similarity
                 </Text>
               </View>
             </View>
@@ -876,6 +916,12 @@ export default function VerificationResultsScreen({
               {result.explanation ||
                 matchTheme.description}
             </Text>
+
+            {result.matchScore !== undefined && (
+              <Text style={styles.matchScoreNote}>
+                The percentage shows how similar the wording is to a claim in the dataset. It is not a truth rating.
+              </Text>
+            )}
 
             {result.matchedClaim && (
               <View style={styles.matchedClaimBox}>
@@ -889,6 +935,65 @@ export default function VerificationResultsScreen({
             )}
           </LinearGradient>
         </View>
+
+        {/* DATASET NOTICE: required by Dr. Göktaş; a database match is not independent verification */}
+        {result.datasetNotice ? (
+          <View
+            style={styles.noticeBox}
+            accessible
+            accessibilityLabel={result.datasetNotice}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color={COLORS.blue}
+            />
+            <Text style={styles.noticeText}>
+              {result.datasetNotice}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* FACT CHECK: only on a no match, when Google Fact Check found a published review */}
+        {result.matchStatus === 'no_match' &&
+        result.factCheck?.found &&
+        result.factCheck.url ? (
+          <View style={styles.factCheckCard}>
+            <Text style={styles.factCheckLabel}>
+              PUBLISHED FACT-CHECK FOUND
+            </Text>
+            <Text style={styles.factCheckPublisher}>
+              {result.factCheck.publisher ?? 'A fact-checking organisation'}
+              {result.factCheck.reviewDate
+                ? ` • ${formatFactCheckDate(result.factCheck.reviewDate)}`
+                : ''}
+            </Text>
+            {/* the rating is the fact-checker's verdict, so study trials show the source only, like every evidence card */}
+            {!studyContext && result.factCheck.rating ? (
+              <Text style={styles.factCheckRating}>
+                Rating given by {result.factCheck.publisher ?? 'the fact-checker'}: “{result.factCheck.rating}”
+              </Text>
+            ) : null}
+            <Text style={styles.factCheckNote}>
+              Found by Google Fact Check search, outside FactTrace’s curated dataset.
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="link"
+              accessibilityLabel={`Open the fact-check by ${result.factCheck.publisher ?? 'the fact-checker'}`}
+              style={styles.factCheckButton}
+              onPress={() => void openFactCheck()}
+            >
+              <Ionicons
+                name="open-outline"
+                size={18}
+                color={COLORS.white}
+              />
+              <Text style={styles.factCheckButtonText}>
+                Open fact-check
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* EVIDENCE HEADER */}
         <View style={styles.sectionHeader}>
@@ -1609,13 +1714,10 @@ const createStyles = (COLORS: ThemeColors, isDark: boolean) => StyleSheet.create
     paddingVertical: 6,
   },
   matchDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
     marginRight: 6,
   },
   matchBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.7,
   },
@@ -1629,8 +1731,78 @@ const createStyles = (COLORS: ThemeColors, isDark: boolean) => StyleSheet.create
   },
   matchScoreLabel: {
     marginTop: -1,
-    color: '#AFC3D8',
-    fontSize: 10,
+    color: '#C7D6E6',
+    fontSize: 12,
+  },
+  matchScoreNote: {
+    marginTop: 10,
+    color: '#C7D6E6',
+    fontSize: 12.5,
+    lineHeight: 17,
+    maxWidth: '96%',
+  },
+  noticeBox: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  noticeText: {
+    flex: 1,
+    color: COLORS.textSecondary,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  factCheckCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    gap: 6,
+  },
+  factCheckLabel: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  factCheckPublisher: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  factCheckRating: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  factCheckNote: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  factCheckButton: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.blue,
+  },
+  factCheckButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   matchTitle: {
     marginTop: 16,

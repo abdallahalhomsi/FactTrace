@@ -19,18 +19,18 @@ One definition for both conditions, so FactTrace and the browser baseline can be
 | Counts as inspected | Tapping **View source** on a source card (opens that source's details), or **Open Original Source** | Opening a web page with content about the claim |
 | Does not count | Seeing the source cards on the results screen | Search result pages, or seeing a result title or snippet without opening it |
 | Distinct by | Source ID (`src_39a`) | Article or page (see the coding rules below) |
-| Recorded by | The app, automatically | The participant lists sources in the app (self-report) **and** the screen recording (coded by two people) |
-| Stored in | `decisions.sources_opened`, `sources_opened_count` | Self-report: `decisions.sources_opened`, `sources_opened_count`. Video count: `browser_source_coding` (coder1, coder2, final) |
+| Recorded by | The app, automatically | The screen recording, coded by two people. Study trials no longer ask participants to list sources in the app (typing them made browser trials slower); outside the study the list still works |
+| Stored in | `decisions.sources_opened`, `sources_opened_count` | `browser_source_coding` (coder1, coder2, final); `decisions.sources_opened` stays empty in study browser trials |
 
 **View Full Evidence is hidden during study trials.** It shows every source in full without opening any of them one by one, which would make the FactTrace count too low. Outside the study the button works as before.
 
 ## Which browser number is used
 
-The **screen-recording count** is the measure for the browser condition, because the self-report can miss pages or list pages that were not really read. The self-reported count is kept to check how well the two agree.
+The **screen-recording count** is the only measure for the browser condition. A self-report can miss pages or list pages that were not really read, and typing each source took 10 to 20 s, which made the browser condition look slower for a reason that is not about the tool (system test #10). A browser trial without a final count is left out of source use, and both analysis scripts warn about it.
 
 ## How it works: one participant from start to finish
 
-In the browser condition the participant leaves the app and searches in the phone's browser, so the app cannot see which websites they open. It only knows what they type into the sources list, and people forget or over-report. So we record the phone screen and count the sources from the video.
+In the browser condition the participant leaves the app and searches in the phone's browser, so the app cannot see which websites they open. So we record the phone screen and count the sources from the video.
 
 **Once, before the study (about 5 minutes):** add Screen Recording to Control Center on the study phone and turn on Do Not Disturb (details in the next section).
 

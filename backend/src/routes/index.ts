@@ -12,7 +12,7 @@ import { postVerify } from "../controllers/verify.controller";
 import { imageUpload } from "../middleware/upload"; //reads the photo before the ocr controller runs
 import { postSession } from "../controllers/sessions.controller";
 import { postQuestionnaire } from "../controllers/questionnaires.controller"; //SUS and NASA-TLX after each block
-import { getStudyAssignment, getStudyClaims } from "../controllers/study.controller"; //study claims and group assignment
+import { getDebrief, getStudyAssignment, getStudyClaims } from "../controllers/study.controller"; //study claims, group assignment and debrief
 import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision, postUndo } from "../controllers/device.controller"; //esp32 device
 
 export const router = Router();
@@ -31,6 +31,7 @@ router.post("/sessions", postSession);
 router.post("/questionnaires", postQuestionnaire); //SUS and NASA-TLX after each block
 router.get("/study/claims", getStudyClaims); //practice claims and the two study sets, in order
 router.get("/study/assignment", getStudyAssignment); //counterbalanced group for a participant
+router.get("/study/debrief", getDebrief); //right answers, only after the participant's session is finished
 
 router.get("/device/state", getState); //esp32 reads the light state
 router.get("/device/status", getStatus); //app checks the button press and whether the device is connected
