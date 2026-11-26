@@ -78,7 +78,13 @@ def load(folder: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         trials["is_true"] == 1, trials["decision"] == "trust", trials["decision"] == "dont_trust"
     ).astype(int)
     trials["sharing"] = pd.to_numeric(trials["sharing_intention"], errors="coerce")
-    trials["time_s"] = pd.to_numeric(trials["duration_ms"], errors="coerce") / 1000
+    # time to decision: the device's server-clock time (t3 - t0) when there was a press, else the app's own time
+    app_time = pd.to_numeric(trials["duration_ms"], errors="coerce")
+    device_time = (pd.to_numeric(trials["device_time_to_decision_ms"], errors="coerce")
+                   if "device_time_to_decision_ms" in trials else pd.Series(np.nan, index=trials.index))
+    trials["time_s"] = device_time.fillna(app_time) / 1000
+    trials["undo_count"] = (pd.to_numeric(trials["undo_count"], errors="coerce").fillna(0)
+                            if "undo_count" in trials else 0)
     trials["sources"] = pd.to_numeric(trials["sources_opened_count"], errors="coerce")
 
     # block 1 is the tool the participant used first
@@ -353,6 +359,9 @@ def main() -> None:
     print("=" * 78)
     print(f"Participants: {table['participant_id'].nunique()} "
           f"({int((complete == 2).sum())} with both conditions). Study trials: {len(trials)}. Practice excluded.")
+    undos = trials.groupby("tool")["undo_count"].sum()
+    print("Undone presses (slips corrected with Undo): " +
+          ", ".join(f"{'FactTrace' if tool == 'app' else 'browser'} {int(n)}" for tool, n in undos.items()))
     groups = table.drop_duplicates("participant_id").groupby(["condition_order", "set_order"]).size()
     print("Group sizes: " + ", ".join(f"{o}/{s}: {n}" for (o, s), n in groups.items()) + "\n")
 

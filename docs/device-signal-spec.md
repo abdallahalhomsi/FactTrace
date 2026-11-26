@@ -40,9 +40,12 @@ In the browser condition the light stays on `ready` for the whole trial, because
 |---|---|---|---|
 | Press recorded (server answers 201) | White | One flash: on 300, then off (`idle`) | "You chose Trust / Unsure / Don't trust. Recorded." (the choice, never right or wrong) |
 | Press not recorded (server answers 409: no trial, result not ready, already answered, wrong trial) | White, dim | Three short blinks: on 100, off 233, three times (3 per second), then back to the previous state | Nothing; the experimenter sees it in the app status |
+| Undo on the phone, within 5 s of a press (a slip such as the wrong button) | Back to what it showed before the press | The pattern of that state | "You chose …. Recorded." with "Wrong button? Undo (5)" counting down; after an undo, "Press a button on the device" again |
 | Buzzer (not used in the first build, decided 26 Nov) | — | If added later: one short beep (100) on a recorded press, the same for all three buttons | — |
 
 The same feedback follows every button, so the feedback cannot hint at the answer. The correct answers are revealed only at the debrief.
+
+This feedback is **visibility of system status** (Nielsen #1): the participant sees that the press was registered and as which button. **Undo** covers user control and error recovery (Nielsen #3 and #5): a slip is corrected before the decision is final, instead of being recorded as a real decision. The app hands the decision on only after the 5 s window; the backend keeps the window 1 s longer for the network. An undone press is deleted, the next press becomes t3, and `undo_count` on the press records how many presses were undone in that trial (reported as a slip count). Right or wrong is never shown after a press: that would be a verdict, and feedback between trials would teach participants and confound the within-subjects comparison.
 
 ## States for the experimenter (not part of the task)
 
@@ -58,7 +61,7 @@ The same feedback follows every button, so the feedback cannot hint at the answe
 | Device polls `GET /api/device/state` | Every 300 ms | Light change within about 0.3 s of the server state change |
 | Device online in the app | Poll within the last 2000 ms (`ONLINE_WINDOW_MS`) | Shows a disconnected device before the trial starts |
 | Button debounce | 50 ms | Ignores contact bounce |
-| One decision per trial | First accepted press only; the server rejects later presses (409) | One t3 per trial |
+| One decision per trial | First accepted press only; the server rejects later presses (409) unless the press is undone in the app within 5 s | One t3 per trial: the final press |
 | Press sent as | `POST /api/device/decision` `{ deviceId, trialIndex, decision }` with the trialIndex from the last poll | A press is tied to the trial the participant saw |
 | Retry | Retry on network error only, never on 409 | A 409 means the press cannot be used |
 | Timestamps | t0–t3 taken by the server clock | All four times on one clock |
@@ -92,5 +95,6 @@ Sabancı University students (18+), with normal or corrected vision. Colour visi
 - **What if the light were grey (or another colour) instead of blue?** Meaning is carried by the pattern and the app label, not by the colour, so another neutral colour would work. We avoid green and red because they read as true and false, and grey on an LED is hard to tell apart from dim white.
 - **What if a strong match lit green?** A false claim with a strong match would then show green, which reads as "true". That would be a verdict, and a wrong one.
 - **What if the buttons were coloured?** Green Trust and red Don't trust would hint at an answer and clash with the light. Neutral buttons with printed labels avoid both.
+- **What if the participant presses the wrong button?** They tap "Wrong button? Undo" on the phone within 5 s; the light returns to the state before the press and they press again. The undo is counted (`undo_count`). Pressing another device button instead is rejected with three short blinks, so a slip is never silently overwritten.
 - **What if the participant presses during "checking"?** The press is rejected with three short blinks and the light returns to "checking"; they press again once the result appears.
 - **What if Wi-Fi drops?** The light goes to the slow connecting blink, the app shows "device offline", and the trial can be restarted; the server never records a press without an active trial.

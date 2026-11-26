@@ -7,6 +7,7 @@ import {
   getDeviceState,
   getDeviceStatus,
   recordHardwareDecision,
+  undoHardwareDecision,
   startTrial,
   endTrial,
   DeviceCondition,
@@ -109,4 +110,17 @@ export async function postDecision(req: Request, res: Response): Promise<void> {
 
   await recordHardwareDecision(body.trialIndex as number, body.decision as string);
   sendSuccess(res, { recorded: true }, 201);
+}
+
+//post /api/device/undo : the app calls this when the participant taps Undo within 5 s of a press
+//the trial opens again for a new press; a 409 means it is too late or there is nothing to undo
+export async function postUndo(req: Request, res: Response): Promise<void> {
+  const body = asObject(req.body);
+  new Validator(body)
+    .string("participantId", { pattern: PARTICIPANT_ID, hint: "must look like P07 (never a name or student id)" })
+    .custom("trialIndex", isTrialIndex(body.trialIndex), "must be a whole number from 1 to 999")
+    .check();
+
+  await undoHardwareDecision((body.participantId as string).toUpperCase(), body.trialIndex as number);
+  sendSuccess(res, { undone: true });
 }

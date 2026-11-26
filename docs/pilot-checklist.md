@@ -35,6 +35,7 @@ Codes already used for testing: P90, P93–P96, P99.
 4. The participant does all 16 trials (each tool: one practice trial, then 7 claims), deciding on the ESP32 buttons:
    - FactTrace trials: scan the printed card, check the text, open sources, decide, answer the sharing question.
    - Browser trials: **Start Task**, search in the phone's browser, list the sources used, decide, answer the sharing question.
+   - After each press the app shows the choice for 5 s with **Wrong button? Undo**. Tell participants in the practice trials that a wrong press can be undone there; the sharing question appears after the 5 s.
 5. After the first tool's block (trial 8): SUS + NASA-TLX about that tool. After trial 16: about the second tool.
 6. **Study complete** → **stop the screen recording.**
 7. Copy the recording to the laptop by cable, name it `P81_browser.mp4`, and delete it from the phone (including Recently Deleted).

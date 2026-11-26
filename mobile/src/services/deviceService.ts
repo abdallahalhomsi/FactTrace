@@ -14,6 +14,7 @@ export type DeviceStatus = {
   decision: DeviceDecision | null;
   state: string;
   deviceOnline: boolean;
+  undoMsLeft: number; //time left to undo the recorded press, 0 if none
 };
 
 type ApiResponse<T> = {
@@ -95,5 +96,26 @@ export async function endDeviceSession(): Promise<void> {
       { method: 'POST' },
     ),
     'Could not end the device session.',
+  );
+}
+
+//how long the app offers Undo after a press (the backend allows 1 s more for the network)
+export const UNDO_WINDOW_MS = 5000;
+
+//undoes the last press of this trial within the undo window (a slip, such as the wrong button);
+//the trial opens again and the light goes back to what it showed before the press
+export async function undoDevicePress(input: {
+  participantId: string;
+  trialIndex: number;
+}): Promise<void> {
+  unwrap(
+    await apiRequest<ApiResponse<{ undone: true }>>(
+      '/api/device/undo',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    ),
+    'Could not undo the press.',
   );
 }

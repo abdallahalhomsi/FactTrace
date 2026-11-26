@@ -468,8 +468,10 @@ export default function VerificationResultsScreen({
     });
   };
 
+  //decidedAt: when the device press was seen (study trials), otherwise now
   const handleDecision = async (
     value: Exclude<Decision, null>,
+    decidedAt?: string,
   ) => {
     if (isWalkthrough) {
       if (
@@ -508,7 +510,7 @@ export default function VerificationResultsScreen({
       return;
     }
 
-    verdictSelectedAt.current = new Date().toISOString();
+    verdictSelectedAt.current = decidedAt ?? new Date().toISOString();
     setDecision(value);
     setIsSharingModalVisible(true);
   };
@@ -1054,11 +1056,12 @@ export default function VerificationResultsScreen({
                     ? 'dont_trust'
                     : decision
                 }
-                onDecision={value =>
+                onDecision={(value, decidedAt) =>
                   void handleDecision(
                     value === 'dont_trust'
                       ? 'dont-trust'
                       : value,
+                    decidedAt,
                   )
                 }
                 onUseScreenButtons={() =>

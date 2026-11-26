@@ -818,6 +818,7 @@ export default function BrowserComparisonScreen({
 
   const chooseVerdict = (
     value: Verdict,
+    decidedAt?: string,
   ) => {
     if (isWalkthrough) {
       return;
@@ -831,8 +832,9 @@ export default function BrowserComparisonScreen({
       return;
     }
 
+    //decidedAt: when the device press was seen (study trials), otherwise now
     verdictSelectedAt.current =
-      new Date().toISOString();
+      decidedAt ?? new Date().toISOString();
 
     setDecision(value);
 
