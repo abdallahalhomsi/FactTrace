@@ -1,3 +1,5 @@
+import { useIsFocused } from '@react-navigation/native';
+import { useNormalDecision } from '../services/normalHardware';
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
@@ -558,6 +560,22 @@ export default function VerificationResultsScreen({
     setIsSharingModalVisible(true);
   };
 
+  const resultFocused = useIsFocused();
+  // Keep the hardware active while the user opens evidence details from this result.
+  const stack = navigation.getState();
+  const evidenceOpen = stack.routes[stack.index]?.name === 'EvidenceDetails' && stack.routes[stack.index - 1]?.key === route.key;
+  const normalMode = !studyContext && hasEvaluation && !isWalkthrough;
+  const normalHardware = useNormalDecision(
+    normalMode && !evaluationComplete && (resultFocused || evidenceOpen),
+    result.matchStatus,
+    (value, decidedAt) => void handleDecision(value === 'dont_trust' ? 'dont-trust' : value, decidedAt),
+  );
+  const chooseScreenDecision = (value: Exclude<Decision, null>) => {
+    if (normalMode) void normalHardware.choose(value === 'dont-trust' ? 'dont_trust' : value);
+    else void handleDecision(value);
+  };
+  const normalDecisionBusy = normalMode && (normalHardware.connecting || normalHardware.busy || Boolean(normalHardware.pending));
+
   const handleSharingIntention = async (
     intention: SharingIntention,
   ) => {
@@ -656,9 +674,7 @@ export default function VerificationResultsScreen({
             : {}),
         },
         studyContext?.participantId,
-        localTrialKey
-          ? { localTrialKey }
-          : undefined,
+        { ...(localTrialKey ? { localTrialKey } : {}), standalone: !studyContext },
       );
 
       setEvaluationStatus(response.message);
@@ -1165,6 +1181,36 @@ export default function VerificationResultsScreen({
               </Text>
             </View>
 
+            {normalMode && !decision && (
+              <View style={{ gap: 8, marginBottom: 12 }}>
+                <Text style={styles.decisionSubtitle}>
+                  {normalHardware.connecting ? 'Connecting to the device…' : normalHardware.connected
+                    ? 'Use Trust, Unsure or Don’t Trust on the device or on this screen.'
+                    : 'Device unavailable. Use the on-screen buttons.'}
+                </Text>
+                {normalHardware.pending && (
+                  <>
+                    <Text style={styles.decisionSubtitle}>
+                      You chose {normalHardware.pending === 'dont_trust' ? 'Don’t Trust' : normalHardware.pending === 'trust' ? 'Trust' : 'Unsure'}. Recorded.
+                    </Text>
+                    <TouchableOpacity accessibilityRole="button" disabled={normalHardware.busy}
+                      style={{ padding: 12, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12 }}
+                      onPress={() => void normalHardware.undo()}>
+                      <Text style={styles.decisionSubtitle}>Wrong button? Undo ({normalHardware.seconds})</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {normalHardware.finalChoice && <Text style={styles.decisionSubtitle}>Retry the same recorded decision to finish saving.</Text>}
+                {normalHardware.canFallback && !normalHardware.pending && (
+                  <TouchableOpacity accessibilityRole="button" disabled={normalHardware.busy}
+                    onPress={normalHardware.useScreenOnly}
+                    style={{ padding: 12, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12 }}>
+                    <Text style={styles.decisionSubtitle}>Use screen only</Text>
+                  </TouchableOpacity>
+                )}
+                {Boolean(normalHardware.message) && <Text accessibilityRole="alert" style={styles.decisionSubtitle}>{normalHardware.message}</Text>}
+              </View>
+            )}
             {useDevice && studyContext ? (
               <DeviceDecisionPanel
                 trial={studyContext}
@@ -1200,13 +1246,13 @@ export default function VerificationResultsScreen({
             <View style={styles.decisionButtons}>
               <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={Boolean(decision)}
+                disabled={Boolean(decision) || normalDecisionBusy || (normalMode && Boolean(normalHardware.finalChoice) && normalHardware.finalChoice !== 'trust')}
                 style={[
                   styles.decisionButton,
                   decision === 'trust' &&
                     styles.trustSelected,
                 ]}
-                onPress={() => handleDecision('trust')}
+                onPress={() => chooseScreenDecision('trust')}
               >
                 <View
                   style={[
@@ -1238,14 +1284,14 @@ export default function VerificationResultsScreen({
 
               <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={Boolean(decision)}
+                disabled={Boolean(decision) || normalDecisionBusy || (normalMode && Boolean(normalHardware.finalChoice) && normalHardware.finalChoice !== 'dont_trust')}
                 style={[
                   styles.decisionButton,
                   decision === 'dont-trust' &&
                     styles.dontTrustSelected,
                 ]}
                 onPress={() =>
-                  handleDecision('dont-trust')
+                  chooseScreenDecision('dont-trust')
                 }
               >
                 <View
@@ -1278,13 +1324,13 @@ export default function VerificationResultsScreen({
 
               <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={Boolean(decision)}
+                disabled={Boolean(decision) || normalDecisionBusy || (normalMode && Boolean(normalHardware.finalChoice) && normalHardware.finalChoice !== 'unsure')}
                 style={[
                   styles.decisionButton,
                   decision === 'unsure' &&
                     styles.unsureSelected,
                 ]}
-                onPress={() => handleDecision('unsure')}
+                onPress={() => chooseScreenDecision('unsure')}
               >
                 <View
                   style={[

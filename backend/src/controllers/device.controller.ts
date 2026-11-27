@@ -11,6 +11,7 @@ import {
   startTrial,
   endTrial,
   DeviceCondition,
+  DeviceLight, startNormalSession, setNormalState, getNormalStatus, endNormalSession, recordNormalScreenDecision, undoNormalDecision,
 } from "../services/device.service";
 import { sendSuccess } from "../utils/apiResponse"; //standard success response
 import { AppError } from "../utils/AppError"; //standard error type
@@ -104,7 +105,7 @@ export async function postDecision(req: Request, res: Response): Promise<void> {
   const body = asObject(req.body);
   new Validator(body)
     .custom("deviceId", body.deviceId === DEVICE_ID, `must be ${DEVICE_ID}`)
-    .custom("trialIndex", isTrialIndex(body.trialIndex), "must be a whole number from 1 to 999")
+    .custom("trialIndex", typeof body.trialIndex === "number" && Number.isInteger(body.trialIndex) && body.trialIndex >= 1 && body.trialIndex <= 2000000000, "invalid device trial index")
     .oneOf("decision", VERDICTS)
     .check();
 
@@ -123,4 +124,40 @@ export async function postUndo(req: Request, res: Response): Promise<void> {
 
   await undoHardwareDecision((body.participantId as string).toUpperCase(), body.trialIndex as number);
   sendSuccess(res, { undone: true });
+}
+
+// Standalone device endpoints never write participant or hardware_events rows.
+const NORMAL_STATES = ["ready", "processing", "strong_match", "weak_match", "no_match"] as const;
+function normalId(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{8,100}$/.test(value)) {
+    throw new AppError("VALIDATION_ERROR", "Invalid standalone session ID");
+  }
+  return value;
+}
+function normalState(value: unknown): DeviceLight {
+  if (!NORMAL_STATES.some(state => state === value)) throw new AppError("VALIDATION_ERROR", "Invalid light state");
+  return value as DeviceLight;
+}
+export function postNormalStart(req: Request, res: Response): void {
+  const body = asObject(req.body);
+  sendSuccess(res, startNormalSession(normalId(body.sessionId), normalState(body.state)));
+}
+export function postNormalState(req: Request, res: Response): void {
+  const body = asObject(req.body);
+  sendSuccess(res, setNormalState(normalId(body.sessionId), normalState(body.state)));
+}
+export function getNormal(req: Request, res: Response): void {
+  sendSuccess(res, getNormalStatus(normalId(req.query.sessionId)));
+}
+export function postNormalEnd(req: Request, res: Response): void {
+  endNormalSession(normalId(asObject(req.body).sessionId));
+  sendSuccess(res, { ended: true });
+}
+export function postNormalDecision(req: Request, res: Response): void {
+  const body = asObject(req.body);
+  new Validator(body).oneOf("decision", VERDICTS).check();
+  sendSuccess(res, recordNormalScreenDecision(normalId(body.sessionId), body.decision as string));
+}
+export function postNormalUndo(req: Request, res: Response): void {
+  sendSuccess(res, undoNormalDecision(normalId(asObject(req.body).sessionId)));
 }

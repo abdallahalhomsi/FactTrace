@@ -22,6 +22,7 @@ function getApiError(
 
 export async function extractTextFromImage(
   imageUri: string,
+  isStudyTrial = false,
 ): Promise<OcrResponse> {
   try {
     const formData = new FormData();
@@ -37,6 +38,7 @@ export async function extractTextFromImage(
       {
         method: 'POST',
         body: formData,
+        headers: { 'X-FactTrace-Mode': isStudyTrial ? 'study' : 'normal' },
       },
     );
 

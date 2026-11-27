@@ -49,6 +49,73 @@ const IDLE: DeviceTrial = {
 };
 
 let current: DeviceTrial = { ...IDLE }; //starts idle, so the light stays off until the app starts a trial
+// Standalone verification is deliberately not a participant or hardware_events row.
+// Its numeric wire IDs are outside the study trial range (1..999).
+type NormalSession = {
+  id: string; index: number; state: DeviceLight; decision: string | null;
+  pressedAt: number; previous: DeviceLight; confirmationUntil: number; expiresAt: number;
+};
+let normal: NormalSession | null = null;
+let nextNormalIndex = 1000 + Math.floor(Math.random() * 1000000000);
+const NORMAL_LEASE_MS = 120000;
+function liveNormal(): NormalSession | null {
+  if (normal && Date.now() > normal.expiresAt) normal = null;
+  return normal;
+}
+function requireNormal(id: string): NormalSession {
+  const session = liveNormal();
+  if (!session || session.id !== id) throw new AppError("DEVICE_CONFLICT", "Standalone session is not active");
+  session.expiresAt = Date.now() + NORMAL_LEASE_MS;
+  return session;
+}
+function normalStatus(session: NormalSession) {
+  return { state: session.state, trialIndex: session.index, decision: session.decision,
+    deviceOnline: Date.now() - lastPollAt <= ONLINE_WINDOW_MS,
+    undoMsLeft: session.decision ? Math.max(0, UNDO_WINDOW_MS - (Date.now() - session.pressedAt)) : 0 };
+}
+export function startNormalSession(id: string, state: DeviceLight) {
+  if (current.participantId !== null) throw new AppError("DEVICE_CONFLICT", "Study trial owns the device");
+  if (liveNormal()?.id === id) return normalStatus(requireNormal(id));
+  nextNormalIndex = nextNormalIndex >= 2000000000 ? 1000 : nextNormalIndex + 1;
+  normal = { id, index: nextNormalIndex, state, decision: null, pressedAt: 0,
+    previous: state, confirmationUntil: 0, expiresAt: Date.now() + NORMAL_LEASE_MS };
+  return normalStatus(normal);
+}
+export function setNormalState(id: string, state: DeviceLight) {
+  const session = requireNormal(id);
+  if (session.decision === null) session.state = state;
+  return normalStatus(session);
+}
+export function getNormalStatus(id: string) { return normalStatus(requireNormal(id)); }
+export function endNormalSession(id: string) { if (liveNormal()?.id === id) normal = null; }
+function recordNormalDecision(session: NormalSession, decision: string, fromScreen: boolean) {
+  if (session.decision !== null) throw new AppError("DEVICE_CONFLICT", "Decision already recorded for this trial");
+  if (!["strong_match", "weak_match", "no_match"].includes(session.state)) {
+    throw new AppError("DEVICE_CONFLICT", "Result not ready yet");
+  }
+  session.previous = session.state;
+  session.decision = decision;
+  session.pressedAt = Date.now();
+  session.state = "idle";
+  // Physical presses already flash locally on HTTP 201; screen presses need a wire signal.
+  session.confirmationUntil = fromScreen ? Date.now() + 2000 : 0;
+  return normalStatus(session);
+}
+export function recordNormalScreenDecision(id: string, decision: string) {
+  return recordNormalDecision(requireNormal(id), decision, true);
+}
+export function undoNormalDecision(id: string) {
+  const session = requireNormal(id);
+  if (!session.decision || Date.now() - session.pressedAt > UNDO_WINDOW_MS) {
+    throw new AppError("DEVICE_CONFLICT", "No decision to undo or too late");
+  }
+  session.decision = null;
+  session.pressedAt = 0;
+  session.confirmationUntil = 0;
+  session.state = session.previous;
+  return normalStatus(session);
+}
+
 let lastPollAt = 0; //last time the esp32 polled, in ms
 
 //true while a trial has started and has no decision yet
@@ -58,8 +125,10 @@ function trialOpen(): boolean {
 
 //what the esp32 needs: the light state and the trial to echo back when a button is pressed
 //also records the poll time, which is how the backend knows the device is connected
-export function getDeviceState(): { state: DeviceLight; trialIndex: number | null } {
+export function getDeviceState(): { state: DeviceLight | "confirmed"; trialIndex: number | null } {
   lastPollAt = Date.now();
+  const session = liveNormal();
+  if (session) return { state: Date.now() < session.confirmationUntil ? "confirmed" : session.state, trialIndex: session.index };
   return { state: current.state, trialIndex: current.trialIndex };
 }
 
@@ -72,6 +141,8 @@ export function getDeviceStatus(): {
   deviceOnline: boolean;
   undoMsLeft: number;
 } {
+  const session = liveNormal();
+  if (session) return { ...normalStatus(session), decisionRecorded: session.decision !== null };
   return {
     trialIndex: current.trialIndex,
     decisionRecorded: current.buttonPressed,
@@ -85,6 +156,7 @@ export function getDeviceStatus(): {
 
 //called by the app at the start of every trial in both conditions; the light shows ready (white) in both
 export function startTrial(participantId: string, trialIndex: number, claimId: string, condition: DeviceCondition): void {
+  normal = null; // study takes priority
   current = {
     ...IDLE,
     participantId,
@@ -127,6 +199,12 @@ export function updateMatchState(matchStatus: MatchLight): void {
 
 //called when a physical button is pressed; trialIndex is the one the esp32 last received
 export async function recordHardwareDecision(trialIndex: number, decision: string): Promise<void> {
+  if (trialIndex > 999) {
+    const session = liveNormal();
+    if (!session || session.index !== trialIndex) throw new AppError("DEVICE_CONFLICT", "Button press belongs to a different trial");
+    recordNormalDecision(session, decision, false);
+    return;
+  }
   const receivedAt = new Date(); //t3, taken in node like t0 to t2, so all four times use the same clock and time zone
   if (current.participantId === null || current.trialIndex === null || current.condition === null || current.claimId === null) {
     throw new AppError("DEVICE_CONFLICT", "No active trial");

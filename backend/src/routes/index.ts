@@ -13,7 +13,7 @@ import { imageUpload } from "../middleware/upload"; //reads the photo before the
 import { postSession } from "../controllers/sessions.controller";
 import { postQuestionnaire } from "../controllers/questionnaires.controller"; //SUS and NASA-TLX after each block
 import { getDebrief, getStudyAssignment, getStudyClaims } from "../controllers/study.controller"; //study claims, group assignment and debrief
-import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision, postUndo } from "../controllers/device.controller"; //esp32 device
+import { getState, getStatus, postTrial, postEnd, postDecision as postDeviceDecision, postUndo, postNormalStart, postNormalState, getNormal, postNormalEnd, postNormalDecision, postNormalUndo } from "../controllers/device.controller"; //esp32 device
 
 export const router = Router();
 
@@ -39,3 +39,10 @@ router.post("/device/trial", postTrial); //app starts a trial in either conditio
 router.post("/device/end", postEnd); //app ends the session, light off
 router.post("/device/decision", postDeviceDecision); //esp32 sends a button press
 router.post("/device/undo", postUndo); //app undoes a press within 5 s (a slip such as the wrong button)
+
+router.post("/device/normal/start", postNormalStart);
+router.post("/device/normal/state", postNormalState);
+router.get("/device/normal/status", getNormal);
+router.post("/device/normal/end", postNormalEnd);
+router.post("/device/normal/decision", postNormalDecision);
+router.post("/device/normal/undo", postNormalUndo);
