@@ -642,7 +642,9 @@ export default function EvidenceDetailsScreen({
                   </View>
                 </View>
 
-                {source.summary ? (
+                {/*show the summary only when it adds something: the backend sends the same text as the evidence (internal inspection, H8)*/}
+                {source.summary &&
+                source.summary.trim() !== source.evidenceText?.trim() ? (
                   <View style={styles.summaryBlock}>
                     <View style={styles.evidenceBlockHeader}>
                       <Ionicons
