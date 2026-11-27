@@ -23,6 +23,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ThemeColors } from '../constants/app';
 import { useAppTheme } from '../theme/AppTheme';
 import { EvidenceSource } from '../types/evidence';
+import { hasDistinctSourceSummary } from '../utils/evidenceDisplay';
 import WalkthroughOverlay from '../components/WalkthroughOverlay';
 
 import {
@@ -424,7 +425,7 @@ export default function EvidenceDetailsScreen({
 
               {/* text similarity to a dataset claim, not a truth rating */}
               <Text style={styles.heroStatLabel}>
-                Similarity
+                Claim wording match
               </Text>
             </View>
 
@@ -442,6 +443,11 @@ export default function EvidenceDetailsScreen({
               </Text>
             </View>
           </View>
+          {result.matchScore !== undefined && (
+            <Text style={styles.matchScoreNote}>
+              Measures wording similarity, not whether the claim is true.
+            </Text>
+          )}
         </LinearGradient>
 
         <View style={styles.claimCard}>
@@ -642,9 +648,8 @@ export default function EvidenceDetailsScreen({
                   </View>
                 </View>
 
-                {/*show the summary only when it adds something: the backend sends the same text as the evidence (internal inspection, H8)*/}
-                {source.summary &&
-                source.summary.trim() !== source.evidenceText?.trim() ? (
+                {/* Avoid repeating equivalent summary and evidence text. */}
+                {hasDistinctSourceSummary(source.summary, source.evidenceText) ? (
                   <View style={styles.summaryBlock}>
                     <View style={styles.evidenceBlockHeader}>
                       <Ionicons
@@ -1154,7 +1159,14 @@ const createStyles = (
       fontWeight: '800',
     },
 
+    matchScoreNote: {
+      marginTop: 12,
+      color: '#B8CDE2',
+      fontSize: 12,
+      lineHeight: 17,
+    },
     heroStatLabel: {
+      textAlign: 'center',
       marginTop: 3,
       color: '#B8CDE2',
       fontSize: 10.5,

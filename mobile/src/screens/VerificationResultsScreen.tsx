@@ -168,6 +168,7 @@ export default function VerificationResultsScreen({
     useState<WalkthroughStep>('result_match');
   const [tourVersion, setTourVersion] = useState(0);
 
+  const headerRef = useRef<ViewInstance>(null);
   const tourScrollRef = useRef<ScrollViewInstance>(null);
   const matchTargetRef = useRef<ViewInstance>(null);
   const evidenceTargetRef = useRef<ViewInstance>(null);
@@ -289,28 +290,28 @@ export default function VerificationResultsScreen({
     target: { current: ViewInstance | null },
   ) => {
     requestAnimationFrame(() => {
-      target.current?.measureInWindow(
-        (_x, y, _width, height) => {
-          const safeBottom = tourWindowHeight - 145;
-          const overflow = y + height - safeBottom;
+      headerRef.current?.measureInWindow((_hx, hy, _hw, hh) => {
+        target.current?.measureInWindow(
+          (_x, y, _width, height) => {
+            const safeBottom = tourWindowHeight - 145;
+            const overflow = y + height - safeBottom;
 
-          if (overflow > 0) {
-            tourScrollRef.current?.scrollTo({
-              y: tourScrollOffset.current + overflow,
-              animated: true,
-            });
-          } else if (y < 70) {
-            tourScrollRef.current?.scrollTo({
-              y: Math.max(
-                0,
-                tourScrollOffset.current + y - 95,
-              ),
-              animated: true,
-            });
-          }
-          setTourVersion(v => v + 1);
-        },
-      );
+            const safeTop = hy + hh + 8;
+            if (y < safeTop) {
+              tourScrollRef.current?.scrollTo({
+                y: Math.max(0, tourScrollOffset.current + y - safeTop),
+                animated: true,
+              });
+            } else if (overflow > 0) {
+              tourScrollRef.current?.scrollTo({
+                y: tourScrollOffset.current + overflow,
+                animated: true,
+              });
+            }
+            setTourVersion(v => v + 1);
+          },
+        );
+      });
     });
   };
 
@@ -742,6 +743,33 @@ export default function VerificationResultsScreen({
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
+      {/* Persistent navigation, outside the scrolling content. */}
+      <View ref={headerRef} collapsable={false} style={styles.header}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={23}
+            color={COLORS.textPrimary}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.headerTextArea}>
+          <Text style={styles.headerTitle}>
+            Evidence Results
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Review the match and supporting sources
+          </Text>
+        </View>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView
         ref={tourScrollRef}
         scrollEventThrottle={16}
@@ -760,31 +788,6 @@ export default function VerificationResultsScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={23}
-              color={COLORS.textPrimary}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headerTextArea}>
-            <Text style={styles.headerTitle}>
-              Evidence Results
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Review the match and supporting sources
-            </Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </View>
-
         {/* PROGRESS */}
         <View style={styles.progressRow}>
           <View style={styles.progressItem}>
@@ -898,13 +901,17 @@ export default function VerificationResultsScreen({
               <View
                 style={styles.matchScore}
                 accessible
-                accessibilityLabel={`${matchScore} text similarity, not a truth rating`}
+                accessibilityLabel={
+                    result.matchScore === undefined
+                      ? 'Claim wording match unavailable'
+                      : `${matchScore} claim wording match, not a truth rating`
+                  }
               >
                 <Text style={styles.matchScoreNumber}>
                   {matchScore}
                 </Text>
                 <Text style={styles.matchScoreLabel}>
-                  text similarity
+                  Claim wording match
                 </Text>
               </View>
             </View>
@@ -919,7 +926,7 @@ export default function VerificationResultsScreen({
 
             {result.matchScore !== undefined && (
               <Text style={styles.matchScoreNote}>
-                The percentage shows how similar the wording is to a claim in the dataset. It is not a truth rating.
+                Measures wording similarity to a claim in the dataset, not whether the claim is true.
               </Text>
             )}
 
@@ -1500,7 +1507,7 @@ export default function VerificationResultsScreen({
             }
             message={
               tourStep === 'result_match'
-                ? 'This is a fictional 92% match. A strong match means similar wording — it does NOT prove the claim is true. Always inspect evidence.'
+                ? 'This is a fictional 92% claim wording match. A strong match means similar wording — it does NOT prove the claim is true. Always inspect evidence.'
                 : tourStep === 'result_source'
                   ? 'Tap the highlighted practice source to inspect its details. This example is not a real publication.'
                   : tourStep === 'result_decision'
@@ -1548,7 +1555,10 @@ const createStyles = (COLORS: ThemeColors, isDark: boolean) => StyleSheet.create
     paddingBottom: 40,
   },
   header: {
-    marginTop: 12,
+    paddingTop: 12,
+    paddingHorizontal: 22,
+    paddingBottom: 8,
+    backgroundColor: COLORS.background,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1701,6 +1711,8 @@ const createStyles = (COLORS: ThemeColors, isDark: boolean) => StyleSheet.create
     bottom: -28,
   },
   matchTopRow: {
+    gap: 8,
+    flexWrap: 'wrap',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
