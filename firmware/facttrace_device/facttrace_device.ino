@@ -256,7 +256,26 @@ void connectWifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   uint32_t started = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - started < 10000) delay(250);
-  if (WiFi.status() == WL_CONNECTED) Serial.printf("wifi ok, ip %s\n", WiFi.localIP().toString().c_str());
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("wifi ok, ip %s\n", WiFi.localIP().toString().c_str());
+    return;
+  }
+  //explain why, so wifi problems can be fixed without guessing
+  int st = WiFi.status();
+  if (st == WL_NO_SSID_AVAIL) {
+    Serial.printf("wifi: network '%s' not found. networks this board can see:\n", WIFI_SSID);
+    int n = WiFi.scanNetworks();
+    for (int i = 0; i < n; i++) Serial.printf("  %s (channel %d)\n", WiFi.SSID(i).c_str(), WiFi.channel(i));
+    if (n <= 0) Serial.println("  none: check the hotspot is on and set to 2.4 GHz");
+  } else if (st == WL_CONNECT_FAILED
+#if defined(ESP8266)
+             || st == WL_WRONG_PASSWORD
+#endif
+  ) {
+    Serial.println("wifi: network found but the password was refused (check the password, and WPA2 not WPA3)");
+  } else {
+    Serial.printf("wifi: not connected yet (status %d), trying again\n", st);
+  }
 }
 
 #if defined(ESP8266)
