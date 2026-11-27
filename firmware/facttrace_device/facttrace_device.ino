@@ -163,7 +163,11 @@ bool beginRequest(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure,
 #if !defined(ESP8266)
   http.setConnectTimeout(HTTP_TIMEOUT_MS);
 #endif
+#if defined(ESP8266)
+  http.setReuse(false); //esp8266: reusing the connection made every second poll fail (-1); a new one per request is fine on the hotspot
+#else
   http.setReuse(true);
+#endif
   if (url.startsWith("https")) {
     secure.setInsecure(); //no certificate check: fine for a lab device talking to our own backend
     return http.begin(secure, url);
