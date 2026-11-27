@@ -3,11 +3,16 @@
 //behaviour follows docs/device-signal-spec.md; light patterns are in signals.h
 //
 //setup: copy secrets.example.h to secrets.h and fill in the wifi and server address
-//board: "ESP32S2 Dev Module" (any esp32 works, check the pins below)
+//board: "ESP32S2 Dev Module" (any esp32 works) or "NodeMCU 1.0 (ESP-12E Module)" for the esp8266 nodemcu; pins below change with the board
 //test without a backend: set DEMO_MODE to true, it cycles through every light state (also works in wokwi)
 
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#else
 #include <WiFi.h>
 #include <HTTPClient.h>
+#endif
 #include <WiFiClientSecure.h>
 #include "signals.h"
 
@@ -24,6 +29,16 @@ const bool DEMO_MODE = false;         //true: no wifi, cycles through the states
 const bool BUZZER_ON = false;         //group decision: one short beep on a recorded press
 const bool COMMON_ANODE = false;      //true if the led's long leg goes to 3.3V instead of GND
 
+#if defined(ESP8266)
+//pins on the esp8266 nodemcu, as printed on the back (IO14 = 14). avoid IO0, IO15 (boot), IO16 (no pull-up, no pwm), RX and TX (usb serial)
+const int PIN_RED = 14;               //D5
+const int PIN_GREEN = 12;             //D6
+const int PIN_BLUE = 13;              //D7
+const int PIN_TRUST = 5;              //D1. buttons connect the pin to GND when pressed (internal pull-up)
+const int PIN_UNSURE = 4;             //D2
+const int PIN_DONT_TRUST = 2;         //D4 (high at boot is fine; the small blue board led lights while it is pressed)
+const int PIN_BUZZER = 15;            //D8, active buzzer (beeps when the pin is high); low at boot, which the buzzer keeps
+#else
 //pins (esp32-s2: avoid 0, 45, 46 which are boot pins, and 19, 20 which are usb)
 const int PIN_RED = 4;
 const int PIN_GREEN = 5;
@@ -32,6 +47,7 @@ const int PIN_TRUST = 10;             //buttons connect the pin to GND when pres
 const int PIN_UNSURE = 11;
 const int PIN_DONT_TRUST = 12;
 const int PIN_BUZZER = 13;            //active buzzer (beeps when the pin is high)
+#endif
 
 //timing (spec: poll every 300 ms, 50 ms debounce, offline after about 2 s without an answer)
 const uint32_t POLL_MS = 300;
@@ -52,7 +68,9 @@ struct Press {
   const char* decision; //trust, unsure or dont_trust (the backend's values)
   int trial;            //the trial the participant saw when pressing
 };
-QueueHandle_t pressQueue;
+#if !defined(ESP8266)
+QueueHandle_t pressQueue;             //esp32: presses go to the network task
+#endif
 
 //---- buttons ----
 struct Button {
@@ -142,7 +160,9 @@ const char* readButtons() {
 //---- network ----
 bool beginRequest(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure, const String& url) {
   http.setTimeout(HTTP_TIMEOUT_MS);
+#if !defined(ESP8266)
   http.setConnectTimeout(HTTP_TIMEOUT_MS);
+#endif
   http.setReuse(true);
   if (url.startsWith("https")) {
     secure.setInsecure(); //no certificate check: fine for a lab device talking to our own backend
@@ -234,10 +254,28 @@ void connectWifi() {
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   uint32_t started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 10000) vTaskDelay(pdMS_TO_TICKS(250));
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 10000) delay(250);
   if (WiFi.status() == WL_CONNECTED) Serial.printf("wifi ok, ip %s\n", WiFi.localIP().toString().c_str());
 }
 
+#if defined(ESP8266)
+//esp8266 has no separate task: the loop polls between light updates (requests on the hotspot take a few tens of ms)
+WiFiClient plainClient;
+WiFiClientSecure secureClient;
+uint32_t lastPollAt = 0;
+
+void networkStep() {
+  if (WiFi.status() != WL_CONNECTED) {
+    online = false;
+    connectWifi();
+    return;
+  }
+  if (millis() - lastPollAt >= POLL_MS) {
+    lastPollAt = millis();
+    pollState(plainClient, secureClient);
+  }
+}
+#else
 //runs separately from the loop, so slow network calls never freeze the light or the buttons
 void networkTask(void*) {
   WiFiClient plain;
@@ -262,6 +300,7 @@ void networkTask(void*) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
+#endif
 
 //---- demo mode: no wifi, steps through every state so the patterns can be checked ----
 const ServerState DEMO_STATES[] = {S_IDLE, S_READY, S_PROCESSING, S_STRONG, S_WEAK, S_NONE};
@@ -283,6 +322,9 @@ void demoPress(const char* decision) {
 //---- arduino ----
 void setup() {
   Serial.begin(115200);
+#if defined(ESP8266)
+  analogWriteRange(255);              //same 0-255 range as the esp32
+#endif
   pinMode(PIN_RED, OUTPUT);
   pinMode(PIN_GREEN, OUTPUT);
   pinMode(PIN_BLUE, OUTPUT);
@@ -295,8 +337,12 @@ void setup() {
     Serial.println("demo mode: no wifi, cycling through the light states");
     return;
   }
+#if defined(ESP8266)
+  connectWifi();
+#else
   pressQueue = xQueueCreate(4, sizeof(Press));
   xTaskCreate(networkTask, "network", 12288, nullptr, 1, nullptr); //12 kB: enough for https too
+#endif
 }
 
 void loop() {
@@ -310,9 +356,18 @@ void loop() {
     } else if (!pressInFlight) { //ignore extra presses while one is being sent
       pressInFlight = true;
       Press p = {decision, trialIndex};
+#if defined(ESP8266)
+      sendPress(p, plainClient, secureClient); //sent straight away; the light catches up afterwards
+      pressInFlight = false;
+      lastPollAt = 0;                        //poll right after a press so the light follows the server quickly
+#else
       xQueueSend(pressQueue, &p, 0);
+#endif
     }
   }
+#if defined(ESP8266)
+  if (!DEMO_MODE) networkStep();
+#endif
   updateLight();
   delay(5);
 }

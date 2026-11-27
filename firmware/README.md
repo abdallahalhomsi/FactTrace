@@ -27,9 +27,28 @@ One RGB LED and three buttons. The light shows the state of the check (never whe
 
 Buttons need no resistors (the internal pull-up is used). Order on the box, left to right: **Trust · Unsure · Don't trust**. Pins can be changed at the top of the `.ino`; on the ESP32-S2 avoid GPIO 0, 45, 46 (boot) and 19, 20 (USB). On a classic ESP32 (not S2) GPIO 6 is used by the flash chip, so move blue to another pin, for example GPIO 25.
 
+## Parts and wiring (ESP8266 NodeMCU)
+
+The board we got from CoSpace is an ESP8266 NodeMCU (pin names printed on the back as IO numbers; the front may show D numbers). The firmware picks these pins automatically when the board is set to NodeMCU.
+
+| Part | NodeMCU pin (back / front) | Other side |
+|---|---|---|
+| RGB LED red leg | IO14 / D5, through a 220 Ω resistor | |
+| RGB LED green leg | IO12 / D6, through a 220 Ω resistor | |
+| RGB LED blue leg | IO13 / D7, through a 220 Ω resistor | |
+| RGB LED common (long) leg | GND (common cathode) or 3V3 (common anode: set `COMMON_ANODE = true`) | |
+| Trust button | IO5 / D1 | GND |
+| Unsure button | IO4 / D2 | GND |
+| Don't trust button | IO2 / D4 | GND |
+| Buzzer (optional, active) | IO15 / D8 (+) | GND (−) |
+
+Do not use IO0 or IO15 for buttons (the board would not start while one is pressed), IO16 (no pull-up) or RX/TX (USB serial). The small blue light on the board flashes while Don't trust is pressed; that is normal. Like the ESP32, the ESP8266 only connects to 2.4 GHz Wi-Fi.
+
+Arduino IDE for the NodeMCU: File → Preferences → Additional boards manager URLs: `https://arduino.esp8266.com/stable/package_esp8266com_index.json`; Boards Manager → install "esp8266 by ESP8266 Community" (compiles on 3.1.2); Tools → Board → **NodeMCU 1.0 (ESP-12E Module)**. If Windows shows no port, install the USB driver for the chip next to the USB socket (CH340 or CP2102).
+
 ## Setup (Arduino IDE)
 
-1. **Boards Manager:** install "esp32 by Espressif Systems" (tested to compile on versions 2.0.9 and 3.1.1).
+1. **Boards Manager:** install "esp32 by Espressif Systems" (tested to compile on versions 2.0.9 and 3.1.1). For the NodeMCU see the section above.
 2. **Board:** Tools → Board → ESP32 → "ESP32S2 Dev Module". Set Tools → "USB CDC On Boot" → Enabled, so Serial Monitor works over USB.
 3. **Secrets:** copy `secrets.example.h` to `secrets.h` in the same folder and fill in:
    - the hotspot name and password (the laptop and the ESP32 on the same hotspot);

@@ -6,7 +6,7 @@ How the hardware, software and interface connect (the handbook asks for this fig
  PARTICIPANT
    │  scans a printed claim card            │  presses Trust / Unsure / Don't trust
    ▼                                        ▼
- Phone app (React Native + Expo, TypeScript)      ESP32-S2 device (Arduino C++)
+ Phone app (React Native + Expo, TypeScript)      ESP32 / ESP8266 device (Arduino C++)
    Camera: photo of the scan frame,                 3 buttons, RGB light (white = system,
    or a QR marker outside study trials              blue = match result; no green or red)
    Claim review: OCR text, confidence, edit         polls GET /api/device/state every 300 ms
