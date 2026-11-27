@@ -203,8 +203,9 @@ void pollState(WiFiClient& plain, WiFiClientSecure& secure) {
     trialIndex = jsonInt(body, "trialIndex");
     pollFailures = 0;
     online = true;
-  } else if (++pollFailures >= FAILS_BEFORE_OFFLINE) {
-    online = false;
+  } else {
+    if (pollFailures == 0) Serial.printf("poll failed: %d (-1 or -11: laptop not reachable, check the firewall and SERVER_URL)\n", code);
+    if (++pollFailures >= FAILS_BEFORE_OFFLINE) online = false;
   }
   http.end();
 }
@@ -264,11 +265,24 @@ WiFiClient plainClient;
 WiFiClientSecure secureClient;
 uint32_t lastPollAt = 0;
 
+uint32_t wifiLostAt = 0;
+
 void networkStep() {
   if (WiFi.status() != WL_CONNECTED) {
     online = false;
-    connectWifi();
+    if (!wifiLostAt) {
+      wifiLostAt = millis();
+      Serial.println("wifi lost, reconnecting");
+    }
+    if (millis() - wifiLostAt > 15000) { //auto-reconnect did not manage: start over
+      wifiLostAt = 0;
+      connectWifi();
+    }
     return;
+  }
+  if (wifiLostAt) {
+    wifiLostAt = 0;
+    Serial.printf("wifi ok, ip %s\n", WiFi.localIP().toString().c_str());
   }
   if (millis() - lastPollAt >= POLL_MS) {
     lastPollAt = millis();
@@ -338,6 +352,8 @@ void setup() {
     return;
   }
 #if defined(ESP8266)
+  WiFi.persistent(false);            //do not rewrite the flash on every connect
+  WiFi.setSleepMode(WIFI_NONE_SLEEP); //modem sleep drops the connection on some hotspots
   connectWifi();
 #else
   pressQueue = xQueueCreate(4, sizeof(Press));
