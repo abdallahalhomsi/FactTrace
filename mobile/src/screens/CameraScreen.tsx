@@ -1,3 +1,4 @@
+import { useNormalLight } from '../services/normalHardware';
 import React, {
   useEffect,
   useMemo,
@@ -229,6 +230,8 @@ export default function CameraScreen({
   ] =
     useState(false);
 
+  useNormalLight(!studyContext, isCheckingQr || isCapturing ? 'processing' : 'ready');
+
   //the camera reports the same code many times a second: handle one at a time
   const qrLock = useRef(false);
 
@@ -284,7 +287,7 @@ export default function CameraScreen({
           await verifyClaim('', {
             source: 'qr',
             claimId,
-          });
+          }, Boolean(studyContext));
 
         if (
           !response.success ||

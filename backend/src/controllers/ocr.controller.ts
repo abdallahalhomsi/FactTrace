@@ -16,11 +16,12 @@ export async function postOcr(req: Request, res: Response): Promise<void> {
     ? req.file.buffer //sent as a multipart file, already read into memory by the upload middleware
     : decodeBase64Image((req.body as Record<string, unknown> | undefined)?.image, ENV.maxImageMb * 1024 * 1024); //sent as base64 json
 
-  markProcessing(); //blue while ocr runs (only during an app trial)
+  const studyLight = req.get("X-FactTrace-Mode") !== "normal";
+  if (studyLight) markProcessing();
   try {
     const result = await ocr(imageBuffer); //run ocr on the photo bytes in memory, nothing is saved
     sendSuccess(res, result); //send text, confidence, engine and error back so the app can show warnings
   } finally {
-    markDoneProcessing(); //back to ready (or the last result) while the participant reviews the text
+    if (studyLight) markDoneProcessing();
   }
 }

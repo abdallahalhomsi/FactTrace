@@ -1,3 +1,4 @@
+import { useNormalLight } from '../services/normalHardware';
 import React, {
   useCallback,
   useEffect,
@@ -445,6 +446,8 @@ export default function ClaimReviewScreen({
     setIsExtracting,
   ] =
     useState(false);
+
+  useNormalLight(!studyContext && !isWalkthrough, isChecking || isExtracting ? 'processing' : 'ready');
 
   const [
     ocrError,
@@ -1047,6 +1050,7 @@ export default function ClaimReviewScreen({
           const response =
             await extractTextFromImage(
               imageUri,
+              Boolean(studyContext),
             );
 
           if (
@@ -1118,6 +1122,7 @@ export default function ClaimReviewScreen({
         const response =
           await extractTextFromImage(
             imageUri,
+            Boolean(studyContext),
           );
 
         applyOcrResponse(
@@ -1276,6 +1281,7 @@ export default function ClaimReviewScreen({
                   : {}
               ),
             },
+            Boolean(studyContext),
           );
 
         if (

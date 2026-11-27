@@ -10,13 +10,14 @@ import { Request, Response } from "express";
 
 export async function postVerify(req: Request, res: Response): Promise<void> {
   const request = parseMatchRequest(req.body); //check the input before touching the light
-  markProcessing(); //blue while matching runs (only during an app trial)
+  const studyLight = req.get("X-FactTrace-Mode") !== "normal"; // legacy clients retain existing behavior
+  if (studyLight) markProcessing();
   try {
     const result = await verifyClaim(request);
-    updateMatchState(result.matchStatus); //green, yellow or red for this trial
+    if (studyLight) updateMatchState(result.matchStatus);
     sendSuccess(res, result);
   } catch (err) {
-    markDoneProcessing(); //matching failed, so do not leave the light blue
+    if (studyLight) markDoneProcessing();
     throw err;
   }
 }

@@ -16,7 +16,7 @@ const Rgb BLUE = {0, 60, 255};
 const float DIM = 0.3f; //brightness of "ready", "not recorded" and "connecting"
 
 //the six states the backend sends on GET /api/device/state
-enum ServerState { S_IDLE, S_READY, S_PROCESSING, S_STRONG, S_WEAK, S_NONE, S_UNKNOWN };
+enum ServerState { S_IDLE, S_READY, S_PROCESSING, S_STRONG, S_WEAK, S_NONE, S_UNKNOWN, S_CONFIRMED };
 
 //short patterns shown on top of the server state after a button press
 enum Overlay { O_NONE, O_RECORDED, O_REJECTED };
@@ -39,6 +39,7 @@ struct Light {
 
 inline ServerState parseState(const char* s) {
   if (!s) return S_UNKNOWN;
+  if (!strcmp(s, "confirmed")) return S_CONFIRMED;
   if (!strcmp(s, "idle")) return S_IDLE;
   if (!strcmp(s, "ready")) return S_READY;
   if (!strcmp(s, "processing")) return S_PROCESSING;
@@ -51,6 +52,8 @@ inline ServerState parseState(const char* s) {
 //the light for a server state, t = ms since the state started
 inline Light stateLight(ServerState s, uint32_t t) {
   switch (s) {
+    case S_CONFIRMED:
+      return {WHITE, t < RECORDED_MS ? 1.0f : 0.0f};
     case S_READY:
       return {WHITE, DIM};
     case S_PROCESSING: {

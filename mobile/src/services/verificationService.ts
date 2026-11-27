@@ -1,4 +1,3 @@
-
 import {
   ApiResponse,
   VerifyClaimRequest,
@@ -104,6 +103,7 @@ export async function verifyClaim(
   requestOptions: Omit<VerifyClaimRequest, 'claimText'> = {
     source: 'manual',
   },
+  isStudyTrial = false,
 ): Promise<VerifyClaimResponse> {
   try {
     //qr scans send only the claim id, so an empty text is left out
@@ -117,6 +117,7 @@ export async function verifyClaim(
       {
         method: 'POST',
         body: JSON.stringify(requestBody),
+        headers: { 'X-FactTrace-Mode': isStudyTrial ? 'study' : 'normal' },
       },
     );
 

@@ -1,4 +1,3 @@
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DecisionRequest } from '../types/api';
@@ -49,6 +48,7 @@ type DecisionApiResponse = {
 type LocalDetails = {
   sourcesConsulted?: EvaluationRecord['sourcesConsulted'];
   localTrialKey?: string;
+  standalone?: boolean; // normal product use never submits to a study participant
 };
 
 let storageQueue: Promise<void> = Promise.resolve();
@@ -285,7 +285,7 @@ export function saveEvaluationDecision(
     const configuredId =
       process.env.EXPO_PUBLIC_STUDY_PARTICIPANT_ID?.trim();
 
-    const candidateId = suppliedParticipantId?.trim() || configuredId;
+    const candidateId = localDetails?.standalone ? undefined : suppliedParticipantId?.trim() || configuredId;
 
     const participantId =
       candidateId && PARTICIPANT_ID_PATTERN.test(candidateId)
@@ -349,7 +349,8 @@ export function saveEvaluationDecision(
         0,
         Date.parse(decision.endedAt) - Date.parse(decision.startedAt),
       ),
-      ...localDetails,
+      ...(localDetails?.localTrialKey ? { localTrialKey: localDetails.localTrialKey } : {}),
+      ...(localDetails?.sourcesConsulted ? { sourcesConsulted: localDetails.sourcesConsulted } : {}),
 
       ...(!isOfficialTrial
         ? {
@@ -361,7 +362,9 @@ export function saveEvaluationDecision(
       serverStatus: participantId ? 'pending' : 'not_submitted',
       serverMessage: participantId
         ? 'Saved locally; server submission is pending.'
-        : 'Saved locally only. No valid study participant code was supplied.',
+        : localDetails?.standalone
+          ? 'Your decision was saved on this device.'
+          : 'Saved locally only. No valid study participant code was supplied.',
     };
 
     // Persist FIRST, before network traffic.
